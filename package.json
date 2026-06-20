@@ -1,0 +1,38 @@
+{
+  "name": "shiyu-hanzi-box",
+  "description": "Capture Chinese words and quotes while reading; export daily Markdown notes.",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build",
+    "build:firefox": "wxt build -b firefox",
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip -b firefox",
+    "compile": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "fflate": "^0.8.3",
+    "lucide-react": "^1.21.0",
+    "pinyin-pro": "^3.28.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@webext-core/fake-browser": "^1.5.2",
+    "@wxt-dev/auto-icons": "^1.1.1",
+    "@wxt-dev/module-react": "^1.1.5",
+    "tailwindcss": "^4.3.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.9",
+    "wxt": "^0.20.26"
+  }
+}

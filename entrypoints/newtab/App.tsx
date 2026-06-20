@@ -1,20 +1,29 @@
 import { BookOpen, CheckCircle2, Inbox, ScrollText } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
-import type { QuoteEntry, Status, WordEntry } from '@/lib/types';
+import iconUrl from '../../assets/icon.png';
+import {
+  buildReviewQueue,
+  repeatReview,
+  skipReview,
+  viewReview,
+} from '@/lib/review';
+import type { Entry, Inbox as InboxState, QuoteEntry, Status, WordEntry } from '@/lib/types';
 import { QuoteList } from './components/QuoteList';
+import { ReviewQueue } from './components/ReviewQueue';
 import { Toolbar } from './components/Toolbar';
 import { WordList } from './components/WordList';
 import { useInbox } from './hooks/useInbox';
 
-type Tab = 'words' | 'quotes';
+type Tab = 'review' | 'words' | 'quotes';
 type StatusFilter = 'all' | Status;
 
 export function App() {
   const { inbox, loading, mutate } = useInbox();
   const [query, setQuery] = useState('');
-  const [tab, setTab] = useState<Tab>('words');
+  const [tab, setTab] = useState<Tab>('review');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('inbox');
+  const normalizedQuery = query.trim().toLowerCase();
   const today = new Intl.DateTimeFormat('zh-CN', {
     month: 'long',
     day: 'numeric',
@@ -22,29 +31,39 @@ export function App() {
   }).format(new Date());
 
   const matches = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    const test = (text: string) =>
-      normalizedQuery === '' || text.toLowerCase().includes(normalizedQuery);
     const byStatus = (status: Status) =>
       statusFilter === 'all' || status === statusFilter;
 
     return {
-      words: inbox.words.filter((word) => test(word.text) && byStatus(word.status)),
+      words: inbox.words.filter(
+        (word) => entryMatchesQuery(word, normalizedQuery) && byStatus(word.status),
+      ),
       quotes: inbox.quotes.filter(
         (quote) =>
-          (test(quote.text) || test(quote.category)) && byStatus(quote.status),
+          entryMatchesQuery(quote, normalizedQuery) && byStatus(quote.status),
       ),
     };
-  }, [inbox, query, statusFilter]);
+  }, [inbox, normalizedQuery, statusFilter]);
+
+  const reviewItems = useMemo(
+    () =>
+      buildReviewQueue(inbox).filter((item) =>
+        entryMatchesQuery(item.entry, normalizedQuery),
+      ),
+    [inbox, normalizedQuery],
+  );
+
+  const reviewDueCount = useMemo(() => buildReviewQueue(inbox).length, [inbox]);
 
   const stats = useMemo(() => {
     const entries = [...inbox.words, ...inbox.quotes];
     return {
+      review: reviewDueCount,
       inbox: entries.filter((entry) => entry.status === 'inbox').length,
       reviewed: entries.filter((entry) => entry.status === 'reviewed').length,
       archived: entries.filter((entry) => entry.status === 'archived').length,
     };
-  }, [inbox]);
+  }, [inbox, reviewDueCount]);
 
   if (loading) {
     return (
@@ -86,6 +105,37 @@ export function App() {
     }));
   }
 
+  function viewEntry(kind: Entry['kind'], id: string) {
+    const now = Date.now();
+    mutate((current) =>
+      updateReviewEntry(current, kind, id, (entry) => viewReview(entry, now)),
+    );
+  }
+
+  function skipEntry(kind: Entry['kind'], id: string) {
+    const now = Date.now();
+    mutate((current) =>
+      updateReviewEntry(current, kind, id, (entry) => skipReview(entry, now)),
+    );
+  }
+
+  function repeatEntry(kind: Entry['kind'], id: string) {
+    const now = Date.now();
+    mutate((current) => {
+      const queueRank =
+        Math.max(
+          now,
+          ...buildReviewQueue(current, now).map(
+            (item) => item.entry.review?.queueRank ?? now,
+          ),
+        ) + 1;
+
+      return updateReviewEntry(current, kind, id, (entry) =>
+        repeatReview(entry, now, queueRank),
+      );
+    });
+  }
+
   return (
     <div className="min-h-screen bg-[#f6fbf8] text-ink">
       <header className="border-b border-jade-100 bg-white">
@@ -95,18 +145,31 @@ export function App() {
               <p className="text-xs font-medium uppercase text-jade-600">
                 今日拾语 · {today}
               </p>
-              <h1 className="mt-2 text-3xl font-semibold text-jade-900">
-                拾语汉字box
-              </h1>
+              <div className="mt-2 flex items-center gap-3">
+                <img
+                  src={iconUrl}
+                  alt=""
+                  className="h-11 w-11 rounded-lg"
+                  aria-hidden="true"
+                />
+                <h1 className="text-3xl font-semibold text-jade-900">
+                  拾语汉字box
+                </h1>
+              </div>
               <p className="mt-2 max-w-xl text-sm leading-6 text-gray-500">
                 把网页里遇见的词语和句子收进一本轻巧的中文阅读手帐。
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+              <StatCard
+                icon={<BookOpen className="h-4 w-4" />}
+                label="今日复习"
+                value={stats.review}
+              />
               <StatCard icon={<Inbox className="h-4 w-4" />} label="待整理" value={stats.inbox} />
               <StatCard
                 icon={<CheckCircle2 className="h-4 w-4" />}
-                label="已复习"
+                label="复习中"
                 value={stats.reviewed}
               />
               <StatCard
@@ -123,7 +186,7 @@ export function App() {
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-jade-100 pb-3">
           <div className="flex rounded-lg border border-jade-100 bg-white p-1 shadow-sm">
-            {(['words', 'quotes'] as Tab[]).map((nextTab) => (
+            {(['review', 'words', 'quotes'] as Tab[]).map((nextTab) => (
               <button
                 key={nextTab}
                 onClick={() => setTab(nextTab)}
@@ -133,29 +196,45 @@ export function App() {
                     : 'text-gray-500 hover:bg-jade-50 hover:text-jade-800'
                 }`}
               >
-                {nextTab === 'words'
-                  ? `Words (${inbox.words.length})`
-                  : `Quotes (${inbox.quotes.length})`}
+                {getTabLabel(nextTab, {
+                  review: reviewDueCount,
+                  words: inbox.words.length,
+                  quotes: inbox.quotes.length,
+                })}
               </button>
             ))}
           </div>
-          <label className="inline-flex items-center gap-2 text-sm text-gray-500">
-            <BookOpen className="h-4 w-4 text-jade-600" />
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-              className="rounded-lg border border-jade-100 bg-white px-3 py-2 text-sm text-ink shadow-sm outline-none focus:border-jade-400"
-            >
-              <option value="inbox">Inbox</option>
-              <option value="reviewed">Reviewed</option>
-              <option value="archived">Archived</option>
-              <option value="all">All</option>
-            </select>
-          </label>
+          {tab === 'review' ? (
+            <div className="inline-flex items-center gap-2 rounded-lg border border-jade-100 bg-white px-3 py-2 text-sm text-gray-500 shadow-sm">
+              <BookOpen className="h-4 w-4 text-jade-600" />
+              Today&apos;s Queue
+            </div>
+          ) : (
+            <label className="inline-flex items-center gap-2 text-sm text-gray-500">
+              <BookOpen className="h-4 w-4 text-jade-600" />
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+                className="rounded-lg border border-jade-100 bg-white px-3 py-2 text-sm text-ink shadow-sm outline-none focus:border-jade-400"
+              >
+                <option value="inbox">Inbox</option>
+                <option value="reviewed">Review</option>
+                <option value="archived">Archived</option>
+                <option value="all">All</option>
+              </select>
+            </label>
+          )}
         </div>
 
         <section className="rounded-lg border border-jade-100 bg-white/80 p-3 shadow-sm">
-          {tab === 'words' ? (
+          {tab === 'review' ? (
+            <ReviewQueue
+              items={reviewItems}
+              onView={viewEntry}
+              onSkip={skipEntry}
+              onRepeat={repeatEntry}
+            />
+          ) : tab === 'words' ? (
             <WordList words={matches.words} onUpdate={updateWord} onDelete={deleteWord} />
           ) : (
             <QuoteList
@@ -168,6 +247,50 @@ export function App() {
       </main>
     </div>
   );
+}
+
+function updateReviewEntry(
+  inbox: InboxState,
+  kind: Entry['kind'],
+  id: string,
+  update: (entry: Entry) => Entry,
+): InboxState {
+  if (kind === 'word') {
+    return {
+      ...inbox,
+      words: inbox.words.map((word) =>
+        word.id === id ? (update(word) as WordEntry) : word,
+      ),
+    };
+  }
+
+  return {
+    ...inbox,
+    quotes: inbox.quotes.map((quote) =>
+      quote.id === id ? (update(quote) as QuoteEntry) : quote,
+    ),
+  };
+}
+
+function entryMatchesQuery(entry: Entry, query: string): boolean {
+  if (query === '') return true;
+
+  const source =
+    entry.kind === 'quote'
+      ? `${entry.category} ${entry.sourceTitle} ${entry.sourceDomain}`
+      : entry.occurrences
+          .map((occurrence) => `${occurrence.sourceTitle} ${occurrence.sourceDomain}`)
+          .join(' ');
+
+  return `${entry.text} ${entry.note} ${entry.tags.join(' ')} ${source}`
+    .toLowerCase()
+    .includes(query);
+}
+
+function getTabLabel(tab: Tab, counts: Record<Tab, number>): string {
+  if (tab === 'review') return `Review (${counts.review})`;
+  if (tab === 'words') return `Words (${counts.words})`;
+  return `Quotes (${counts.quotes})`;
 }
 
 function StatCard({

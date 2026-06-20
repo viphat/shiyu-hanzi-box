@@ -128,6 +128,17 @@ Create a distributable zip:
 npm run zip
 ```
 
+## To Do
+
+- Add backup and restore import/export so local-first data has a sturdy escape
+  hatch.
+- Add capture undo and clearer save feedback after context menu, shortcut, and
+  popup captures.
+- Add review settings such as daily cap, interval presets, and review streak
+  visibility.
+- Add richer context review with highlighted source sentences around saved words
+  and quotes.
+
 ## Useful Notes
 
 - The manifest is configured in `wxt.config.ts`.
@@ -136,8 +147,6 @@ npm run zip
   `Browser.tabs.Tab`.
 - The base extension icon lives at `assets/icon.png`; WXT auto-icons generates
   the packed icon sizes during build.
-- The next planned step is Task 15: manual Chrome smoke testing against
-  `.output/chrome-mv3/`.
 
 ## Test Coverage
 

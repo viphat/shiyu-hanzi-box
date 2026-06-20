@@ -12,8 +12,7 @@ The implementation plan is in:
 - `docs/superpowers/plans/2026-06-20-shiyu-hanzi-box.md`
 - `docs/superpowers/specs/2026-06-20-shiyu-hanzi-box-design.md`
 
-Tasks 0 through 14 have landed. Future work should continue from Task 15 unless
-the user says otherwise.
+Tasks 0 through 15 have landed.
 
 ## Commands
 
@@ -124,9 +123,3 @@ cat .output/chrome-mv3/manifest.json
 Expected manifest features include `contextMenus`, `storage`, `activeTab`,
 `scripting`, `downloads`, `unlimitedStorage`, command shortcuts, a toolbar
 popup, a new-tab override, and an MV3 background service worker.
-
-## Current Known Gaps
-
-- Task 15 manual Chrome smoke testing has not been completed/documented yet.
-- Browser-level dashboard/capture/export flows still need manual verification
-  in loaded Chrome extension form.

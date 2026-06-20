@@ -1,5 +1,14 @@
 export type Status = 'inbox' | 'reviewed' | 'archived';
 
+export interface ReviewState {
+  dueAt: number;
+  intervalDays: number;
+  repetitions: number;
+  lapses: number;
+  lastReviewedAt?: number;
+  queueRank?: number;
+}
+
 /** Captured once per save. Words aggregate many of these. */
 export interface Occurrence {
   sourceTitle: string;
@@ -19,6 +28,7 @@ interface EntryBase {
   createdAt: number;
   updatedAt: number;
   pinyin?: string;
+  review?: ReviewState;
 }
 
 export interface WordEntry extends EntryBase {

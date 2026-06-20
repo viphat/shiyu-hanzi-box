@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ClipboardPaste, Loader2, Quote, Type } from 'lucide-react';
+import iconUrl from '../../assets/icon.png';
 import {
   handleCapture,
   handleManualCapture,
@@ -77,7 +78,17 @@ export function Popup() {
 
   return (
     <div className="space-y-3">
-      <h1 className="text-sm font-semibold tracking-wide text-jade-700">拾语汉字box</h1>
+      <div className="flex items-center gap-2">
+        <img
+          src={iconUrl}
+          alt=""
+          className="h-8 w-8 rounded-lg"
+          aria-hidden="true"
+        />
+        <h1 className="text-sm font-semibold tracking-wide text-jade-700">
+          拾语汉字box
+        </h1>
+      </div>
       <p className="text-xs text-gray-500">Select text on the page, then choose how to save it.</p>
       <div className="grid grid-cols-2 gap-2">
         <button

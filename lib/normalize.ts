@@ -1,5 +1,5 @@
-// Character class covering ASCII + CJK punctuation/whitespace to strip at the edges.
-const EDGE_PUNCT = /[\s\u3000-\u303f\uff00-\uffef!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~，。！？、；：""''（）【】《》〈〉「」『』〔〕…—·]+/;
+// Strip only whitespace and actual Unicode punctuation at the edges.
+const EDGE_PUNCT = /[\s\p{P}]+/u;
 
 const FULLWIDTH_OFFSET = 0xfee0;
 

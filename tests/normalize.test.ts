@@ -20,6 +20,11 @@ describe('normalizeText', () => {
     expect(normalizeText('你好，世界')).toBe('你好，世界');
   });
 
+  it('does not strip edge CJK symbols that are meaningful text', () => {
+    expect(normalizeText('〇')).toBe('〇');
+    expect(normalizeText('〇二三')).toBe('〇二三');
+  });
+
   it('converts full-width latin to half-width (and lowercases per the lowercase rule)', () => {
     expect(normalizeText('ＡＢＣ')).toBe('abc');
   });

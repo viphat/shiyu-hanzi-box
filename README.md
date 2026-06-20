@@ -2,8 +2,8 @@
 
 拾语汉字box is a local-first Chrome MV3 extension for collecting Chinese words,
 phrases, and quotes while reading. Select text on a page, save it as a word or a
-quote, keep the working inbox in local extension storage, and eventually export
-daily Markdown notes.
+quote, keep the working inbox in local extension storage, and export daily
+Markdown notes.
 
 The project is built with WXT, React, TypeScript, Tailwind CSS, Vitest, and
 `@webext-core/fake-browser`.
@@ -22,21 +22,26 @@ Implemented:
   - empty selections are ignored.
 - Page-context reader for selected text, surrounding text, title, URL, and domain.
 - Background service worker wiring for context menus and keyboard commands.
-- Unit tests for normalization, capture/dedupe, and background capture paths.
+- Toolbar popup buttons for saving the current selection as a word or quote.
+- Lazy pinyin generation with `pinyin-pro`.
+- Daily Markdown rendering and zip export helpers.
+- New-tab dashboard with search, status filters, cards, edit controls, pinyin,
+  and export actions.
+- Jade/ink Tailwind theme tokens and CJK font stack.
+- Unit tests for normalization, capture/dedupe, background capture paths,
+  pinyin, Markdown rendering, and export generation.
 
 Still planned:
 
-- Toolbar popup save buttons.
-- Pinyin generation module.
-- Markdown and zip export.
-- New-tab dashboard and inbox components.
-- Tailwind theme polish and Chrome manual smoke test.
+- Manual Chrome smoke test for context menu, keyboard, popup, dashboard,
+  persistence, and exported files.
+- Real `assets/icon.png` to replace WXT's generated default icons.
 
 ## How Capture Works
 
 ```mermaid
 flowchart LR
-  A["User selects Chinese text"] --> B["Context menu or command"]
+  A["User selects Chinese text"] --> B["Context menu, command, or popup"]
   B --> C["background/capture-handler.ts"]
   C --> D["scripting.executeScript(readPageContext)"]
   D --> E["saveWord or saveQuote"]
@@ -59,18 +64,31 @@ entrypoints/
     capture-handler.ts   # active-tab selection capture + badge feedback
   popup/
     index.html
-    main.tsx             # placeholder until the full popup task lands
+    main.tsx
+    Popup.tsx            # save as word / save as quote buttons
+  newtab/
+    index.html
+    main.tsx
+    App.tsx              # dashboard shell, filters, list wiring
+    hooks/useInbox.ts    # live WXT storage hook
+    components/          # toolbar, word/quote cards, lists, pinyin button
 lib/
   capture.ts             # saveWord/saveQuote and word dedupe behavior
+  export.ts              # export map + zip generation
   id.ts                  # dependency-free id generation
+  markdown.ts            # daily note rendering
   normalize.ts           # word normalization
   page-context.ts        # injected selection reader
+  pinyin.ts              # pinyin-pro wrapper
   storage.ts             # WXT storage item and serialized mutations
   types.ts               # persisted data shapes
 tests/
   capture-handler.test.ts
   capture.test.ts
+  export.test.ts
+  markdown.test.ts
   normalize.test.ts
+  pinyin.test.ts
 ```
 
 Design and implementation planning live under `docs/superpowers/`.
@@ -124,8 +142,8 @@ npm run zip
   `Browser.tabs.Tab`.
 - The build currently warns that auto-icons has no `assets/icon.png`; WXT still
   produces default generated icons.
-- The popup is still a placeholder and is expected to be replaced by the Task 7
-  implementation.
+- The next planned step is Task 15: manual Chrome smoke testing against
+  `.output/chrome-mv3/`.
 
 ## Test Coverage
 
@@ -135,4 +153,8 @@ The current test suite covers:
 - first word capture, normalized word dedupe, duplicate occurrence suppression,
   quote capture, and empty-input handling;
 - background capture success, no-selection, restricted-page, no-active-tab, and
-  quote paths using fake Chrome APIs.
+  quote paths using fake Chrome APIs;
+- local pinyin generation;
+- daily Markdown frontmatter, sections, words, quotes, tags, pinyin, and source
+  links;
+- daily export grouping, archived-entry skipping, and zip byte generation.

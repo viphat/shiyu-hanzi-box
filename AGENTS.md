@@ -4,15 +4,15 @@
 
 This repo is `shiyu-hanzi-box`, a local-first Chrome MV3 extension named
 拾语汉字box. Its job is to capture selected Chinese text as words or quotes,
-store the working inbox in `chrome.storage.local`, and later export daily
-Markdown notes.
+store the working inbox in `chrome.storage.local`, and export daily Markdown
+notes.
 
 The implementation plan is in:
 
 - `docs/superpowers/plans/2026-06-20-shiyu-hanzi-box.md`
 - `docs/superpowers/specs/2026-06-20-shiyu-hanzi-box-design.md`
 
-Tasks 0 through 6 have landed. Future work should continue from Task 7 unless
+Tasks 0 through 14 have landed. Future work should continue from Task 15 unless
 the user says otherwise.
 
 ## Commands
@@ -34,6 +34,9 @@ Focused tests:
 npx vitest run tests/normalize.test.ts
 npx vitest run tests/capture.test.ts
 npx vitest run tests/capture-handler.test.ts
+npx vitest run tests/pinyin.test.ts
+npx vitest run tests/markdown.test.ts
+npx vitest run tests/export.test.ts
 ```
 
 `npm run compile` is `tsc --noEmit`.
@@ -48,6 +51,9 @@ The central data path is:
 3. `lib/page-context.ts` reads selected text and page metadata in the page.
 4. `lib/capture.ts` decides word vs quote behavior.
 5. `lib/storage.ts` persists the inbox with WXT storage.
+6. `entrypoints/newtab/App.tsx` reads and mutates the inbox through
+   `entrypoints/newtab/hooks/useInbox.ts`.
+7. `lib/markdown.ts` and `lib/export.ts` render daily notes and zip exports.
 
 Core modules:
 
@@ -57,6 +63,12 @@ Core modules:
 - `lib/storage.ts`: `local:inbox` storage item and serialized mutations.
 - `lib/capture.ts`: `saveWord` and `saveQuote`.
 - `lib/page-context.ts`: self-contained injected function.
+- `lib/pinyin.ts`: `pinyin-pro` wrapper for lazy dashboard pinyin generation.
+- `lib/markdown.ts`: pure daily Markdown rendering.
+- `lib/export.ts`: daily export map and zip byte generation.
+- `entrypoints/popup/Popup.tsx`: toolbar capture buttons.
+- `entrypoints/newtab/`: dashboard shell, toolbar, cards, lists, and storage
+  hook.
 
 ## Conventions
 
@@ -110,13 +122,13 @@ cat .output/chrome-mv3/manifest.json
 ```
 
 Expected manifest features include `contextMenus`, `storage`, `activeTab`,
-`scripting`, command shortcuts, and an MV3 background service worker.
+`scripting`, `downloads`, `unlimitedStorage`, command shortcuts, a toolbar
+popup, a new-tab override, and an MV3 background service worker.
 
 ## Current Known Gaps
 
-- `entrypoints/popup/main.tsx` is still a placeholder.
-- New-tab dashboard, pinyin, Markdown export, and zip export are not implemented
-  yet.
+- Task 15 manual Chrome smoke testing has not been completed/documented yet.
 - `assets/icon.png` is missing, so WXT auto-icons emits a warning and generates
   default icons.
-- Tailwind theme tokens for jade/ink styling are planned later.
+- Browser-level dashboard/capture/export flows still need manual verification
+  in loaded Chrome extension form.

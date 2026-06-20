@@ -12,14 +12,18 @@ export function WordList({
 }) {
   if (words.length === 0) {
     return (
-      <p className="py-8 text-center text-sm text-gray-400">
-        No words yet. Select text on any page and save it.
-      </p>
+      <div className="py-12 text-center">
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-jade-50 text-2xl text-jade-700">
+          词
+        </div>
+        <p className="text-sm font-medium text-jade-900">还没有词语</p>
+        <p className="mt-1 text-sm text-gray-400">去网页里拾一个字词，收藏箱会在这里展开。</p>
+      </div>
     );
   }
 
   return (
-    <div className="space-y-2">
+    <div className="grid gap-3">
       {words.map((word) => (
         <WordCard
           key={word.id}

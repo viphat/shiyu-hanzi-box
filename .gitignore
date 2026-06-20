@@ -30,6 +30,7 @@ node_modules/
 # WXT build output
 .wxt/
 .output/
+output/
 dist/
 
 # Logs

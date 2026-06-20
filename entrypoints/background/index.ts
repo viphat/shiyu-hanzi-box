@@ -1,4 +1,9 @@
-import { handleCapture, MENU_SAVE_WORD, MENU_SAVE_QUOTE } from './capture-handler';
+import {
+  handleCapture,
+  handleContextMenuCapture,
+  MENU_SAVE_WORD,
+  MENU_SAVE_QUOTE,
+} from './capture-handler';
 
 export default defineBackground(() => {
   browser.runtime.onInstalled.addListener(() => {
@@ -14,9 +19,12 @@ export default defineBackground(() => {
     });
   });
 
-  browser.contextMenus.onClicked.addListener((info) => {
-    if (info.menuItemId === MENU_SAVE_WORD) void handleCapture('word');
-    else if (info.menuItemId === MENU_SAVE_QUOTE) void handleCapture('quote');
+  browser.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === MENU_SAVE_WORD) {
+      void handleContextMenuCapture('word', info, tab);
+    } else if (info.menuItemId === MENU_SAVE_QUOTE) {
+      void handleContextMenuCapture('quote', info, tab);
+    }
   });
 
   browser.commands.onCommand.addListener((command) => {

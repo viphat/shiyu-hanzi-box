@@ -29,5 +29,9 @@ export function useInbox() {
     await inboxStorage.setValue(fn(current));
   }, []);
 
-  return { inbox, loading, mutate };
+  const replace = useCallback(async (next: Inbox) => {
+    await inboxStorage.setValue(next);
+  }, []);
+
+  return { inbox, loading, mutate, replace };
 }

@@ -19,7 +19,7 @@ type Tab = 'review' | 'words' | 'quotes';
 type StatusFilter = 'all' | Status;
 
 export function App() {
-  const { inbox, loading, mutate } = useInbox();
+  const { inbox, loading, mutate, replace } = useInbox();
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<Tab>('review');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('inbox');
@@ -182,7 +182,12 @@ export function App() {
         </div>
       </header>
       <main className="mx-auto max-w-5xl space-y-5 px-5 py-6">
-        <Toolbar inbox={inbox} query={query} onQuery={setQuery} />
+        <Toolbar
+          inbox={inbox}
+          query={query}
+          onQuery={setQuery}
+          onRestore={replace}
+        />
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-jade-100 pb-3">
           <div className="flex rounded-lg border border-jade-100 bg-white p-1 shadow-sm">

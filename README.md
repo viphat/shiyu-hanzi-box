@@ -25,11 +25,13 @@ Implemented:
 - Toolbar popup buttons for saving the current selection as a word or quote.
 - Lazy pinyin generation with `pinyin-pro`.
 - Daily Markdown rendering and zip export helpers.
+- Versioned JSON backup export and validated restore import for the full local
+  inbox.
 - New-tab dashboard with search, status filters, cards, edit controls, pinyin,
-  and export actions.
+  export actions, and backup/restore controls.
 - Jade/ink Tailwind theme tokens and CJK font stack.
 - Unit tests for normalization, capture/dedupe, background capture paths,
-  pinyin, Markdown rendering, and export generation.
+  pinyin, Markdown rendering, export generation, and backup restore validation.
 
 ## How Capture Works
 
@@ -69,6 +71,7 @@ entrypoints/
 lib/
   capture.ts             # saveWord/saveQuote and word dedupe behavior
   export.ts              # export map + zip generation
+  backup.ts              # versioned JSON backup + restore validation
   id.ts                  # dependency-free id generation
   markdown.ts            # daily note rendering
   normalize.ts           # word normalization
@@ -130,8 +133,6 @@ npm run zip
 
 ## To Do
 
-- Add backup and restore import/export so local-first data has a sturdy escape
-  hatch.
 - Add capture undo and clearer save feedback after context menu, shortcut, and
   popup captures.
 - Add review settings such as daily cap, interval presets, and review streak
@@ -161,3 +162,5 @@ The current test suite covers:
 - daily Markdown frontmatter, sections, words, quotes, tags, pinyin, and source
   links;
 - daily export grouping, archived-entry skipping, and zip byte generation.
+- versioned backup JSON generation, legacy raw inbox restore, and invalid import
+  rejection.

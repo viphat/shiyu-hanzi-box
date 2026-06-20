@@ -128,7 +128,5 @@ popup, a new-tab override, and an MV3 background service worker.
 ## Current Known Gaps
 
 - Task 15 manual Chrome smoke testing has not been completed/documented yet.
-- `assets/icon.png` is missing, so WXT auto-icons emits a warning and generates
-  default icons.
 - Browser-level dashboard/capture/export flows still need manual verification
   in loaded Chrome extension form.

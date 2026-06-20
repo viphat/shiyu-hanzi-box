@@ -31,12 +31,6 @@ Implemented:
 - Unit tests for normalization, capture/dedupe, background capture paths,
   pinyin, Markdown rendering, and export generation.
 
-Still planned:
-
-- Manual Chrome smoke test for context menu, keyboard, popup, dashboard,
-  persistence, and exported files.
-- Real `assets/icon.png` to replace WXT's generated default icons.
-
 ## How Capture Works
 
 ```mermaid
@@ -140,8 +134,8 @@ npm run zip
 - The storage import path for this WXT version is `wxt/utils/storage`.
 - WXT browser types are imported as `Browser` from `wxt/browser`; tab types are
   `Browser.tabs.Tab`.
-- The build currently warns that auto-icons has no `assets/icon.png`; WXT still
-  produces default generated icons.
+- The base extension icon lives at `assets/icon.png`; WXT auto-icons generates
+  the packed icon sizes during build.
 - The next planned step is Task 15: manual Chrome smoke testing against
   `.output/chrome-mv3/`.
 

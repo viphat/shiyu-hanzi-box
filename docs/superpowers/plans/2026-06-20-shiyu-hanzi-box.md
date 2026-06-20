@@ -268,7 +268,7 @@ git commit -m "feat: add entry type definitions"
 - Create: `lib/normalize.ts`
 - Test: `tests/normalize.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/normalize.test.ts`:
 ```ts
@@ -294,8 +294,8 @@ describe('normalizeText', () => {
     expect(normalizeText('你好，世界')).toBe('你好，世界');
   });
 
-  it('converts full-width latin to half-width', () => {
-    expect(normalizeText('ＡＢＣ')).toBe('ABC');
+  it('converts full-width latin to half-width (and lowercases per the lowercase rule)', () => {
+    expect(normalizeText('ＡＢＣ')).toBe('abc');
   });
 
   it('lowercases latin letters', () => {
@@ -313,12 +313,12 @@ describe('normalizeText', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/normalize.test.ts`
 Expected: FAIL — `normalizeText` not defined / module not found.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 `lib/normalize.ts`:
 ```ts
@@ -329,10 +329,19 @@ const FULLWIDTH_OFFSET = 0xfee0;
 
 function toHalfWidth(ch: string): string {
   const code = ch.charCodeAt(0);
-  // Full-width ASCII range U+FF01–U+FF5E -> ASCII U+0021–U+007E
-  if (code >= 0xff01 && code <= 0xff5e) return String.fromCharCode(code - FULLWIDTH_OFFSET);
-  // Ideographic space U+3000 -> regular space
-  if (code === 0x3000) return ' ';
+  if (code === 0x3000) return ' '; // ideographic space -> regular space
+  // Convert full-width ASCII *alphanumeric* variants (U+FF10-19 digits,
+  // U+FF21-5A upper, U+FF41-5A lower) to half-width. CJK full-width
+  // punctuation (U+FF01-0F, U+FF1B-20, U+FF3B-40, U+FF5B-e0, …) is preserved
+  // so internal CJK punctuation like ，。！？ is not mangled into ASCII.
+  const half = code - FULLWIDTH_OFFSET;
+  if (
+    (half >= 0x30 && half <= 0x39) || // 0-9
+    (half >= 0x41 && half <= 0x5a) || // A-Z
+    (half >= 0x61 && half <= 0x7a)    // a-z
+  ) {
+    return String.fromCharCode(half);
+  }
   return ch;
 }
 
@@ -354,12 +363,12 @@ export function normalizeText(input: string): string {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run tests/normalize.test.ts`
 Expected: PASS (all 8 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/normalize.ts tests/normalize.test.ts

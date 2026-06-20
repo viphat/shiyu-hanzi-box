@@ -1,22 +1,92 @@
 @import "tailwindcss";
 
 @theme {
-  --color-jade-50: #ecfdf5;
-  --color-jade-100: #d1fae5;
-  --color-jade-200: #a7f3d0;
-  --color-jade-300: #6ee7b7;
-  --color-jade-400: #34d399;
-  --color-jade-500: #10b981;
-  --color-jade-600: #059669;
-  --color-jade-700: #047857;
-  --color-jade-800: #065f46;
-  --color-jade-900: #064e3b;
-  --color-ink: #1f2937;
+  --color-paper: #f5f0e8;
+  --color-paper-light: rgba(255, 252, 245, 0.5);
+  --color-paper-input: rgba(255, 252, 245, 0.8);
+  --color-ink: #1a1a1a;
+  --color-ink-secondary: #4a3f35;
+  --color-muted: #8a7e6e;
+  --color-border: rgba(50, 50, 50, 0.1);
+  --color-border-hover: rgba(50, 50, 50, 0.2);
+  --color-border-strong: rgba(50, 50, 50, 0.15);
+  --color-cinnabar: #b4321e;
+  --color-cinnabar-light: rgba(180, 50, 30, 0.06);
+  --color-cinnabar-border: rgba(180, 50, 30, 0.12);
+  --color-cinnabar-fade: rgba(180, 50, 30, 0.5);
+  --color-cinnabar-subtle: rgba(180, 50, 30, 0.25);
 
-  --font-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
-    "Source Han Sans SC", "Noto Sans CJK SC", system-ui, sans-serif;
+  --font-serif: "Songti SC", "Source Han Serif SC", "Noto Serif CJK SC",
+    "SimSun", "STSong", serif;
+  --font-sans: var(--font-serif);
+
+  --radius-xs: 2px;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 2px;
+  --radius-2xl: 2px;
+  --radius-full: 2px;
+}
+
+html {
+  background: var(--color-paper);
 }
 
 body {
-  font-family: var(--font-sans);
+  min-width: 0;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(180, 160, 130, 0.06) 0,
+      rgba(180, 160, 130, 0.06) 1px,
+      transparent 1px,
+      transparent 28px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(180, 160, 130, 0.05) 0,
+      rgba(180, 160, 130, 0.05) 1px,
+      transparent 1px,
+      transparent 29px
+    ),
+    radial-gradient(circle at 18% 12%, rgba(255, 250, 235, 0.7), transparent 36%),
+    radial-gradient(circle at 88% 82%, rgba(210, 188, 150, 0.2), transparent 40%),
+    linear-gradient(135deg, #f5f0e8, #ede6d8, #f2ece2, #e8e0d0);
+  color: var(--color-ink);
+  font-family: var(--font-serif);
+  letter-spacing: 1px;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: var(--color-cinnabar-subtle);
+  color: var(--color-ink);
+}
+
+.bamboo-divider {
+  color: var(--color-border-strong);
+  font-size: 12px;
+  letter-spacing: 12px;
+  text-align: center;
+}
+
+.cinnabar-header-accent {
+  position: relative;
+}
+
+.cinnabar-header-accent::after {
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 50px;
+  height: 2px;
+  background: var(--color-cinnabar-fade);
+  content: "";
 }

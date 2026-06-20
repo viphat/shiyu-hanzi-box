@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Archive, Check, Trash2 } from 'lucide-react';
 import type { QuoteEntry } from '@/lib/types';
 
 export function QuoteCard({
@@ -14,22 +13,28 @@ export function QuoteCard({
   const [note, setNote] = useState(quote.note);
 
   return (
-    <div className="rounded-lg border border-jade-100 bg-[#fbfefc] p-4 shadow-sm transition hover:border-jade-200 hover:shadow-md">
-      <blockquote className="border-l-4 border-jade-400 pl-4 text-lg leading-8 text-jade-950">
-        「{quote.text}」
+    <div className="rounded-sm border border-border bg-paper-light p-4 shadow-sm transition hover:border-border-hover hover:shadow-md">
+      <blockquote className="relative border-l-[3px] border-cinnabar-fade py-1 pl-5 pr-4 text-base leading-8 text-ink tracking-[1px]">
+        <span aria-hidden="true" className="absolute left-2 top-0 text-xl text-cinnabar/40">
+          「
+        </span>
+        <span>{quote.text}</span>
+        <span aria-hidden="true" className="absolute bottom-0 right-1 text-xl text-cinnabar/40">
+          」
+        </span>
       </blockquote>
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">
         <input
           value={quote.category}
           onChange={(event) => onUpdate({ category: event.target.value })}
-          className="rounded bg-jade-100 px-2 py-1 text-jade-800 outline-none focus:bg-white"
+          className="rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-1 text-cinnabar outline-none transition focus:border-cinnabar-fade focus:bg-paper-input"
         />
         {quote.sourceUrl && (
           <a
             href={quote.sourceUrl}
             target="_blank"
             rel="noreferrer"
-            className="rounded bg-white px-2 py-1 hover:text-jade-700"
+            className="rounded-sm border border-border bg-paper-input px-2 py-1 hover:text-cinnabar"
           >
             {quote.sourceTitle || quote.sourceDomain}
           </a>
@@ -41,30 +46,33 @@ export function QuoteCard({
         onBlur={() => note !== quote.note && onUpdate({ note })}
         placeholder="给这句话留一条旁注..."
         rows={2}
-        className="mt-3 w-full resize-none rounded-lg border border-jade-100 bg-white p-2 text-xs outline-none focus:border-jade-400"
+        className="mt-3 w-full resize-none rounded-sm border border-border bg-paper-input p-2 text-xs text-ink outline-none transition placeholder:text-muted focus:border-cinnabar-fade"
       />
       <div className="mt-1 flex justify-end gap-1">
         {quote.status !== 'reviewed' && (
           <button
             onClick={() => onUpdate({ status: 'reviewed' })}
-            className="rounded p-1 text-gray-400 hover:bg-jade-50 hover:text-jade-700"
+            title="标为复习中"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-cinnabar-border bg-cinnabar-light text-xs font-semibold text-cinnabar transition hover:bg-cinnabar hover:text-white"
           >
-            <Check className="h-4 w-4" />
+            阅
           </button>
         )}
         {quote.status !== 'archived' && (
           <button
             onClick={() => onUpdate({ status: 'archived' })}
-            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            title="归档"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-border bg-transparent text-xs font-semibold text-muted transition hover:border-border-hover hover:bg-paper-input hover:text-ink-secondary"
           >
-            <Archive className="h-4 w-4" />
+            档
           </button>
         )}
         <button
           onClick={onDelete}
-          className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+          title="删除"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-border bg-transparent text-xs font-semibold text-muted transition hover:border-cinnabar-border hover:bg-cinnabar-light hover:text-cinnabar"
         >
-          <Trash2 className="h-4 w-4" />
+          删
         </button>
       </div>
     </div>

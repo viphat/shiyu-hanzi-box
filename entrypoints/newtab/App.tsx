@@ -67,7 +67,7 @@ export function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#f6fbf8] p-8 text-sm text-jade-700">
+      <div className="min-h-screen p-8 text-sm text-ink-secondary">
         正在翻开收藏箱...
       </div>
     );
@@ -137,26 +137,26 @@ export function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f6fbf8] text-ink">
-      <header className="border-b border-jade-100 bg-white">
+    <div className="min-h-screen text-ink">
+      <header className="cinnabar-header-accent border-b-2 border-border-strong bg-paper-light">
         <div className="mx-auto max-w-5xl px-5 py-6">
           <div className="grid gap-5 md:grid-cols-[1fr_auto] md:items-end">
             <div>
-              <p className="text-xs font-medium uppercase text-jade-600">
+              <p className="text-xs font-medium text-muted tracking-[2px]">
                 今日拾语 · {today}
               </p>
               <div className="mt-2 flex items-center gap-3">
                 <img
                   src={iconUrl}
                   alt=""
-                  className="h-11 w-11 rounded-lg"
+                  className="h-11 w-11 rounded-sm"
                   aria-hidden="true"
                 />
-                <h1 className="text-3xl font-semibold text-jade-900">
+                <h1 className="text-[26px] font-bold leading-none text-ink tracking-[6px]">
                   拾语汉字box
                 </h1>
               </div>
-              <p className="mt-2 max-w-xl text-sm leading-6 text-gray-500">
+              <p className="mt-2 max-w-xl text-xs leading-6 text-muted tracking-[2px]">
                 把网页里遇见的词语和句子收进一本轻巧的中文阅读手帐。
               </p>
             </div>
@@ -189,16 +189,16 @@ export function App() {
           onRestore={replace}
         />
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-jade-100 pb-3">
-          <div className="flex rounded-lg border border-jade-100 bg-white p-1 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-strong pb-3">
+          <div className="flex gap-1">
             {(['review', 'words', 'quotes'] as Tab[]).map((nextTab) => (
               <button
                 key={nextTab}
                 onClick={() => setTab(nextTab)}
-                className={`rounded px-4 py-2 text-sm font-medium transition ${
+                className={`relative px-4 py-2 text-[13px] tracking-[2px] transition ${
                   tab === nextTab
-                    ? 'bg-jade-700 text-white shadow-sm'
-                    : 'text-gray-500 hover:bg-jade-50 hover:text-jade-800'
+                    ? "font-semibold text-ink after:absolute after:-bottom-[13px] after:left-1/2 after:h-0.5 after:w-9 after:-translate-x-1/2 after:bg-cinnabar-fade after:content-['']"
+                    : 'text-muted hover:text-ink-secondary'
                 }`}
               >
                 {getTabLabel(nextTab, {
@@ -210,28 +210,32 @@ export function App() {
             ))}
           </div>
           {tab === 'review' ? (
-            <div className="inline-flex items-center gap-2 rounded-lg border border-jade-100 bg-white px-3 py-2 text-sm text-gray-500 shadow-sm">
-              <BookOpen className="h-4 w-4 text-jade-600" />
-              Today&apos;s Queue
+            <div className="inline-flex items-center gap-2 rounded-sm border border-border bg-paper-light px-3 py-2 text-sm text-muted shadow-sm">
+              <BookOpen className="h-4 w-4 text-cinnabar" />
+              今日温习
             </div>
           ) : (
-            <label className="inline-flex items-center gap-2 text-sm text-gray-500">
-              <BookOpen className="h-4 w-4 text-jade-600" />
+            <label className="inline-flex items-center gap-2 text-sm text-muted">
+              <BookOpen className="h-4 w-4 text-cinnabar" />
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-                className="rounded-lg border border-jade-100 bg-white px-3 py-2 text-sm text-ink shadow-sm outline-none focus:border-jade-400"
+                className="rounded-sm border border-border bg-paper-input px-3 py-2 text-sm text-ink shadow-sm outline-none transition focus:border-cinnabar-fade"
               >
-                <option value="inbox">Inbox</option>
-                <option value="reviewed">Review</option>
-                <option value="archived">Archived</option>
-                <option value="all">All</option>
+                <option value="inbox">待整理</option>
+                <option value="reviewed">复习中</option>
+                <option value="archived">已归档</option>
+                <option value="all">全部</option>
               </select>
             </label>
           )}
         </div>
 
-        <section className="rounded-lg border border-jade-100 bg-white/80 p-3 shadow-sm">
+        <div className="bamboo-divider" aria-hidden="true">
+          ◇ ◇ ◇
+        </div>
+
+        <section>
           {tab === 'review' ? (
             <ReviewQueue
               items={reviewItems}
@@ -293,9 +297,9 @@ function entryMatchesQuery(entry: Entry, query: string): boolean {
 }
 
 function getTabLabel(tab: Tab, counts: Record<Tab, number>): string {
-  if (tab === 'review') return `Review (${counts.review})`;
-  if (tab === 'words') return `Words (${counts.words})`;
-  return `Quotes (${counts.quotes})`;
+  if (tab === 'review') return `温习 (${counts.review})`;
+  if (tab === 'words') return `词语 (${counts.words})`;
+  return `句子 (${counts.quotes})`;
 }
 
 function StatCard({
@@ -308,12 +312,12 @@ function StatCard({
   value: number;
 }) {
   return (
-    <div className="rounded-lg border border-jade-100 bg-jade-50 px-4 py-3 text-jade-900">
-      <div className="mx-auto flex w-fit items-center gap-1 text-jade-700">
+    <div className="rounded-sm border border-border bg-paper-light px-4 py-3 text-ink">
+      <div className="mx-auto flex w-fit items-center gap-1 text-muted">
         {icon}
-        <span className="text-xs">{label}</span>
+        <span className="text-[11px] tracking-[1px]">{label}</span>
       </div>
-      <div className="mt-1 text-2xl font-semibold">{value}</div>
+      <div className="mt-1 text-2xl font-bold">{value}</div>
     </div>
   );
 }

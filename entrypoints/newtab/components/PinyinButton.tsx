@@ -12,7 +12,7 @@ export function PinyinButton({
   onGenerated: (pinyin: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
-  if (existing) return <span className="text-xs italic text-jade-600">{existing}</span>;
+  if (existing) return <span className="text-xs italic text-cinnabar">{existing}</span>;
 
   return (
     <button
@@ -23,14 +23,14 @@ export function PinyinButton({
         onGenerated(pinyin);
         setBusy(false);
       }}
-      className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-jade-600"
+      className="inline-flex items-center gap-1 text-xs text-muted transition hover:text-cinnabar"
     >
       {busy ? (
         <Loader2 className="h-3 w-3 animate-spin" />
       ) : (
         <Sparkles className="h-3 w-3" />
       )}
-      pinyin
+      注音
     </button>
   );
 }

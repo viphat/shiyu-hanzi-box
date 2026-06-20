@@ -61,7 +61,7 @@ export function Toolbar({
     const json = serializeBackup(inbox);
     const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
     await downloadBlob(blob, `shiyu-hanzi-box-backup-${todayStamp()}.json`);
-    setMessage({ tone: 'success', text: 'Backup JSON is ready.' });
+    setMessage({ tone: 'success', text: '备份 JSON 已备好。' });
   }
 
   async function restoreBackup(event: ChangeEvent<HTMLInputElement>) {
@@ -76,7 +76,7 @@ export function Toolbar({
       const restored = parseBackup(await file.text());
       const count = restored.words.length + restored.quotes.length;
       const confirmed = window.confirm(
-        `Restore ${count} entries from "${file.name}"? This replaces the current local inbox.`,
+        `要从「${file.name}」还原 ${count} 条记录吗？这会替换当前本地收藏箱。`,
       );
 
       if (!confirmed) return;
@@ -84,7 +84,7 @@ export function Toolbar({
       await onRestore(restored);
       setMessage({
         tone: 'success',
-        text: `Restored ${count} entries from backup.`,
+        text: `已从备份还原 ${count} 条记录。`,
       });
     } catch (error) {
       setMessage({
@@ -92,7 +92,7 @@ export function Toolbar({
         text:
           error instanceof BackupParseError
             ? error.message
-            : 'Could not restore that backup file.',
+            : '无法还原这个备份文件。',
       });
     } finally {
       setRestoring(false);
@@ -100,45 +100,47 @@ export function Toolbar({
   }
 
   return (
-    <div className="rounded-lg border border-jade-100 bg-white p-3 shadow-sm">
+    <div className="rounded-sm border border-border bg-paper-light p-3 shadow-sm">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-medium text-jade-700">书桌工具</p>
-          <p className="text-xs text-gray-400">
-            Search your notes or export today&apos;s reading.
+          <p className="inline-block border-b border-cinnabar-subtle pb-1 text-xs font-medium text-ink-secondary tracking-[2px]">
+            案头工具
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            检索札记，或导出今日读到的词句。
           </p>
         </div>
-        <div className="rounded bg-jade-50 px-2 py-1 text-xs text-jade-700">
+        <div className="rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-1 text-xs text-cinnabar tracking-[1px]">
           {inbox.words.length} 词 · {inbox.quotes.length} 句
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[220px] flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-jade-500" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
           <input
             value={query}
             onChange={(event) => onQuery(event.target.value)}
-            placeholder="Search words, quotes, categories..."
-            className="w-full rounded-lg border border-jade-100 bg-[#fbfefc] py-2.5 pl-9 pr-3 text-sm outline-none focus:border-jade-400"
+            placeholder="检索词语、句子、分类..."
+            className="w-full rounded-sm border border-border bg-paper-input py-2.5 pl-9 pr-3 text-sm text-ink outline-none transition placeholder:text-muted focus:border-cinnabar-fade"
           />
         </div>
         <button
           onClick={downloadToday}
-          className="inline-flex items-center gap-1 rounded-lg border border-jade-100 bg-white px-3 py-2.5 text-sm text-jade-800 hover:bg-jade-50"
+          className="inline-flex items-center gap-1 rounded-sm border border-border bg-transparent px-3 py-2.5 text-sm text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input"
         >
-          <FileText className="h-4 w-4" /> Today
+          <FileText className="h-4 w-4" /> 今日札记
         </button>
         <button
           onClick={downloadZip}
-          className="inline-flex items-center gap-1 rounded-lg bg-jade-700 px-3 py-2.5 text-sm text-white shadow-sm hover:bg-jade-800"
+          className="inline-flex items-center gap-1 rounded-sm bg-cinnabar px-3 py-2.5 text-sm text-white shadow-sm tracking-[2px] transition hover:brightness-95"
         >
-          <Download className="h-4 w-4" /> Export zip
+          <Download className="h-4 w-4" /> 导出
         </button>
         <button
           onClick={downloadBackup}
-          className="inline-flex items-center gap-1 rounded-lg border border-jade-100 bg-white px-3 py-2.5 text-sm text-jade-800 hover:bg-jade-50"
+          className="inline-flex items-center gap-1 rounded-sm border border-border bg-transparent px-3 py-2.5 text-sm text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input"
         >
-          <Download className="h-4 w-4" /> Backup
+          <Download className="h-4 w-4" /> 备份
         </button>
         <input
           ref={fileInputRef}
@@ -150,15 +152,15 @@ export function Toolbar({
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={restoring}
-          className="inline-flex items-center gap-1 rounded-lg border border-jade-100 bg-white px-3 py-2.5 text-sm text-jade-800 hover:bg-jade-50 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex items-center gap-1 rounded-sm border border-border bg-transparent px-3 py-2.5 text-sm text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input disabled:cursor-not-allowed disabled:opacity-60"
         >
-          <Upload className="h-4 w-4" /> {restoring ? 'Restoring...' : 'Restore'}
+          <Upload className="h-4 w-4" /> {restoring ? '还原中...' : '还原'}
         </button>
       </div>
       {message ? (
         <p
-          className={`mt-3 text-xs ${
-            message.tone === 'error' ? 'text-red-600' : 'text-jade-700'
+          className={`mt-3 text-xs tracking-[1px] ${
+            message.tone === 'error' ? 'text-cinnabar' : 'text-ink-secondary'
           }`}
           role="status"
         >

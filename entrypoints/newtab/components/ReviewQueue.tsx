@@ -15,12 +15,12 @@ export function ReviewQueue({
 }) {
   if (items.length === 0) {
     return (
-      <div className="py-12 text-center">
-        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-jade-50 text-2xl text-jade-700">
+      <div className="rounded-sm border border-dashed border-border bg-paper-light py-12 text-center">
+        <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center text-[56px] leading-none text-ink/12">
           习
         </div>
-        <p className="text-sm font-medium text-jade-900">今日复习清空了</p>
-        <p className="mt-1 text-sm text-gray-400">
+        <p className="text-base font-medium text-ink-secondary tracking-[3px]">今日复习清空了</p>
+        <p className="mt-1 text-xs text-muted">
           新拾到的词句会先出现在这里，直到你把它们归档。
         </p>
       </div>
@@ -57,35 +57,41 @@ function ReviewCard({
   const source = getSourceLabel(entry);
 
   return (
-    <article className="rounded-lg border border-jade-100 bg-[#fbfefc] p-4 shadow-sm transition hover:border-jade-200 hover:shadow-md">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-        <span className="inline-flex items-center gap-1 rounded bg-jade-100 px-2 py-1 font-medium text-jade-800">
+    <article className="rounded-sm border border-border bg-paper-light p-4 shadow-sm transition hover:border-border-hover hover:shadow-md">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+        <span className="inline-flex items-center gap-1 rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-1 font-medium text-cinnabar tracking-[1px]">
           {entry.kind === 'word' ? (
             <WholeWord className="h-3.5 w-3.5" />
           ) : (
             <MessageSquareQuote className="h-3.5 w-3.5" />
           )}
-          {entry.kind === 'word' ? 'Word' : 'Quote'}
+          {entry.kind === 'word' ? '词' : '句'}
         </span>
-        <span className="rounded bg-white px-2 py-1">
-          {entry.status === 'inbox' ? 'Inbox' : 'Review'}
+        <span className="rounded-sm border border-border bg-paper-input px-2 py-1">
+          {entry.status === 'inbox' ? '待整理' : '复习中'}
         </span>
         {entry.kind === 'quote' && (
-          <span className="rounded bg-white px-2 py-1">{entry.category}</span>
+          <span className="rounded-sm border border-border bg-paper-input px-2 py-1">{entry.category}</span>
         )}
-        {source && <span className="truncate rounded bg-white px-2 py-1">{source}</span>}
+        {source && <span className="truncate rounded-sm border border-border bg-paper-input px-2 py-1">{source}</span>}
       </div>
 
       {entry.kind === 'word' ? (
-        <h2 className="mt-3 text-3xl font-semibold text-jade-950">{entry.text}</h2>
+        <h2 className="mt-3 text-[32px] font-bold leading-none text-ink tracking-[4px]">{entry.text}</h2>
       ) : (
-        <blockquote className="mt-3 border-l-4 border-jade-400 pl-4 text-lg leading-8 text-jade-950">
-          「{entry.text}」
+        <blockquote className="relative mt-3 border-l-[3px] border-cinnabar-fade py-1 pl-5 pr-4 text-base leading-8 text-ink tracking-[1px]">
+          <span aria-hidden="true" className="absolute left-2 top-0 text-xl text-cinnabar/40">
+            「
+          </span>
+          <span>{entry.text}</span>
+          <span aria-hidden="true" className="absolute bottom-0 right-1 text-xl text-cinnabar/40">
+            」
+          </span>
         </blockquote>
       )}
 
       {entry.note && (
-        <p className="mt-3 rounded-lg bg-white px-3 py-2 text-sm leading-6 text-gray-600">
+        <p className="mt-3 rounded-sm border border-border bg-paper-input px-3 py-2 text-sm leading-6 text-ink-secondary">
           {entry.note}
         </p>
       )}
@@ -93,24 +99,24 @@ function ReviewCard({
       <div className="mt-4 flex flex-wrap justify-end gap-2">
         <button
           onClick={onView}
-          title="Mark viewed and schedule the next review"
-          className="inline-flex items-center gap-1 rounded-lg bg-jade-700 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-jade-800"
+          title="标记已阅并安排下次复习"
+          className="inline-flex items-center gap-1 rounded-sm bg-cinnabar px-3 py-2 text-sm font-medium text-white shadow-sm tracking-[2px] transition hover:brightness-95"
         >
-          <Eye className="h-4 w-4" /> View
+          <Eye className="h-4 w-4" /> 已阅
         </button>
         <button
           onClick={onSkip}
-          title="Skip this card until tomorrow"
-          className="inline-flex items-center gap-1 rounded-lg border border-jade-100 bg-white px-3 py-2 text-sm font-medium text-jade-800 hover:bg-jade-50"
+          title="这张卡片明日再看"
+          className="inline-flex items-center gap-1 rounded-sm border border-border bg-transparent px-3 py-2 text-sm font-medium text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input"
         >
-          <SkipForward className="h-4 w-4" /> Skip
+          <SkipForward className="h-4 w-4" /> 明日
         </button>
         <button
           onClick={onRepeat}
-          title="Push this card to the end of today's queue"
-          className="inline-flex items-center gap-1 rounded-lg border border-jade-100 bg-white px-3 py-2 text-sm font-medium text-jade-800 hover:bg-jade-50"
+          title="移到今日队尾"
+          className="inline-flex items-center gap-1 rounded-sm border border-border bg-transparent px-3 py-2 text-sm font-medium text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input"
         >
-          <Repeat2 className="h-4 w-4" /> Repeat
+          <Repeat2 className="h-4 w-4" /> 稍后
         </button>
       </div>
     </article>

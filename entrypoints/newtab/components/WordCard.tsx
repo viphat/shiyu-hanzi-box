@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import type { WordEntry } from '@/lib/types';
 import { PinyinButton } from './PinyinButton';
+import { WordInsightPanel } from './WordInsightPanel';
 
 export function WordCard({
   word,
@@ -83,23 +84,29 @@ export function WordCard({
 
       {expanded && (
         <div className="mt-4 space-y-3 border-t border-border pt-3 text-sm">
-          <ul className="space-y-1.5">
-            {word.occurrences.map((occurrence, index) => (
-              <li key={index} className="truncate rounded-sm border border-border bg-paper-input px-2 py-1 text-xs text-muted">
-                <a
-                  href={occurrence.sourceUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hover:text-cinnabar"
-                >
-                  {occurrence.sourceTitle || occurrence.sourceDomain}
-                </a>
-                {occurrence.surrounding && (
-                  <span className="text-muted"> · {occurrence.surrounding}</span>
-                )}
-              </li>
-            ))}
-          </ul>
+          <WordInsightPanel word={word} />
+
+          <details className="rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs">
+            <summary className="cursor-pointer text-muted">所有相遇（{word.occurrences.length}）</summary>
+            <ul className="mt-1.5 space-y-1.5">
+              {word.occurrences.map((occurrence, index) => (
+                <li key={index} className="truncate rounded-sm border border-border bg-paper-light px-2 py-1 text-xs text-muted">
+                  <a
+                    href={occurrence.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-cinnabar"
+                  >
+                    {occurrence.sourceTitle || occurrence.sourceDomain}
+                  </a>
+                  {occurrence.surrounding && (
+                    <span className="text-muted"> · {occurrence.surrounding}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </details>
+
           <textarea
             value={note}
             onChange={(event) => setNote(event.target.value)}

@@ -1,6 +1,7 @@
 import { Eye, MessageSquareQuote, Repeat2, SkipForward, WholeWord } from 'lucide-react';
 import type { Entry } from '@/lib/types';
 import type { ReviewQueueItem } from '@/lib/review';
+import { ReviewInsightReveal } from './ReviewInsightReveal';
 
 export function ReviewQueue({
   items,
@@ -90,11 +91,13 @@ function ReviewCard({
         </blockquote>
       )}
 
-      {entry.note && (
+      {entry.kind === 'quote' && entry.note && (
         <p className="mt-3 rounded-sm border border-border bg-paper-input px-3 py-2 text-sm leading-6 text-ink-secondary">
           {entry.note}
         </p>
       )}
+
+      {entry.kind === 'word' && <ReviewInsightReveal word={entry} />}
 
       <div className="mt-4 flex flex-wrap justify-end gap-2">
         <button

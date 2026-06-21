@@ -8,7 +8,8 @@ import {
   latestDisplayableOccurrence,
   occurrenceSourceLabel,
 } from '@/lib/occurrences';
-import type { WordEntry } from '@/lib/types';
+import { t } from '@/lib/i18n';
+import type { UiLocale, WordEntry } from '@/lib/types';
 import { PinyinButton } from './PinyinButton';
 import { WordInsightPanel } from './WordInsightPanel';
 
@@ -16,10 +17,12 @@ export function WordCard({
   word,
   onUpdate,
   onDelete,
+  locale,
 }: {
   word: WordEntry;
   onUpdate: (patch: Partial<WordEntry>) => void;
   onDelete: () => void;
+  locale: UiLocale;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [note, setNote] = useState(word.note);
@@ -47,12 +50,13 @@ export function WordCard({
               text={word.text}
               existing={word.pinyin}
               onGenerated={(pinyin) => onUpdate({ pinyin })}
+              locale={locale}
             />
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-7">
             {occurrences.length > 0 && (
               <span className="rounded-sm border border-border bg-paper-input px-2 py-0.5 text-xs text-muted">
-                {occurrences.length} 次相遇
+                {occurrences.length} {t(locale, 'word.encounters')}
               </span>
             )}
             {latestLabel && (
@@ -65,39 +69,41 @@ export function WordCard({
         <div className="flex shrink-0 gap-1">
           {word.status !== 'reviewed' && (
             <button
-              title="标为复习中"
+              title={t(locale, 'word.markReviewed')}
               onClick={() => onUpdate({ status: 'reviewed' })}
               className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-cinnabar-border bg-cinnabar-light text-xs font-semibold text-cinnabar transition hover:bg-cinnabar hover:text-white"
             >
-              阅
+              {locale === 'en' ? 'R' : '阅'}
             </button>
           )}
           {word.status !== 'archived' && (
             <button
-              title="归档"
+              title={t(locale, 'word.archive')}
               onClick={() => onUpdate({ status: 'archived' })}
               className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-border bg-transparent text-xs font-semibold text-muted transition hover:border-border-hover hover:bg-paper-input hover:text-ink-secondary"
             >
-              档
+              {locale === 'en' ? 'A' : '档'}
             </button>
           )}
           <button
-            title="删除"
+            title={t(locale, 'word.delete')}
             onClick={onDelete}
             className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-border bg-transparent text-xs font-semibold text-muted transition hover:border-cinnabar-border hover:bg-cinnabar-light hover:text-cinnabar"
           >
-            删
+            {locale === 'en' ? 'D' : '删'}
           </button>
         </div>
       </div>
 
       {expanded && (
         <div className="mt-4 space-y-3 border-t border-border pt-3 text-sm">
-          <WordInsightPanel word={word} />
+          <WordInsightPanel word={word} locale={locale} />
 
           {occurrences.length > 0 && (
             <details className="rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs">
-              <summary className="cursor-pointer text-muted">所有相遇（{occurrences.length}）</summary>
+              <summary className="cursor-pointer text-muted">
+                {t(locale, 'word.allEncounters')} ({occurrences.length})
+              </summary>
               <ul className="mt-1.5 space-y-1.5">
                 {occurrences.map((occurrence, index) => {
                   const label = occurrenceSourceLabel(occurrence);
@@ -129,7 +135,7 @@ export function WordCard({
             value={note}
             onChange={(event) => setNote(event.target.value)}
             onBlur={() => note !== word.note && onUpdate({ note })}
-            placeholder="写一点自己的理解..."
+            placeholder={t(locale, 'word.notePlaceholder')}
             className="w-full resize-none rounded-sm border border-border bg-paper-input p-2 text-xs text-ink outline-none transition placeholder:text-muted focus:border-cinnabar-fade"
             rows={2}
           />

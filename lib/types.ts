@@ -58,6 +58,26 @@ export interface Inbox {
 export const EMPTY_INBOX: Inbox = { words: [], quotes: [] };
 
 // ---------------------------------------------------------------------------
+// App settings
+// ---------------------------------------------------------------------------
+
+export type UiLocale = 'en' | 'zh-CN';
+
+export interface KaikkiSettings {
+  enabled: boolean;
+  sourceUrl: string;
+  sourceName: string;
+  hash: string | null;
+  entryCount: number;
+  importedAt: number | null;
+}
+
+export interface AppSettings {
+  uiLocale: UiLocale;
+  kaikki: KaikkiSettings;
+}
+
+// ---------------------------------------------------------------------------
 // Word Insight domain types (non-persisted — computed at view time)
 // ---------------------------------------------------------------------------
 
@@ -85,13 +105,17 @@ export interface CompactDictionaryAsset {
   };
 }
 
-/** One CC-CEDICT entry, after the loader materializes it from the compact asset. */
+export type DictionarySourceId = 'cc-cedict' | 'kaikki';
+
+/** One dictionary entry, after the loader materializes it from a compact/runtime asset. */
 export interface DictionaryEntry {
   index: number;
   traditional: string;
   simplified: string;
   pinyin: string;
   definitions: string[];
+  /** Runtime-only source label. Cached/generated assets do not need this field. */
+  source?: DictionarySourceId;
 }
 
 /** Runtime lookup index materialized from the compact asset. Never persisted in chrome.storage. */
@@ -129,7 +153,7 @@ export interface HighlightedExample {
 
 /** A click-only outbound dictionary link (no content fetched). */
 export interface ExternalDictionaryLink {
-  label: 'MDBG' | '百度汉语';
+  label: 'Youdao' | '百度汉语';
   language: 'Chinese-English' | 'Chinese-Chinese';
   url: string;
 }

@@ -174,7 +174,7 @@ describe('computeWordInsight', () => {
     expect(insight.toneChips).toHaveLength(2);
     expect(insight.toneChips[0].source).toBe('dictionary');
     expect(insight.examples).toHaveLength(1);
-    expect(insight.externalLinks.map((l) => l.label)).toEqual(['MDBG', '百度汉语']);
+    expect(insight.externalLinks.map((l) => l.label)).toEqual(['Youdao', '百度汉语']);
   });
 
   it('tries the normalized key when captured text is decorated', () => {
@@ -197,6 +197,26 @@ describe('computeWordInsight', () => {
     const insight = computeWordInsight(w, index);
     expect(insight.status).toBe('no-definition');
     expect(insight.componentEntries.map((e) => e.simplified)).toEqual(['龙', '龙']);
+  });
+
+  it('uses Kaikki exact entries and pinyin-pro tones when Kaikki has no pinyin', () => {
+    const fallbackIndex = buildIndex([
+      {
+        index: 0,
+        traditional: '滞胀',
+        simplified: '滞胀',
+        pinyin: '',
+        definitions: ['stagflation'],
+        source: 'kaikki',
+      },
+    ]);
+    const w = word({ text: '滞胀', normalized: '滞胀' });
+    const insight = computeWordInsight(w, fallbackIndex);
+
+    expect(insight.status).toBe('ready');
+    expect(insight.exactEntries[0].definitions).toEqual(['stagflation']);
+    expect(insight.exactEntries[0].source).toBe('kaikki');
+    expect(insight.toneChips[0].source).toBe('pinyin-pro');
   });
 
   it('returns dictionary-unavailable status when index is null', () => {

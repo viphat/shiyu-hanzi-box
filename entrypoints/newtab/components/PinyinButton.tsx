@@ -1,15 +1,19 @@
 import { Loader2, Sparkles } from 'lucide-react';
 import { useState } from 'react';
+import { t } from '@/lib/i18n';
 import { toPinyin } from '@/lib/pinyin';
+import type { UiLocale } from '@/lib/types';
 
 export function PinyinButton({
   text,
   onGenerated,
   existing,
+  locale,
 }: {
   text: string;
   existing?: string;
   onGenerated: (pinyin: string) => void;
+  locale: UiLocale;
 }) {
   const [busy, setBusy] = useState(false);
   if (existing) return <span className="text-xs italic text-cinnabar">{existing}</span>;
@@ -28,9 +32,9 @@ export function PinyinButton({
       {busy ? (
         <Loader2 className="h-3 w-3 animate-spin" />
       ) : (
-        <Sparkles className="h-3 w-3" />
+      <Sparkles className="h-3 w-3" />
       )}
-      注音
+      {t(locale, 'pinyin.generate')}
     </button>
   );
 }

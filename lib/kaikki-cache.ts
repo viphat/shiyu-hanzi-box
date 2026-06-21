@@ -1,15 +1,10 @@
 import type { DictionaryEntry, DictionaryIndex } from './types';
 
 const DB_NAME = 'shiyu-hanzi-box';
-const STORE = 'dictionary-cache';
-const KAIKKI_STORE = 'kaikki-cache';
+const STORE = 'kaikki-cache';
+const DICTIONARY_STORE = 'dictionary-cache';
 const DB_VERSION = 2;
 
-/**
- * Minimal storage backend interface. In the dashboard this is backed by
- * IndexedDB; tests inject a fake. Keeping the boundary narrow keeps the
- * serialization logic pure and unit-testable.
- */
 interface CacheBackend {
   get(key: string): Promise<string | null>;
   set(key: string, value: string): Promise<void>;
@@ -17,7 +12,7 @@ interface CacheBackend {
 }
 
 function backend(): CacheBackend {
-  const injected = (globalThis as { __dictCacheStore?: CacheBackend }).__dictCacheStore;
+  const injected = (globalThis as { __kaikkiCacheStore?: CacheBackend }).__kaikkiCacheStore;
   if (injected) return injected;
   return indexedDbBackend();
 }
@@ -62,8 +57,8 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE)) {
         db.createObjectStore(STORE);
       }
-      if (!db.objectStoreNames.contains(KAIKKI_STORE)) {
-        db.createObjectStore(KAIKKI_STORE);
+      if (!db.objectStoreNames.contains(DICTIONARY_STORE)) {
+        db.createObjectStore(DICTIONARY_STORE);
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -71,16 +66,13 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-/** Serialized shape: `Map` does not survive JSON, so it is an array of pairs. */
 interface SerializedIndex {
   v: 1;
   pairs: Array<[string, DictionaryEntry[]]>;
   maxKeyLength: number;
 }
 
-export async function getDictionaryCache(
-  hash: string,
-): Promise<DictionaryIndex | null> {
+export async function getKaikkiCache(hash: string): Promise<DictionaryIndex | null> {
   const raw = await backend().get(hash);
   if (!raw) return null;
   try {
@@ -94,10 +86,7 @@ export async function getDictionaryCache(
   }
 }
 
-export async function setDictionaryCache(
-  hash: string,
-  index: DictionaryIndex,
-): Promise<void> {
+export async function setKaikkiCache(hash: string, index: DictionaryIndex): Promise<void> {
   const serialized: SerializedIndex = {
     v: 1,
     pairs: Array.from(index.byForm.entries()),
@@ -106,6 +95,6 @@ export async function setDictionaryCache(
   await backend().set(hash, JSON.stringify(serialized));
 }
 
-export async function clearDictionaryCache(hash: string): Promise<void> {
+export async function clearKaikkiCache(hash: string): Promise<void> {
   await backend().clear(hash);
 }

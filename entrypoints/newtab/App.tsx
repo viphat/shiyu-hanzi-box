@@ -8,23 +8,27 @@ import {
   skipReview,
   viewReview,
 } from '@/lib/review';
-import type { Entry, Inbox as InboxState, QuoteEntry, Status, WordEntry } from '@/lib/types';
+import { t } from '@/lib/i18n';
+import type { Entry, Inbox as InboxState, QuoteEntry, Status, UiLocale, WordEntry } from '@/lib/types';
 import { QuoteList } from './components/QuoteList';
 import { ReviewQueue } from './components/ReviewQueue';
 import { Toolbar } from './components/Toolbar';
 import { WordList } from './components/WordList';
 import { useInbox } from './hooks/useInbox';
+import { useSettings } from './hooks/useSettings';
 
 type Tab = 'review' | 'words' | 'quotes';
 type StatusFilter = 'all' | Status;
 
 export function App() {
   const { inbox, loading, mutate, replace } = useInbox();
+  const { settings, loading: settingsLoading } = useSettings();
+  const locale = settings.uiLocale;
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<Tab>('review');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('inbox');
   const normalizedQuery = query.trim().toLowerCase();
-  const today = new Intl.DateTimeFormat('zh-CN', {
+  const today = new Intl.DateTimeFormat(locale, {
     month: 'long',
     day: 'numeric',
     weekday: 'long',
@@ -65,10 +69,10 @@ export function App() {
     };
   }, [inbox, reviewDueCount]);
 
-  if (loading) {
+  if (loading || settingsLoading) {
     return (
       <div className="min-h-screen p-8 text-sm text-ink-secondary">
-        正在翻开收藏箱...
+        {t(locale, 'app.loading')}
       </div>
     );
   }
@@ -143,7 +147,7 @@ export function App() {
           <div className="grid gap-5 md:grid-cols-[1fr_auto] md:items-end">
             <div>
               <p className="text-xs font-medium text-muted tracking-[2px]">
-                今日拾语 · {today}
+                {t(locale, 'app.todayPrefix')} · {today}
               </p>
               <div className="mt-2 flex items-center gap-3">
                 <img
@@ -157,24 +161,24 @@ export function App() {
                 </h1>
               </div>
               <p className="mt-2 max-w-xl text-xs leading-6 text-muted tracking-[2px]">
-                把网页里遇见的词语和句子收进一本轻巧的中文阅读手帐。
+                {t(locale, 'app.subtitle')}
               </p>
             </div>
             <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
               <StatCard
                 icon={<BookOpen className="h-4 w-4" />}
-                label="今日复习"
+                label={t(locale, 'app.reviewToday')}
                 value={stats.review}
               />
-              <StatCard icon={<Inbox className="h-4 w-4" />} label="待整理" value={stats.inbox} />
+              <StatCard icon={<Inbox className="h-4 w-4" />} label={t(locale, 'app.inbox')} value={stats.inbox} />
               <StatCard
                 icon={<CheckCircle2 className="h-4 w-4" />}
-                label="复习中"
+                label={t(locale, 'app.reviewed')}
                 value={stats.reviewed}
               />
               <StatCard
                 icon={<ScrollText className="h-4 w-4" />}
-                label="已归档"
+                label={t(locale, 'app.archived')}
                 value={stats.archived}
               />
             </div>
@@ -187,6 +191,7 @@ export function App() {
           query={query}
           onQuery={setQuery}
           onRestore={replace}
+          locale={locale}
         />
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-strong pb-3">
@@ -205,14 +210,14 @@ export function App() {
                   review: reviewDueCount,
                   words: inbox.words.length,
                   quotes: inbox.quotes.length,
-                })}
+                }, locale)}
               </button>
             ))}
           </div>
           {tab === 'review' ? (
             <div className="inline-flex items-center gap-2 rounded-sm border border-border bg-paper-light px-3 py-2 text-sm text-muted shadow-sm">
               <BookOpen className="h-4 w-4 text-cinnabar" />
-              今日温习
+              {t(locale, 'app.reviewToday')}
             </div>
           ) : (
             <label className="inline-flex items-center gap-2 text-sm text-muted">
@@ -222,10 +227,10 @@ export function App() {
                 onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
                 className="rounded-sm border border-border bg-paper-input px-3 py-2 text-sm text-ink shadow-sm outline-none transition focus:border-cinnabar-fade"
               >
-                <option value="inbox">待整理</option>
-                <option value="reviewed">复习中</option>
-                <option value="archived">已归档</option>
-                <option value="all">全部</option>
+                <option value="inbox">{t(locale, 'app.inbox')}</option>
+                <option value="reviewed">{t(locale, 'app.reviewed')}</option>
+                <option value="archived">{t(locale, 'app.archived')}</option>
+                <option value="all">{t(locale, 'filter.all')}</option>
               </select>
             </label>
           )}
@@ -242,14 +247,16 @@ export function App() {
               onView={viewEntry}
               onSkip={skipEntry}
               onRepeat={repeatEntry}
+              locale={locale}
             />
           ) : tab === 'words' ? (
-            <WordList words={matches.words} onUpdate={updateWord} onDelete={deleteWord} />
+            <WordList words={matches.words} onUpdate={updateWord} onDelete={deleteWord} locale={locale} />
           ) : (
             <QuoteList
               quotes={matches.quotes}
               onUpdate={updateQuote}
               onDelete={deleteQuote}
+              locale={locale}
             />
           )}
         </section>
@@ -297,10 +304,10 @@ function entryMatchesQuery(entry: Entry, query: string): boolean {
     .includes(query);
 }
 
-function getTabLabel(tab: Tab, counts: Record<Tab, number>): string {
-  if (tab === 'review') return `温习 (${counts.review})`;
-  if (tab === 'words') return `词语 (${counts.words})`;
-  return `句子 (${counts.quotes})`;
+function getTabLabel(tab: Tab, counts: Record<Tab, number>, locale: UiLocale): string {
+  if (tab === 'review') return `${t(locale, 'tab.review')} (${counts.review})`;
+  if (tab === 'words') return `${t(locale, 'tab.words')} (${counts.words})`;
+  return `${t(locale, 'tab.quotes')} (${counts.quotes})`;
 }
 
 function StatCard({

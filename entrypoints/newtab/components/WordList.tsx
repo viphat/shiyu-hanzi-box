@@ -1,14 +1,18 @@
 import type { WordEntry } from '@/lib/types';
+import type { UiLocale } from '@/lib/types';
+import { t } from '@/lib/i18n';
 import { WordCard } from './WordCard';
 
 export function WordList({
   words,
   onUpdate,
   onDelete,
+  locale,
 }: {
   words: WordEntry[];
   onUpdate: (id: string, patch: Partial<WordEntry>) => void;
   onDelete: (id: string) => void;
+  locale: UiLocale;
 }) {
   if (words.length === 0) {
     return (
@@ -16,8 +20,8 @@ export function WordList({
         <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center text-[56px] leading-none text-ink/12">
           词
         </div>
-        <p className="text-base font-medium text-ink-secondary tracking-[3px]">还没有词语</p>
-        <p className="mt-1 text-xs text-muted">去网页里拾一个字词，收藏箱会在这里展开。</p>
+        <p className="text-base font-medium text-ink-secondary tracking-[3px]">{t(locale, 'word.emptyTitle')}</p>
+        <p className="mt-1 text-xs text-muted">{t(locale, 'word.emptyBody')}</p>
       </div>
     );
   }
@@ -30,6 +34,7 @@ export function WordList({
           word={word}
           onUpdate={(patch) => onUpdate(word.id, patch)}
           onDelete={() => onDelete(word.id)}
+          locale={locale}
         />
       ))}
     </div>

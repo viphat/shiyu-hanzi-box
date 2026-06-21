@@ -3,6 +3,11 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
+import {
+  displayableOccurrences,
+  latestDisplayableOccurrence,
+  occurrenceSourceLabel,
+} from '@/lib/occurrences';
 import type { WordEntry } from '@/lib/types';
 import { PinyinButton } from './PinyinButton';
 import { WordInsightPanel } from './WordInsightPanel';
@@ -18,7 +23,9 @@ export function WordCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [note, setNote] = useState(word.note);
-  const latest = word.occurrences[0];
+  const occurrences = displayableOccurrences(word.occurrences);
+  const latest = latestDisplayableOccurrence(word.occurrences);
+  const latestLabel = latest ? occurrenceSourceLabel(latest) : '';
 
   return (
     <div className="rounded-sm border border-border bg-paper-light p-4 shadow-sm transition hover:border-border-hover hover:shadow-md">
@@ -44,11 +51,11 @@ export function WordCard({
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-7">
             <span className="rounded-sm border border-border bg-paper-input px-2 py-0.5 text-xs text-muted">
-              {word.occurrences.length} 次相遇
+              {occurrences.length} 次相遇
             </span>
-            {latest && (
+            {latestLabel && (
               <span className="truncate rounded-sm border border-border bg-paper-input px-2 py-0.5 text-xs text-muted">
-                {latest.sourceTitle || latest.sourceDomain}
+                {latestLabel}
               </span>
             )}
           </div>
@@ -86,26 +93,35 @@ export function WordCard({
         <div className="mt-4 space-y-3 border-t border-border pt-3 text-sm">
           <WordInsightPanel word={word} />
 
-          <details className="rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs">
-            <summary className="cursor-pointer text-muted">所有相遇（{word.occurrences.length}）</summary>
-            <ul className="mt-1.5 space-y-1.5">
-              {word.occurrences.map((occurrence, index) => (
-                <li key={index} className="truncate rounded-sm border border-border bg-paper-light px-2 py-1 text-xs text-muted">
-                  <a
-                    href={occurrence.sourceUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="hover:text-cinnabar"
-                  >
-                    {occurrence.sourceTitle || occurrence.sourceDomain}
-                  </a>
-                  {occurrence.surrounding && (
-                    <span className="text-muted"> · {occurrence.surrounding}</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </details>
+          {occurrences.length > 0 && (
+            <details className="rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs">
+              <summary className="cursor-pointer text-muted">所有相遇（{occurrences.length}）</summary>
+              <ul className="mt-1.5 space-y-1.5">
+                {occurrences.map((occurrence, index) => {
+                  const label = occurrenceSourceLabel(occurrence);
+                  return (
+                    <li key={index} className="truncate rounded-sm border border-border bg-paper-light px-2 py-1 text-xs text-muted">
+                      {label && occurrence.sourceUrl ? (
+                        <a
+                          href={occurrence.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="hover:text-cinnabar"
+                        >
+                          {label}
+                        </a>
+                      ) : (
+                        label && <span>{label}</span>
+                      )}
+                      {occurrence.surrounding && (
+                        <span className="text-muted">{label ? ' · ' : ''}{occurrence.surrounding}</span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </details>
+          )}
 
           <textarea
             value={note}

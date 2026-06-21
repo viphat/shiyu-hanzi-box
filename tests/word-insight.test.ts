@@ -59,6 +59,18 @@ describe('buildHighlightedExamples', () => {
     expect(ex[0].snippet).toBe('');
   });
 
+  it('ignores fully empty occurrences', () => {
+    const ex = buildHighlightedExamples('龙', [
+      occ({
+        sourceTitle: '',
+        sourceUrl: '',
+        sourceDomain: '',
+        surrounding: '',
+      }),
+    ]);
+    expect(ex).toEqual([]);
+  });
+
   it('clips surrounding to the first 1000 characters before scanning', () => {
     const long = 'x'.repeat(1200);
     const ex = buildHighlightedExamples('龙', [

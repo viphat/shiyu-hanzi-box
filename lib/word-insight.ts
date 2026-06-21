@@ -1,5 +1,6 @@
 import { lookupExact, segmentComponents } from './dictionary';
 import { buildExternalLinks } from './external-dictionaries';
+import { displayableOccurrences } from './occurrences';
 import { cedictPinyinToChips, inferToneChips } from './pinyin-helpers';
 import type {
   DictionaryEntry,
@@ -23,11 +24,12 @@ export function buildHighlightedExamples(
   occurrences: Occurrence[],
   variants: string[] = [],
 ): HighlightedExample[] {
-  if (occurrences.length === 0) return [];
+  const displayable = displayableOccurrences(occurrences);
+  if (displayable.length === 0) return [];
   const needles = uniqueNeedles([word, ...variants]);
 
   const newestBySurrounding = new Map<string, Occurrence>();
-  for (const occ of occurrences) {
+  for (const occ of displayable) {
     const prev = newestBySurrounding.get(occ.surrounding);
     if (!prev || occ.capturedAt > prev.capturedAt) {
       newestBySurrounding.set(occ.surrounding, occ);

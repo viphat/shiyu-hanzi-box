@@ -7,6 +7,7 @@ import {
   parseCedictText,
   extractRelease,
   lookupExact,
+  segmentComponents,
 } from '../lib/dictionary';
 import type { DictionaryEntry } from '../lib/types';
 
@@ -115,5 +116,65 @@ describe('buildIndex + lookupExact', () => {
     const hits = lookupExact(index, '中 国');
     expect(hits).toHaveLength(1);
     expect(hits[0].definitions).toEqual(['China']);
+  });
+});
+
+describe('segmentComponents', () => {
+  const idx = buildIndex([
+    ...sampleEntries,
+    { index: 5, traditional: '雲', simplified: '云', pinyin: 'yun2', definitions: ['cloud'] },
+  ]);
+
+  it('returns no segments when the text is an exact match (caller decides)', () => {
+    const segs = segmentComponents(idx, '你好');
+    expect(segs.map((s) => s.entry?.simplified ?? s.text)).toContain('你好');
+  });
+
+  it('segments multi-char text into matched + single-char components', () => {
+    const segs = segmentComponents(idx, '龙云');
+    const matched = segs.filter((s) => s.entry !== undefined);
+    expect(matched.map((s) => s.entry!.simplified).sort()).toEqual(['云', '龙']);
+  });
+
+  it('leaves unmatched characters as plain components', () => {
+    const segs = segmentComponents(idx, '龙雨');
+    expect(segs).toHaveLength(2);
+    expect(segs[0].entry?.simplified).toBe('龙');
+    expect(segs[1].entry).toBeUndefined();
+    expect(segs[1].text).toBe('雨');
+  });
+
+  it('prefers longest dictionary match', () => {
+    const segs = segmentComponents(idx, '你好龙');
+    expect(segs).toHaveLength(2);
+    expect(segs[0].entry?.simplified).toBe('你好');
+    expect(segs[1].entry?.simplified).toBe('龙');
+  });
+
+  it('can choose dictionary entries longer than four characters', () => {
+    const longIndex = buildIndex([
+      ...sampleEntries,
+      {
+        index: 6,
+        traditional: '中华人民共和国',
+        simplified: '中华人民共和国',
+        pinyin: 'zhong1 hua2 ren2 min2 gong4 he2 guo2',
+        definitions: ['People’s Republic of China'],
+      },
+    ]);
+    const segs = segmentComponents(longIndex, '中华人民共和国龙');
+    expect(segs[0].entry?.simplified).toBe('中华人民共和国');
+    expect(segs[1].entry?.simplified).toBe('龙');
+  });
+
+  it('skips non-Chinese characters without matching them', () => {
+    const segs = segmentComponents(idx, '龙abc云');
+    const chinese = segs.filter((s) => /[\u4e00-\u9fff]/.test(s.text));
+    expect(chinese.map((s) => s.entry?.simplified)).toEqual(['龙', '云']);
+  });
+
+  it('returns an empty array for input above the length cap', () => {
+    const long = '龙'.repeat(17);
+    expect(segmentComponents(idx, long)).toEqual([]);
   });
 });

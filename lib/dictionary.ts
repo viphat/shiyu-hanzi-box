@@ -182,3 +182,54 @@ export function buildIndex(entries: DictionaryEntry[]): DictionaryIndex {
 export function lookupExact(index: DictionaryIndex, surface: string): DictionaryEntry[] {
   return index.byForm.get(formKey(surface)) ?? [];
 }
+
+/** Maximum captured-text length (in Chinese characters) to segment. */
+export const MAX_COMPONENT_LOOKUP_CHARS = 16;
+
+const CJK = /[\u3400-\u9fff\uf900-\ufaff]/;
+
+export interface ComponentSegment {
+  text: string;
+  entry?: DictionaryEntry;
+}
+
+/**
+ * Segment `text` into components using longest-match, then single-char
+ * fallback. Returns `[]` when the text exceeds MAX_COMPONENT_LOOKUP_CHARS
+ * Chinese characters (caller should show tone help + links only).
+ */
+export function segmentComponents(
+  index: DictionaryIndex,
+  text: string,
+): ComponentSegment[] {
+  const cjkCount = Array.from(text).filter((ch) => CJK.test(ch)).length;
+  if (cjkCount > MAX_COMPONENT_LOOKUP_CHARS) return [];
+
+  const chars = Array.from(text);
+  const segments: ComponentSegment[] = [];
+  let i = 0;
+  while (i < chars.length) {
+    const ch = chars[i];
+    if (!CJK.test(ch)) {
+      i += 1;
+      continue;
+    }
+    let matched: { end: number; entry: DictionaryEntry } | null = null;
+    for (let len = Math.min(index.maxKeyLength, chars.length - i); len >= 1; len -= 1) {
+      const slice = chars.slice(i, i + len).join('');
+      const hits = lookupExact(index, slice);
+      if (hits.length > 0) {
+        matched = { end: i + len, entry: hits[0] };
+        break;
+      }
+    }
+    if (matched) {
+      segments.push({ text: chars.slice(i, matched.end).join(''), entry: matched.entry });
+      i = matched.end;
+    } else {
+      segments.push({ text: ch });
+      i += 1;
+    }
+  }
+  return segments;
+}

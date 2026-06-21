@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildHighlightedExamples } from '../lib/word-insight';
-import type { Occurrence } from '../lib/types';
+import { buildIndex, materializeEntries } from '../lib/dictionary';
+import { buildHighlightedExamples, computeWordInsight } from '../lib/word-insight';
+import type { CompactDictionaryAsset, DictionaryIndex, Occurrence, WordEntry } from '../lib/types';
 
 const occ = (over: Partial<Occurrence>): Occurrence => ({
   sourceTitle: 'T',
@@ -89,5 +90,115 @@ describe('buildHighlightedExamples', () => {
     expect(ex[0].snippet.length).toBeLessThan(180);
     expect(ex[0].snippet).toContain('龙');
     expect(ex[0].ranges[0].text).toBe('龙');
+  });
+});
+
+const asset: CompactDictionaryAsset = {
+  meta: {
+    source: 'CC-CEDICT',
+    sourceUrl: '',
+    release: '2026-06-20',
+    license: 'CC-BY-SA 4.0',
+    licenseUrl: '',
+    hash: 'abc123',
+    generatedAt: '2026-06-20T00:00:00.000Z',
+  },
+  columns: {
+    simplified: ['你好', '行', '行', '龙'],
+    traditional: ['你好', '行', '行', '龍'],
+    pinyin: ['ni3 hao3', 'xing2', 'hang2', 'long2'],
+    definitionRanges: [
+      [0, 2],
+      [2, 1],
+      [3, 1],
+      [4, 1],
+    ],
+    definitions: ['hello', 'good day', 'to walk', 'row', 'dragon'],
+  },
+};
+
+const index: DictionaryIndex = buildIndex(materializeEntries(asset));
+
+const word = (over: Partial<WordEntry>): WordEntry => ({
+  id: 'w1',
+  kind: 'word',
+  text: '你好',
+  normalized: '你好',
+  note: '',
+  status: 'inbox',
+  createdAt: 1,
+  updatedAt: 1,
+  occurrences: [],
+  ...over,
+});
+
+describe('computeWordInsight', () => {
+  it('returns ready with exact entries, tone chips, examples, and links', () => {
+    const w = word({
+      text: '你好',
+      occurrences: [
+        {
+          sourceTitle: 'A',
+          sourceUrl: 'https://a.com',
+          sourceDomain: 'a.com',
+          surrounding: '今天 我 看到 你好 世界',
+          capturedAt: 1,
+        },
+      ],
+    });
+    const insight = computeWordInsight(w, index);
+    expect(insight.status).toBe('ready');
+    expect(insight.displayText).toBe('你好');
+    expect(insight.exactEntries).toHaveLength(1);
+    expect(insight.exactEntries[0].pinyin).toBe('ni3 hao3');
+    expect(insight.toneChips).toHaveLength(2);
+    expect(insight.toneChips[0].source).toBe('dictionary');
+    expect(insight.examples).toHaveLength(1);
+    expect(insight.externalLinks.map((l) => l.label)).toEqual(['MDBG', '百度汉语']);
+  });
+
+  it('tries the normalized key when captured text is decorated', () => {
+    const w = word({ text: '你好！', normalized: '你好' });
+    const insight = computeWordInsight(w, index);
+    expect(insight.status).toBe('ready');
+    expect(insight.exactEntries[0].simplified).toBe('你好');
+  });
+
+  it('uses pinyin-pro tone chips when no exact match exists', () => {
+    const w = word({ text: '不存在词', normalized: '不存在词' });
+    const insight = computeWordInsight(w, index);
+    expect(insight.status).toBe('no-definition');
+    expect(insight.exactEntries).toEqual([]);
+    expect(insight.toneChips[0].source).toBe('pinyin-pro');
+  });
+
+  it('runs component fallback for a multi-char word with no exact match', () => {
+    const w = word({ text: '龙龙', normalized: '龙龙' });
+    const insight = computeWordInsight(w, index);
+    expect(insight.status).toBe('no-definition');
+    expect(insight.componentEntries.map((e) => e.simplified)).toEqual(['龙', '龙']);
+  });
+
+  it('returns dictionary-unavailable status when index is null', () => {
+    const w = word({ text: '你好' });
+    const insight = computeWordInsight(w, null);
+    expect(insight.status).toBe('dictionary-unavailable');
+    expect(insight.exactEntries).toEqual([]);
+    expect(insight.toneChips[0].source).toBe('pinyin-pro');
+  });
+
+  it('caps exact entries to five', () => {
+    const many = buildIndex(
+      Array.from({ length: 8 }, (_, i) => ({
+        index: i,
+        traditional: '行',
+        simplified: '行',
+        pinyin: `pinyin${i}`,
+        definitions: [`d${i}`],
+      })),
+    );
+    const w = word({ text: '行' });
+    const insight = computeWordInsight(w, many);
+    expect(insight.exactEntries.length).toBeLessThanOrEqual(5);
   });
 });

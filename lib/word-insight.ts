@@ -1,4 +1,15 @@
-import type { HighlightedExample, HighlightRange, Occurrence } from './types';
+import { lookupExact, segmentComponents } from './dictionary';
+import { buildExternalLinks } from './external-dictionaries';
+import { cedictPinyinToChips, inferToneChips } from './pinyin-helpers';
+import type {
+  DictionaryEntry,
+  DictionaryIndex,
+  HighlightedExample,
+  HighlightRange,
+  Occurrence,
+  WordEntry,
+  WordInsight,
+} from './types';
 
 const SCAN_LIMIT = 1000;
 
@@ -88,4 +99,88 @@ function clipSnippet(
       end: range.end - start + prefixOffset,
     }));
   return { snippet, ranges: adjusted };
+}
+
+const MAX_EXACT_ENTRIES = 5;
+
+/**
+ * Combine dictionary lookup, tone analysis, highlighted examples, and
+ * external links into a non-persisted WordInsight.
+ *
+ * Pass `null` for `index` when the dictionary asset could not be loaded.
+ */
+export function computeWordInsight(
+  word: WordEntry,
+  index: DictionaryIndex | null,
+): WordInsight {
+  const displayText = word.text;
+  const externalLinks = buildExternalLinks(displayText);
+
+  if (index === null) {
+    const examples = buildHighlightedExamples(displayText, word.occurrences);
+    return {
+      displayText,
+      exactEntries: [],
+      componentEntries: [],
+      toneChips: inferToneChips(displayText),
+      examples,
+      externalLinks,
+      status: 'dictionary-unavailable',
+    };
+  }
+
+  const exactRaw = uniqueEntries([
+    ...lookupExact(index, displayText),
+    ...lookupExact(index, word.normalized),
+  ]);
+  const exactEntries = exactRaw.slice(0, MAX_EXACT_ENTRIES);
+  const highlightVariants = exactEntries.flatMap((entry) => [
+    entry.simplified,
+    entry.traditional,
+  ]);
+  const examples = buildHighlightedExamples(
+    displayText,
+    word.occurrences,
+    highlightVariants,
+  );
+
+  if (exactEntries.length > 0) {
+    const primaryPinyin = exactEntries[0].pinyin;
+    const toneChips = cedictPinyinToChips(primaryPinyin, displayText);
+    return {
+      displayText,
+      exactEntries,
+      componentEntries: [],
+      toneChips,
+      examples,
+      externalLinks,
+      status: 'ready',
+    };
+  }
+
+  const segments = segmentComponents(index, displayText);
+  const componentEntries = segments
+    .map((seg) => seg.entry)
+    .filter((entry): entry is DictionaryEntry => entry !== undefined);
+
+  return {
+    displayText,
+    exactEntries: [],
+    componentEntries,
+    toneChips: inferToneChips(displayText),
+    examples,
+    externalLinks,
+    status: 'no-definition',
+  };
+}
+
+function uniqueEntries(entries: DictionaryEntry[]): DictionaryEntry[] {
+  const seen = new Set<number>();
+  const out: DictionaryEntry[] = [];
+  for (const entry of entries) {
+    if (seen.has(entry.index)) continue;
+    seen.add(entry.index);
+    out.push(entry);
+  }
+  return out;
 }

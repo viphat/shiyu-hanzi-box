@@ -55,3 +55,4 @@ pnpm-debug.log*
 coverage/
 .superpowers/
 .worktrees/
+cc-cedict.txt

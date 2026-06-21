@@ -50,9 +50,11 @@ export function WordCard({
             />
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-7">
-            <span className="rounded-sm border border-border bg-paper-input px-2 py-0.5 text-xs text-muted">
-              {occurrences.length} 次相遇
-            </span>
+            {occurrences.length > 0 && (
+              <span className="rounded-sm border border-border bg-paper-input px-2 py-0.5 text-xs text-muted">
+                {occurrences.length} 次相遇
+              </span>
+            )}
             {latestLabel && (
               <span className="truncate rounded-sm border border-border bg-paper-input px-2 py-0.5 text-xs text-muted">
                 {latestLabel}

@@ -1,4 +1,4 @@
-import type { DictionaryEntry } from './types';
+import type { CompactDictionaryAsset, DictionaryEntry } from './types';
 
 /** A raw parsed entry before it is materialized into the compact asset. */
 export interface ParsedCedictEntry {
@@ -73,3 +73,85 @@ export function extractRelease(text: string): string {
 // Materialized-entry and index/lookup functions are added in later tasks.
 // This export keeps the type relationship explicit for downstream tasks.
 export type { DictionaryEntry };
+
+export interface BuildCompactAssetOptions {
+  sourceUrl: string;
+  license: string;
+  licenseUrl: string;
+}
+
+/**
+ * Build a compact columnar asset from raw CC-CEDICT text. Definitions are
+ * stored contiguously and identical definition sequences are deduped. Each entry
+ * stores a [start, count] range into the definitions pool.
+ */
+export function buildCompactAsset(
+  text: string,
+  options: BuildCompactAssetOptions,
+): CompactDictionaryAsset {
+  const { entries, skipped } = parseCedictText(text, { withStats: true });
+  void skipped;
+
+  const simplified: string[] = [];
+  const traditional: string[] = [];
+  const pinyin: string[] = [];
+  const definitionRanges: Array<[number, number]> = [];
+  const definitions: string[] = [];
+  const defSequenceIndex = new Map<string, [number, number]>();
+
+  for (const entry of entries) {
+    simplified.push(entry.simplified);
+    traditional.push(entry.traditional);
+    pinyin.push(entry.pinyin);
+    const sequenceKey = JSON.stringify(entry.definitions);
+    const existingRange = defSequenceIndex.get(sequenceKey);
+    if (existingRange) {
+      definitionRanges.push(existingRange);
+      continue;
+    }
+
+    const start = definitions.length;
+    definitions.push(...entry.definitions);
+    const range: [number, number] = [start, entry.definitions.length];
+    defSequenceIndex.set(sequenceKey, range);
+    definitionRanges.push(range);
+  }
+
+  const meta = {
+    source: 'CC-CEDICT' as const,
+    sourceUrl: options.sourceUrl,
+    release: extractRelease(text),
+    license: options.license,
+    licenseUrl: options.licenseUrl,
+    hash: hashAsset({ simplified, traditional, pinyin, definitionRanges, definitions }),
+    generatedAt: new Date().toISOString(),
+  };
+
+  return { meta, columns: { simplified, traditional, pinyin, definitionRanges, definitions } };
+}
+
+/** Rebuild DictionaryEntry[] from a compact asset (used by the loader). */
+export function materializeEntries(asset: CompactDictionaryAsset): DictionaryEntry[] {
+  const { columns } = asset;
+  return columns.simplified.map((_, index) => {
+    const [start, count] = columns.definitionRanges[index];
+    const definitions = columns.definitions.slice(start, start + count);
+    return {
+      index,
+      traditional: columns.traditional[index],
+      simplified: columns.simplified[index],
+      pinyin: columns.pinyin[index],
+      definitions,
+    };
+  });
+}
+
+function hashAsset(columns: CompactDictionaryAsset['columns']): string {
+  const json = JSON.stringify(columns);
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < json.length; i += 1) {
+    hash ^= json.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}

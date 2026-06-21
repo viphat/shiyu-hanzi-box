@@ -1,13 +1,17 @@
 import { zip } from 'fflate';
 import { groupByDay, renderDay } from './markdown';
-import type { Inbox, QuoteEntry, WordEntry } from './types';
+import type { DictionaryIndex, Inbox, QuoteEntry, WordEntry } from './types';
 
 interface DayBucket {
   words: WordEntry[];
   quotes: QuoteEntry[];
 }
 
-export function buildExportMap(words: WordEntry[], quotes: QuoteEntry[]): Map<string, string> {
+export function buildExportMap(
+  words: WordEntry[],
+  quotes: QuoteEntry[],
+  index?: DictionaryIndex | null,
+): Map<string, string> {
   const buckets = new Map<string, DayBucket>();
 
   function touch(date: string): DayBucket {
@@ -33,7 +37,7 @@ export function buildExportMap(words: WordEntry[], quotes: QuoteEntry[]): Map<st
 
   const files = new Map<string, string>();
   for (const [date, bucket] of buckets) {
-    files.set(`daily/${date}.md`, renderDay(date, bucket.words, bucket.quotes));
+    files.set(`daily/${date}.md`, renderDay(date, bucket.words, bucket.quotes, index));
   }
   return files;
 }
@@ -52,6 +56,9 @@ export async function zipBytes(files: Map<string, string>): Promise<Uint8Array> 
   });
 }
 
-export async function exportInboxAsZip(inbox: Inbox): Promise<Uint8Array> {
-  return zipBytes(buildExportMap(inbox.words, inbox.quotes));
+export async function exportInboxAsZip(
+  inbox: Inbox,
+  index?: DictionaryIndex | null,
+): Promise<Uint8Array> {
+  return zipBytes(buildExportMap(inbox.words, inbox.quotes, index));
 }

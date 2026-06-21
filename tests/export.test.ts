@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { buildIndex } from '../lib/dictionary';
 import { buildExportMap, zipBytes } from '../lib/export';
-import type { QuoteEntry, WordEntry } from '../lib/types';
+import type { DictionaryEntry, QuoteEntry, WordEntry } from '../lib/types';
 
 const word: WordEntry = {
   id: 'w1',
@@ -60,5 +61,21 @@ describe('zipBytes', () => {
     expect(bytes.byteLength).toBeGreaterThan(0);
     expect(bytes[0]).toBe(0x50);
     expect(bytes[1]).toBe(0x4b);
+  });
+});
+
+describe('buildExportMap with dictionary', () => {
+  it('passes dictionary definitions into daily markdown files', () => {
+    const entries: DictionaryEntry[] = [
+      {
+        index: 0,
+        traditional: '你好',
+        simplified: '你好',
+        pinyin: 'ni3 hao3',
+        definitions: ['hello'],
+      },
+    ];
+    const map = buildExportMap([word], [], buildIndex(entries));
+    expect(map.get('daily/2026-06-20.md')).toContain('Dictionary: _ni3 hao3_ hello');
   });
 });

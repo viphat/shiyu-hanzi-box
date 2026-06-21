@@ -1,10 +1,16 @@
-import type { QuoteEntry, WordEntry } from './types';
+import { lookupExact } from './dictionary';
+import type { DictionaryIndex, QuoteEntry, WordEntry } from './types';
 
 function esc(value: string): string {
   return value.replace(/\|/g, '\\|');
 }
 
-export function renderDay(date: string, words: WordEntry[], quotes: QuoteEntry[]): string {
+export function renderDay(
+  date: string,
+  words: WordEntry[],
+  quotes: QuoteEntry[],
+  index?: DictionaryIndex | null,
+): string {
   const lines: string[] = [];
   lines.push('---', `date: ${date}`, `words: ${words.length}`, `quotes: ${quotes.length}`, '---', '');
 
@@ -16,6 +22,12 @@ export function renderDay(date: string, words: WordEntry[], quotes: QuoteEntry[]
       if (word.note) lines.push(`  - ${esc(word.note)}`);
       for (const occurrence of word.occurrences) {
         lines.push(`  - [${esc(occurrence.sourceTitle || occurrence.sourceDomain)}](${occurrence.sourceUrl})`);
+      }
+      if (index) {
+        const entries = dictionaryEntriesForWord(index, word).slice(0, 3);
+        for (const entry of entries) {
+          lines.push(`  - Dictionary: _${esc(entry.pinyin)}_ ${entry.definitions.map((d) => esc(d)).join('; ')}`);
+        }
       }
       lines.push('');
     }
@@ -42,4 +54,20 @@ export function groupByDay(capturedAt: number): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function dictionaryEntriesForWord(index: DictionaryIndex, word: WordEntry) {
+  return uniqueDictionaryEntries([
+    ...lookupExact(index, word.text),
+    ...lookupExact(index, word.normalized),
+  ]);
+}
+
+function uniqueDictionaryEntries(entries: ReturnType<typeof lookupExact>) {
+  const seen = new Set<number>();
+  return entries.filter((entry) => {
+    if (seen.has(entry.index)) return false;
+    seen.add(entry.index);
+    return true;
+  });
 }

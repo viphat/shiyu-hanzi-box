@@ -2,6 +2,7 @@ import { Download, FileText, Search, Upload } from 'lucide-react';
 import { useRef, useState, type ChangeEvent } from 'react';
 import { browser } from 'wxt/browser';
 import { BackupParseError, parseBackup, serializeBackup } from '@/lib/backup';
+import { loadDictionary } from '@/lib/dictionary-loader';
 import { buildExportMap, exportInboxAsZip } from '@/lib/export';
 import type { Inbox } from '@/lib/types';
 
@@ -38,8 +39,14 @@ export function Toolbar({
     }
   }
 
+  async function dictionaryIndexForExport() {
+    const result = await loadDictionary();
+    return result.index;
+  }
+
   async function downloadZip() {
-    const bytes = await exportInboxAsZip(inbox);
+    const index = await dictionaryIndexForExport();
+    const bytes = await exportInboxAsZip(inbox, index);
     const blob = new Blob([toArrayBuffer(bytes)], { type: 'application/zip' });
     await downloadBlob(blob, 'shiyu-hanzi-box-export.zip');
   }
@@ -51,7 +58,8 @@ export function Toolbar({
       String(today.getMonth() + 1).padStart(2, '0'),
       String(today.getDate()).padStart(2, '0'),
     ].join('-');
-    const map = buildExportMap(inbox.words, inbox.quotes);
+    const index = await dictionaryIndexForExport();
+    const map = buildExportMap(inbox.words, inbox.quotes, index);
     const md = map.get(`daily/${date}.md`) ?? `# ${date}\n\n_No entries today._\n`;
     const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
     await downloadBlob(blob, `${date}.md`);

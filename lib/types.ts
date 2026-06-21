@@ -56,3 +56,91 @@ export interface Inbox {
 }
 
 export const EMPTY_INBOX: Inbox = { words: [], quotes: [] };
+
+// ---------------------------------------------------------------------------
+// Word Insight domain types (non-persisted — computed at view time)
+// ---------------------------------------------------------------------------
+
+/** Metadata for a generated dictionary asset file. */
+export interface DictionaryAssetMeta {
+  source: 'CC-CEDICT';
+  sourceUrl: string;
+  release: string;
+  license: string;
+  licenseUrl: string;
+  hash: string;
+  generatedAt: string;
+}
+
+/** Compact columnar dictionary asset, as emitted by the build script. */
+export interface CompactDictionaryAsset {
+  meta: DictionaryAssetMeta;
+  columns: {
+    simplified: string[];
+    traditional: string[];
+    pinyin: string[];
+    /** [startIndex, count] into the contiguous definitions[] pool, per entry. */
+    definitionRanges: Array<[number, number]>;
+    definitions: string[];
+  };
+}
+
+/** One CC-CEDICT entry, after the loader materializes it from the compact asset. */
+export interface DictionaryEntry {
+  index: number;
+  traditional: string;
+  simplified: string;
+  pinyin: string;
+  definitions: string[];
+}
+
+/** Runtime lookup index materialized from the compact asset. Never persisted in chrome.storage. */
+export interface DictionaryIndex {
+  /** key = normalized simplified/traditional form; value = matching entries in dictionary order. */
+  byForm: Map<string, DictionaryEntry[]>;
+  /** Longest normalized dictionary key length, used by component segmentation. */
+  maxKeyLength: number;
+}
+
+/** One syllable's tone info for the tone-chip display. */
+export interface ToneChip {
+  text: string;
+  mark: string;
+  numbered: string;
+  tone: 0 | 1 | 2 | 3 | 4;
+  source: 'dictionary' | 'pinyin-pro';
+}
+
+/** A highlighted range inside a source-example snippet. */
+export interface HighlightRange {
+  start: number;
+  end: number;
+  text: string;
+}
+
+/** A source occurrence rendered as a highlighted example. */
+export interface HighlightedExample {
+  sourceTitle: string;
+  sourceUrl: string;
+  capturedAt: number;
+  snippet: string;
+  ranges: HighlightRange[];
+}
+
+/** A click-only outbound dictionary link (no content fetched). */
+export interface ExternalDictionaryLink {
+  label: 'MDBG' | '百度汉语';
+  language: 'Chinese-English' | 'Chinese-Chinese';
+  url: string;
+}
+
+/** Result of computing insight for a word. Never persisted. */
+export interface WordInsight {
+  displayText: string;
+  exactEntries: DictionaryEntry[];
+  componentEntries: DictionaryEntry[];
+  toneChips: ToneChip[];
+  examples: HighlightedExample[];
+  externalLinks: ExternalDictionaryLink[];
+  status: 'ready' | 'no-definition' | 'dictionary-unavailable';
+}

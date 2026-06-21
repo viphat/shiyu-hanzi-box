@@ -1,4 +1,9 @@
-import type { CompactDictionaryAsset, DictionaryEntry, DictionaryIndex } from './types';
+import type {
+  CompactDictionaryAsset,
+  DictionaryEntry,
+  DictionaryIndex,
+  DictionarySourceId,
+} from './types';
 
 /** A raw parsed entry before it is materialized into the compact asset. */
 export interface ParsedCedictEntry {
@@ -176,6 +181,39 @@ export function buildIndex(entries: DictionaryEntry[]): DictionaryIndex {
     }
   }
   return { byForm, maxKeyLength };
+}
+
+export function labelDictionaryIndex(
+  index: DictionaryIndex,
+  source: DictionarySourceId,
+): DictionaryIndex {
+  return {
+    byForm: new Map(
+      Array.from(index.byForm.entries()).map(([key, entries]) => [
+        key,
+        entries.map((entry) => ({ ...entry, source })),
+      ]),
+    ),
+    maxKeyLength: index.maxKeyLength,
+  };
+}
+
+export function mergeDictionaryIndexes(
+  primary: DictionaryIndex,
+  fallback: DictionaryIndex | null,
+): DictionaryIndex {
+  if (!fallback) return primary;
+  const byForm = new Map<string, DictionaryEntry[]>();
+  for (const [key, entries] of primary.byForm.entries()) {
+    byForm.set(key, [...entries]);
+  }
+  for (const [key, entries] of fallback.byForm.entries()) {
+    byForm.set(key, [...(byForm.get(key) ?? []), ...entries]);
+  }
+  return {
+    byForm,
+    maxKeyLength: Math.max(primary.maxKeyLength, fallback.maxKeyLength),
+  };
 }
 
 /** Return all entries whose simplified or traditional form matches `surface`. */

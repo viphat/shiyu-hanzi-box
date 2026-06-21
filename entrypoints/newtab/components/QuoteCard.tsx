@@ -1,14 +1,17 @@
 import { useState } from 'react';
-import type { QuoteEntry } from '@/lib/types';
+import { t } from '@/lib/i18n';
+import type { QuoteEntry, UiLocale } from '@/lib/types';
 
 export function QuoteCard({
   quote,
   onUpdate,
   onDelete,
+  locale,
 }: {
   quote: QuoteEntry;
   onUpdate: (patch: Partial<QuoteEntry>) => void;
   onDelete: () => void;
+  locale: UiLocale;
 }) {
   const [note, setNote] = useState(quote.note);
 
@@ -44,7 +47,7 @@ export function QuoteCard({
         value={note}
         onChange={(event) => setNote(event.target.value)}
         onBlur={() => note !== quote.note && onUpdate({ note })}
-        placeholder="给这句话留一条旁注..."
+        placeholder={t(locale, 'quote.notePlaceholder')}
         rows={2}
         className="mt-3 w-full resize-none rounded-sm border border-border bg-paper-input p-2 text-xs text-ink outline-none transition placeholder:text-muted focus:border-cinnabar-fade"
       />
@@ -52,27 +55,27 @@ export function QuoteCard({
         {quote.status !== 'reviewed' && (
           <button
             onClick={() => onUpdate({ status: 'reviewed' })}
-            title="标为复习中"
+            title={t(locale, 'word.markReviewed')}
             className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-cinnabar-border bg-cinnabar-light text-xs font-semibold text-cinnabar transition hover:bg-cinnabar hover:text-white"
           >
-            阅
+            {locale === 'en' ? 'R' : '阅'}
           </button>
         )}
         {quote.status !== 'archived' && (
           <button
             onClick={() => onUpdate({ status: 'archived' })}
-            title="归档"
+            title={t(locale, 'word.archive')}
             className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-border bg-transparent text-xs font-semibold text-muted transition hover:border-border-hover hover:bg-paper-input hover:text-ink-secondary"
           >
-            档
+            {locale === 'en' ? 'A' : '档'}
           </button>
         )}
         <button
           onClick={onDelete}
-          title="删除"
+          title={t(locale, 'word.delete')}
           className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-border bg-transparent text-xs font-semibold text-muted transition hover:border-cinnabar-border hover:bg-cinnabar-light hover:text-cinnabar"
         >
-          删
+          {locale === 'en' ? 'D' : '删'}
         </button>
       </div>
     </div>

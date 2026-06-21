@@ -1,21 +1,24 @@
-import { Download, FileText, Search, Upload } from 'lucide-react';
+import { Download, FileText, Search, Settings, Upload } from 'lucide-react';
 import { useRef, useState, type ChangeEvent } from 'react';
 import { browser } from 'wxt/browser';
 import { BackupParseError, parseBackup, serializeBackup } from '@/lib/backup';
 import { loadDictionary } from '@/lib/dictionary-loader';
 import { buildExportMap, exportInboxAsZip } from '@/lib/export';
-import type { Inbox } from '@/lib/types';
+import { t } from '@/lib/i18n';
+import type { Inbox, UiLocale } from '@/lib/types';
 
 export function Toolbar({
   inbox,
   query,
   onQuery,
   onRestore,
+  locale,
 }: {
   inbox: Inbox;
   query: string;
   onQuery: (query: string) => void;
   onRestore: (inbox: Inbox) => Promise<void> | void;
+  locale: UiLocale;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [restoring, setRestoring] = useState(false);
@@ -69,7 +72,11 @@ export function Toolbar({
     const json = serializeBackup(inbox);
     const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
     await downloadBlob(blob, `shiyu-hanzi-box-backup-${todayStamp()}.json`);
-    setMessage({ tone: 'success', text: '备份 JSON 已备好。' });
+    setMessage({ tone: 'success', text: t(locale, 'toolbar.backupReady') });
+  }
+
+  function openSettings() {
+    browser.tabs.create({ url: browser.runtime.getURL('/settings.html') });
   }
 
   async function restoreBackup(event: ChangeEvent<HTMLInputElement>) {
@@ -84,7 +91,9 @@ export function Toolbar({
       const restored = parseBackup(await file.text());
       const count = restored.words.length + restored.quotes.length;
       const confirmed = window.confirm(
-        `要从「${file.name}」还原 ${count} 条记录吗？这会替换当前本地收藏箱。`,
+        locale === 'en'
+          ? `Restore ${count} entries from "${file.name}"? This replaces the current local collection.`
+          : `要从「${file.name}」还原 ${count} 条记录吗？这会替换当前本地收藏箱。`,
       );
 
       if (!confirmed) return;
@@ -92,7 +101,7 @@ export function Toolbar({
       await onRestore(restored);
       setMessage({
         tone: 'success',
-        text: `已从备份还原 ${count} 条记录。`,
+        text: locale === 'en' ? `Restored ${count} entries from backup.` : `已从备份还原 ${count} 条记录。`,
       });
     } catch (error) {
       setMessage({
@@ -100,7 +109,7 @@ export function Toolbar({
         text:
           error instanceof BackupParseError
             ? error.message
-            : '无法还原这个备份文件。',
+            : t(locale, 'toolbar.restoreFailed'),
       });
     } finally {
       setRestoring(false);
@@ -112,14 +121,14 @@ export function Toolbar({
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <p className="inline-block border-b border-cinnabar-subtle pb-1 text-xs font-medium text-ink-secondary tracking-[2px]">
-            案头工具
+            {t(locale, 'toolbar.title')}
           </p>
           <p className="mt-1 text-xs text-muted">
-            检索札记，或导出今日读到的词句。
+            {t(locale, 'toolbar.subtitle')}
           </p>
         </div>
         <div className="rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-1 text-xs text-cinnabar tracking-[1px]">
-          {inbox.words.length} 词 · {inbox.quotes.length} 句
+          {inbox.words.length} {t(locale, 'toolbar.wordCount')} · {inbox.quotes.length} {t(locale, 'toolbar.quoteCount')}
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -128,7 +137,7 @@ export function Toolbar({
           <input
             value={query}
             onChange={(event) => onQuery(event.target.value)}
-            placeholder="检索词语、句子、分类..."
+            placeholder={t(locale, 'toolbar.searchPlaceholder')}
             className="w-full rounded-sm border border-border bg-paper-input py-2.5 pl-9 pr-3 text-sm text-ink outline-none transition placeholder:text-muted focus:border-cinnabar-fade"
           />
         </div>
@@ -136,19 +145,19 @@ export function Toolbar({
           onClick={downloadToday}
           className="inline-flex items-center gap-1 rounded-sm border border-border bg-transparent px-3 py-2.5 text-sm text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input"
         >
-          <FileText className="h-4 w-4" /> 今日札记
+          <FileText className="h-4 w-4" /> {t(locale, 'toolbar.todayNote')}
         </button>
         <button
           onClick={downloadZip}
           className="inline-flex items-center gap-1 rounded-sm bg-cinnabar px-3 py-2.5 text-sm text-white shadow-sm tracking-[2px] transition hover:brightness-95"
         >
-          <Download className="h-4 w-4" /> 导出
+          <Download className="h-4 w-4" /> {t(locale, 'toolbar.export')}
         </button>
         <button
           onClick={downloadBackup}
           className="inline-flex items-center gap-1 rounded-sm border border-border bg-transparent px-3 py-2.5 text-sm text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input"
         >
-          <Download className="h-4 w-4" /> 备份
+          <Download className="h-4 w-4" /> {t(locale, 'toolbar.backup')}
         </button>
         <input
           ref={fileInputRef}
@@ -162,7 +171,13 @@ export function Toolbar({
           disabled={restoring}
           className="inline-flex items-center gap-1 rounded-sm border border-border bg-transparent px-3 py-2.5 text-sm text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input disabled:cursor-not-allowed disabled:opacity-60"
         >
-          <Upload className="h-4 w-4" /> {restoring ? '还原中...' : '还原'}
+          <Upload className="h-4 w-4" /> {restoring ? t(locale, 'toolbar.restoring') : t(locale, 'toolbar.restore')}
+        </button>
+        <button
+          onClick={openSettings}
+          className="inline-flex items-center gap-1 rounded-sm border border-border bg-transparent px-3 py-2.5 text-sm text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input"
+        >
+          <Settings className="h-4 w-4" /> {t(locale, 'toolbar.settings')}
         </button>
       </div>
       {message ? (

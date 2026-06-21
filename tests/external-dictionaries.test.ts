@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { buildExternalLinks } from '../lib/external-dictionaries';
 
 describe('buildExternalLinks', () => {
-  it('builds an MDBG link with the encoded word', () => {
+  it('builds a Youdao link with the encoded word', () => {
     const links = buildExternalLinks('你好');
-    const mdbg = links.find((l) => l.label === 'MDBG')!;
-    expect(mdbg.url).toBe(
-      'https://www.mdbg.net/chinese/dictionary?wd=' + encodeURIComponent('你好'),
+    const youdao = links.find((l) => l.label === 'Youdao')!;
+    expect(youdao.url).toBe(
+      'https://www.youdao.com/result?word=' + encodeURIComponent('你好') + '&lang=en',
     );
-    expect(mdbg.language).toBe('Chinese-English');
+    expect(youdao.language).toBe('Chinese-English');
   });
 
   it('builds a 百度汉语 link with the encoded word', () => {
@@ -23,8 +23,8 @@ describe('buildExternalLinks', () => {
     expect(links[0].url).toContain(encodeURIComponent('龍'));
   });
 
-  it('returns both links in a stable order (MDBG first)', () => {
+  it('returns both links in a stable order (Youdao first)', () => {
     const links = buildExternalLinks('龙');
-    expect(links.map((l) => l.label)).toEqual(['MDBG', '百度汉语']);
+    expect(links.map((l) => l.label)).toEqual(['Youdao', '百度汉语']);
   });
 });

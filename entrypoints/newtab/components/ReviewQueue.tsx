@@ -1,5 +1,6 @@
 import { Eye, MessageSquareQuote, Repeat2, SkipForward, WholeWord } from 'lucide-react';
-import type { Entry } from '@/lib/types';
+import { t } from '@/lib/i18n';
+import type { Entry, UiLocale } from '@/lib/types';
 import type { ReviewQueueItem } from '@/lib/review';
 import { ReviewInsightReveal } from './ReviewInsightReveal';
 
@@ -8,11 +9,13 @@ export function ReviewQueue({
   onView,
   onSkip,
   onRepeat,
+  locale,
 }: {
   items: ReviewQueueItem[];
   onView: (kind: Entry['kind'], id: string) => void;
   onSkip: (kind: Entry['kind'], id: string) => void;
   onRepeat: (kind: Entry['kind'], id: string) => void;
+  locale: UiLocale;
 }) {
   if (items.length === 0) {
     return (
@@ -20,9 +23,9 @@ export function ReviewQueue({
         <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center text-[56px] leading-none text-ink/12">
           习
         </div>
-        <p className="text-base font-medium text-ink-secondary tracking-[3px]">今日复习清空了</p>
+        <p className="text-base font-medium text-ink-secondary tracking-[3px]">{t(locale, 'review.emptyTitle')}</p>
         <p className="mt-1 text-xs text-muted">
-          新拾到的词句会先出现在这里，直到你把它们归档。
+          {t(locale, 'review.emptyBody')}
         </p>
       </div>
     );
@@ -37,6 +40,7 @@ export function ReviewQueue({
           onView={() => onView(item.kind, item.entry.id)}
           onSkip={() => onSkip(item.kind, item.entry.id)}
           onRepeat={() => onRepeat(item.kind, item.entry.id)}
+          locale={locale}
         />
       ))}
     </div>
@@ -48,11 +52,13 @@ function ReviewCard({
   onView,
   onSkip,
   onRepeat,
+  locale,
 }: {
   item: ReviewQueueItem;
   onView: () => void;
   onSkip: () => void;
   onRepeat: () => void;
+  locale: UiLocale;
 }) {
   const { entry } = item;
   const source = getSourceLabel(entry);
@@ -66,10 +72,10 @@ function ReviewCard({
           ) : (
             <MessageSquareQuote className="h-3.5 w-3.5" />
           )}
-          {entry.kind === 'word' ? '词' : '句'}
+          {entry.kind === 'word' ? t(locale, 'review.kindWord') : t(locale, 'review.kindQuote')}
         </span>
         <span className="rounded-sm border border-border bg-paper-input px-2 py-1">
-          {entry.status === 'inbox' ? '待整理' : '复习中'}
+          {entry.status === 'inbox' ? t(locale, 'app.inbox') : t(locale, 'app.reviewed')}
         </span>
         {entry.kind === 'quote' && (
           <span className="rounded-sm border border-border bg-paper-input px-2 py-1">{entry.category}</span>
@@ -97,29 +103,29 @@ function ReviewCard({
         </p>
       )}
 
-      {entry.kind === 'word' && <ReviewInsightReveal word={entry} />}
+      {entry.kind === 'word' && <ReviewInsightReveal word={entry} locale={locale} />}
 
       <div className="mt-4 flex flex-wrap justify-end gap-2">
         <button
           onClick={onView}
-          title="标记已阅并安排下次复习"
+          title={locale === 'en' ? 'Mark viewed and schedule the next review' : '标记已阅并安排下次复习'}
           className="inline-flex items-center gap-1 rounded-sm bg-cinnabar px-3 py-2 text-sm font-medium text-white shadow-sm tracking-[2px] transition hover:brightness-95"
         >
-          <Eye className="h-4 w-4" /> 已阅
+          <Eye className="h-4 w-4" /> {t(locale, 'review.markViewed')}
         </button>
         <button
           onClick={onSkip}
-          title="这张卡片明日再看"
+          title={locale === 'en' ? 'Review this card tomorrow' : '这张卡片明日再看'}
           className="inline-flex items-center gap-1 rounded-sm border border-border bg-transparent px-3 py-2 text-sm font-medium text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input"
         >
-          <SkipForward className="h-4 w-4" /> 明日
+          <SkipForward className="h-4 w-4" /> {t(locale, 'review.tomorrow')}
         </button>
         <button
           onClick={onRepeat}
-          title="移到今日队尾"
+          title={locale === 'en' ? 'Move to the end of today’s queue' : '移到今日队尾'}
           className="inline-flex items-center gap-1 rounded-sm border border-border bg-transparent px-3 py-2 text-sm font-medium text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input"
         >
-          <Repeat2 className="h-4 w-4" /> 稍后
+          <Repeat2 className="h-4 w-4" /> {t(locale, 'review.later')}
         </button>
       </div>
     </article>

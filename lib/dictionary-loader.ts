@@ -1,6 +1,13 @@
 import { browser } from 'wxt/browser';
-import { buildIndex, materializeEntries } from './dictionary';
+import {
+  buildIndex,
+  labelDictionaryIndex,
+  materializeEntries,
+  mergeDictionaryIndexes,
+} from './dictionary';
 import { getDictionaryCache, setDictionaryCache } from './dictionary-cache';
+import { getKaikkiCache } from './kaikki-cache';
+import { settingsStorage } from './settings';
 import type { CompactDictionaryAsset, DictionaryAssetMeta, DictionaryIndex } from './types';
 
 export type DictionaryLoadStatus = 'cached' | 'built' | 'unavailable';
@@ -23,7 +30,8 @@ export async function loadDictionary(): Promise<DictionaryLoadResult> {
 
     const cached = await getDictionaryCache(manifest.hash);
     if (cached) {
-      return done({ index: cached, status: 'cached', meta: manifest }, startedAt);
+      const index = await withOptionalKaikki(labelDictionaryIndex(cached, 'cc-cedict'));
+      return done({ index, status: 'cached', meta: manifest }, startedAt);
     }
 
     const asset = await fetchJson<CompactDictionaryAsset>(ASSET_URL);
@@ -33,10 +41,19 @@ export async function loadDictionary(): Promise<DictionaryLoadResult> {
     const entries = materializeEntries(asset);
     const index = buildIndex(entries);
     await setDictionaryCache(manifest.hash, index);
-    return done({ index, status: 'built', meta: manifest }, startedAt);
+    const merged = await withOptionalKaikki(labelDictionaryIndex(index, 'cc-cedict'));
+    return done({ index: merged, status: 'built', meta: manifest }, startedAt);
   } catch {
     return done(unavailable(), startedAt);
   }
+}
+
+async function withOptionalKaikki(primary: DictionaryIndex): Promise<DictionaryIndex> {
+  const settings = await settingsStorage.getValue();
+  if (!settings.kaikki.enabled || !settings.kaikki.hash) return primary;
+  const cached = await getKaikkiCache(settings.kaikki.hash);
+  if (!cached) return primary;
+  return mergeDictionaryIndexes(primary, labelDictionaryIndex(cached, 'kaikki'));
 }
 
 async function fetchJson<T>(path: string): Promise<T | null> {

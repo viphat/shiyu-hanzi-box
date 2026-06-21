@@ -15,6 +15,7 @@ export default defineConfig({
       'unlimitedStorage',
       'clipboardRead',
     ],
+    optional_host_permissions: ['https://kaikki.org/*'],
     commands: {
       'save-word': {
         suggested_key: { default: 'Ctrl+Shift+S', mac: 'Command+Shift+S' },

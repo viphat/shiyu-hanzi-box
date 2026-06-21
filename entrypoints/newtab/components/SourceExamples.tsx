@@ -1,16 +1,19 @@
-import type { ExternalDictionaryLink, HighlightedExample } from '@/lib/types';
+import { t } from '@/lib/i18n';
+import type { ExternalDictionaryLink, HighlightedExample, UiLocale } from '@/lib/types';
 
 export function SourceExamples({
   examples,
   externalLinks,
+  locale,
 }: {
   examples: HighlightedExample[];
   externalLinks: ExternalDictionaryLink[];
+  locale: UiLocale;
 }) {
   return (
     <div className="space-y-2">
       {examples.map((ex, i) => (
-        <HighlightedLine key={i} example={ex} />
+        <HighlightedLine key={i} example={ex} locale={locale} />
       ))}
       {externalLinks.length > 0 && (
         <div className="flex flex-wrap gap-2 pt-1">
@@ -31,9 +34,9 @@ export function SourceExamples({
   );
 }
 
-function HighlightedLine({ example }: { example: HighlightedExample }) {
+function HighlightedLine({ example, locale }: { example: HighlightedExample; locale: UiLocale }) {
   const parts = renderWithRanges(example.snippet, example.ranges);
-  const sourceLabel = example.sourceTitle || '来源';
+  const sourceLabel = example.sourceTitle || t(locale, 'insight.source');
   return (
     <div className="rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs">
       {example.snippet ? (

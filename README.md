@@ -31,6 +31,9 @@ Implemented:
   export actions, and backup/restore controls.
 - Offline Word Insight Panel with CC-CEDICT definitions, tone chips, source
   examples, external dictionary links, and review reveal mode.
+- Settings page with English / zh-CN UI locale selection.
+- Optional runtime Kaikki JSONL import/download into local IndexedDB storage for
+  extra dictionary fallback entries without growing the packed extension.
 - Jade/ink Tailwind theme tokens and CJK font stack.
 - Unit tests for normalization, capture/dedupe, background capture paths,
   pinyin, Markdown rendering, export generation, and backup restore validation.
@@ -45,7 +48,7 @@ Expanding a saved word in the dashboard shows:
   the component characters.
 - **Source examples** — the captured surrounding sentences with the word
   highlighted, deduped to the newest three.
-- **External links** — click-only links to MDBG (Chinese-English) and
+- **External links** — click-only links to Youdao (Chinese-English) and
   百度汉语 (Chinese-Chinese). Nothing is fetched until you click.
 
 Review cards gain a **显示释义** reveal button so you can test yourself before
@@ -62,6 +65,37 @@ never contacts MDBG at runtime.
 
 The Word Insight Panel is fully offline. The only outbound requests are the
 two external dictionary links, and only when you click them.
+
+## Settings And Optional Kaikki Dictionary
+
+Open **Settings** from the dashboard toolbar to choose the UI locale:
+
+- `zh-CN` keeps the original Simplified Chinese interface.
+- `en` switches dashboard, popup, review, insight, and settings labels to
+  English. Saved words, quotes, notes, backups, and Markdown exports are never
+  translated.
+
+CC-CEDICT remains the default bundled offline dictionary. For words that
+CC-CEDICT misses, the settings page can optionally extend lookup with a Kaikki
+JSONL dictionary source:
+
+- **Import JSONL file** reads a local Kaikki JSONL file and stores processed
+  entries in IndexedDB.
+- **Download from Kaikki** asks for the optional `https://kaikki.org/*` host
+  permission, downloads the configured Kaikki URL, processes it locally, and
+  stores the compact index in IndexedDB.
+- **Enable Kaikki fallback** controls whether the stored Kaikki index is used.
+- **Remove Kaikki data** deletes the runtime Kaikki index and leaves the
+  bundled CC-CEDICT dictionary untouched.
+
+Kaikki data is not bundled into `public/` and is not added to the packed
+extension. Large Kaikki dumps can take significant time and local browser
+storage to process. Kaikki entries are used only as fallback definitions:
+CC-CEDICT results stay first when both sources contain a word.
+
+Kaikki data comes from [Kaikki/Wiktextract](https://kaikki.org/) and its
+published dictionary dumps. Review the Kaikki source page and Wiktionary license
+terms before redistributing imported dictionary data.
 
 ## How Capture Works
 
@@ -93,11 +127,16 @@ entrypoints/
     index.html
     main.tsx
     Popup.tsx            # save as word / save as quote buttons
+  settings/
+    index.html
+    main.tsx
+    SettingsApp.tsx      # locale + optional Kaikki runtime dictionary settings
   newtab/
     index.html
     main.tsx
     App.tsx              # dashboard shell, filters, list wiring
-    hooks/useInbox.ts    # live WXT storage hook
+    hooks/useInbox.ts    # live WXT inbox storage hook
+    hooks/useSettings.ts # live WXT settings storage hook
     components/          # toolbar, word/quote cards, lists, pinyin button
 lib/
   capture.ts             # saveWord/saveQuote and word dedupe behavior
@@ -105,10 +144,14 @@ lib/
   backup.ts              # versioned JSON backup + restore validation
   id.ts                  # dependency-free id generation
   markdown.ts            # daily note rendering
+  i18n.ts                # EN/zh-CN UI messages
+  kaikki.ts              # Kaikki JSONL parser and URL validation
+  kaikki-cache.ts        # IndexedDB cache for runtime Kaikki indexes
   normalize.ts           # word normalization
   page-context.ts        # injected selection reader
   pinyin.ts              # pinyin-pro wrapper
   storage.ts             # WXT storage item and serialized mutations
+  settings.ts            # WXT app settings storage and helpers
   types.ts               # persisted data shapes
 tests/
   capture-handler.test.ts

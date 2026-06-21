@@ -9,9 +9,9 @@ export function buildExternalLinks(word: string): ExternalDictionaryLink[] {
   const q = encodeURIComponent(word);
   return [
     {
-      label: 'MDBG',
+      label: 'Youdao',
       language: 'Chinese-English',
-      url: `https://www.mdbg.net/chinese/dictionary?wd=${q}`,
+      url: `https://www.youdao.com/result?word=${q}&lang=en`,
     },
     {
       label: '百度汉语',

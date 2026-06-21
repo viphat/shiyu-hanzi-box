@@ -161,7 +161,9 @@ export function computeWordInsight(
 
   if (exactEntries.length > 0) {
     const primaryPinyin = exactEntries[0].pinyin;
-    const toneChips = cedictPinyinToChips(primaryPinyin, displayText);
+    const toneChips = primaryPinyin
+      ? cedictPinyinToChips(primaryPinyin, displayText)
+      : inferToneChips(displayText);
     return {
       displayText,
       exactEntries,
@@ -190,11 +192,12 @@ export function computeWordInsight(
 }
 
 function uniqueEntries(entries: DictionaryEntry[]): DictionaryEntry[] {
-  const seen = new Set<number>();
+  const seen = new Set<string>();
   const out: DictionaryEntry[] = [];
   for (const entry of entries) {
-    if (seen.has(entry.index)) continue;
-    seen.add(entry.index);
+    const key = `${entry.source ?? 'dictionary'}:${entry.index}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     out.push(entry);
   }
   return out;

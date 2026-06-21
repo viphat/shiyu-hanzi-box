@@ -1,14 +1,18 @@
 import type { QuoteEntry } from '@/lib/types';
+import type { UiLocale } from '@/lib/types';
+import { t } from '@/lib/i18n';
 import { QuoteCard } from './QuoteCard';
 
 export function QuoteList({
   quotes,
   onUpdate,
   onDelete,
+  locale,
 }: {
   quotes: QuoteEntry[];
   onUpdate: (id: string, patch: Partial<QuoteEntry>) => void;
   onDelete: (id: string) => void;
+  locale: UiLocale;
 }) {
   if (quotes.length === 0) {
     return (
@@ -16,8 +20,8 @@ export function QuoteList({
         <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center text-[56px] leading-none text-ink/12">
           句
         </div>
-        <p className="text-base font-medium text-ink-secondary tracking-[3px]">还没有句子</p>
-        <p className="mt-1 text-xs text-muted">遇到喜欢的句子，就把它夹进这本小手帐。</p>
+        <p className="text-base font-medium text-ink-secondary tracking-[3px]">{t(locale, 'quote.emptyTitle')}</p>
+        <p className="mt-1 text-xs text-muted">{t(locale, 'quote.emptyBody')}</p>
       </div>
     );
   }
@@ -30,6 +34,7 @@ export function QuoteList({
           quote={quote}
           onUpdate={(patch) => onUpdate(quote.id, patch)}
           onDelete={() => onDelete(quote.id)}
+          locale={locale}
         />
       ))}
     </div>

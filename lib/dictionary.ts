@@ -66,7 +66,7 @@ export function parseCedictText(
  * that the CC-CEDICT download places at the top of the file.
  */
 export function extractRelease(text: string): string {
-  const match = text.match(/^#!.*\bdate=(\d{4}-\d{2}-\d{2})\b/m);
+  const match = text.match(/^#!.*\bdate=([^\s]+)\b/m);
   return match ? match[1] : 'unknown';
 }
 

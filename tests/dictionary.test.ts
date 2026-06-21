@@ -72,6 +72,12 @@ describe('extractRelease', () => {
     expect(extractRelease(sample)).toBe('2026-06-20');
   });
 
+  it('reads an ISO timestamp release from the #! date marker line', () => {
+    expect(extractRelease('#! date=2026-06-20T08:45:02Z\n你好 你好 [ni3 hao3] /hi/')).toBe(
+      '2026-06-20T08:45:02Z',
+    );
+  });
+
   it('returns "unknown" when no marker is present', () => {
     expect(extractRelease('# just a comment\n你好 你好 [ni3 hao3] /hi/')).toBe(
       'unknown',

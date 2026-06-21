@@ -9,7 +9,6 @@ const word: WordEntry = {
   kind: 'word',
   text: '你好',
   normalized: '你好',
-  tags: ['greeting'],
   note: 'common hello',
   status: 'inbox',
   createdAt: 1,
@@ -45,13 +44,14 @@ describe('renderDay', () => {
   });
 
   it('lists a word once with all source links and a review checkbox', () => {
-    const md = renderDay(day, [word], []);
+    const legacyWord = { ...word, tags: ['greeting'] } as unknown as WordEntry;
+    const md = renderDay(day, [legacyWord], []);
     expect(md).toContain('## Words');
     expect(md).toContain('- [ ] **你好**');
     expect(md).toContain('https://a.com/1');
     expect(md).toContain('https://b.com/2');
     expect(md).toContain('nǐ hǎo');
-    expect(md).toContain('#greeting');
+    expect(md).not.toContain('#greeting');
   });
 
   it('lists each quote as its own entry', () => {

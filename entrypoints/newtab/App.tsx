@@ -284,6 +284,7 @@ function updateReviewEntry(
 function entryMatchesQuery(entry: Entry, query: string): boolean {
   if (query === '') return true;
 
+  const tags = entry.kind === 'quote' ? entry.tags.join(' ') : '';
   const source =
     entry.kind === 'quote'
       ? `${entry.category} ${entry.sourceTitle} ${entry.sourceDomain}`
@@ -291,7 +292,7 @@ function entryMatchesQuery(entry: Entry, query: string): boolean {
           .map((occurrence) => `${occurrence.sourceTitle} ${occurrence.sourceDomain}`)
           .join(' ');
 
-  return `${entry.text} ${entry.note} ${entry.tags.join(' ')} ${source}`
+  return `${entry.text} ${entry.note} ${tags} ${source}`
     .toLowerCase()
     .includes(query);
 }

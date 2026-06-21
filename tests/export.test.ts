@@ -7,7 +7,6 @@ const word: WordEntry = {
   kind: 'word',
   text: '你好',
   normalized: '你好',
-  tags: [],
   note: '',
   status: 'inbox',
   createdAt: Date.UTC(2026, 5, 20),

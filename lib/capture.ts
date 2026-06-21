@@ -27,7 +27,6 @@ export async function saveWord(text: string, src: SourceInfo): Promise<WordEntry
         kind: 'word',
         text: text.trim(),
         normalized,
-        tags: [],
         note: '',
         status: 'inbox',
         createdAt: now,

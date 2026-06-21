@@ -18,7 +18,6 @@ function word(overrides: Partial<WordEntry> = {}): WordEntry {
     kind: 'word',
     text: '山水',
     normalized: '山水',
-    tags: [],
     note: '',
     status: 'inbox',
     createdAt: YESTERDAY,

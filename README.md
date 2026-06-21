@@ -45,11 +45,12 @@ flowchart LR
   C --> G["Extension badge feedback"]
 ```
 
-Words and quotes share common metadata such as `id`, `text`, `tags`, `note`,
-`status`, `createdAt`, `updatedAt`, and optional `pinyin`.
+Words and quotes share common metadata such as `id`, `text`, `note`, `status`,
+`createdAt`, `updatedAt`, and optional `pinyin`.
 
 Words also store a `normalized` dedupe key and an `occurrences[]` list containing
-source page metadata. Quotes store source metadata directly and are not deduped.
+source page metadata. Quotes store source metadata directly, keep optional tags,
+and are not deduped.
 
 ## Project Layout
 
@@ -159,8 +160,8 @@ The current test suite covers:
 - background capture success, no-selection, restricted-page, no-active-tab, and
   quote paths using fake Chrome APIs;
 - local pinyin generation;
-- daily Markdown frontmatter, sections, words, quotes, tags, pinyin, and source
-  links;
+- daily Markdown frontmatter, sections, words, quotes, quote tags, pinyin, and
+  source links;
 - daily export grouping, archived-entry skipping, and zip byte generation.
 - versioned backup JSON generation, legacy raw inbox restore, and invalid import
   rejection.

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
-  Tag,
 } from 'lucide-react';
 import type { WordEntry } from '@/lib/types';
 import { PinyinButton } from './PinyinButton';
@@ -17,7 +16,6 @@ export function WordCard({
   onDelete: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [tagInput, setTagInput] = useState('');
   const [note, setNote] = useState(word.note);
   const latest = word.occurrences[0];
 
@@ -44,14 +42,6 @@ export function WordCard({
             />
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-7">
-            {word.tags.map((tag) => (
-              <span
-                key={tag}
-                className="rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-0.5 text-xs text-cinnabar tracking-[1px]"
-              >
-                #{tag}
-              </span>
-            ))}
             <span className="rounded-sm border border-border bg-paper-input px-2 py-0.5 text-xs text-muted">
               {word.occurrences.length} 次相遇
             </span>
@@ -110,22 +100,6 @@ export function WordCard({
               </li>
             ))}
           </ul>
-          <div className="flex items-center gap-2">
-            <Tag className="h-3 w-3 text-cinnabar" />
-            <input
-              value={tagInput}
-              onChange={(event) => setTagInput(event.target.value)}
-              onKeyDown={(event) => {
-                const tag = tagInput.trim();
-                if (event.key === 'Enter' && tag) {
-                  onUpdate({ tags: [...word.tags, tag] });
-                  setTagInput('');
-                }
-              }}
-              placeholder="添标签..."
-              className="w-40 border-b border-border bg-transparent text-xs text-ink outline-none transition placeholder:text-muted focus:border-cinnabar-fade"
-            />
-          </div>
           <textarea
             value={note}
             onChange={(event) => setNote(event.target.value)}

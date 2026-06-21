@@ -22,7 +22,6 @@ export interface Occurrence {
 interface EntryBase {
   id: string;
   text: string;
-  tags: string[];
   note: string;
   status: Status;
   createdAt: number;
@@ -41,6 +40,7 @@ export interface WordEntry extends EntryBase {
 export interface QuoteEntry extends EntryBase {
   kind: 'quote';
   category: string; // freeform; defaults to 'uncategorized'
+  tags: string[];
   sourceTitle: string;
   sourceUrl: string;
   sourceDomain: string;

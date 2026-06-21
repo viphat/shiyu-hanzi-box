@@ -24,6 +24,7 @@ describe('saveWord', () => {
     expect(inbox.words[0].normalized).toBe('你好');
     expect(inbox.words[0].occurrences).toHaveLength(1);
     expect(inbox.words[0].status).toBe('inbox');
+    expect('tags' in inbox.words[0]).toBe(false);
   });
 
   it('dedupes by normalized text and appends an occurrence', async () => {

@@ -12,7 +12,6 @@ const word: WordEntry = {
   kind: 'word',
   text: '你好',
   normalized: '你好',
-  tags: ['greeting'],
   note: 'common hello',
   status: 'reviewed',
   createdAt: Date.UTC(2026, 5, 20),
@@ -59,9 +58,14 @@ const inbox: Inbox = {
 
 describe('serializeBackup', () => {
   it('wraps the full inbox in a versioned JSON backup', () => {
-    const json = serializeBackup(inbox, new Date('2026-06-20T12:34:56.000Z'));
+    const legacyInbox = {
+      words: [{ ...word, tags: ['greeting'] }],
+      quotes: [quote],
+    } as unknown as Inbox;
+    const json = serializeBackup(legacyInbox, new Date('2026-06-20T12:34:56.000Z'));
     const backup = JSON.parse(json);
 
+    expect(backup.inbox.words[0]).not.toHaveProperty('tags');
     expect(backup).toMatchObject({
       app: 'shiyu-hanzi-box',
       formatVersion: 1,
@@ -84,6 +88,22 @@ describe('parseBackup', () => {
 
   it('accepts a raw inbox JSON file as a legacy restore format', () => {
     expect(parseBackup(JSON.stringify(inbox))).toEqual(inbox);
+  });
+
+  it('restores word entries without tags', () => {
+    expect(parseBackup(JSON.stringify({ words: [word], quotes: [quote] }))).toEqual({
+      words: [word],
+      quotes: [quote],
+    });
+  });
+
+  it('strips legacy word tags on restore', () => {
+    const legacyInbox = {
+      words: [{ ...word, tags: ['greeting'] }],
+      quotes: [quote],
+    };
+
+    expect(parseBackup(JSON.stringify(legacyInbox))).toEqual(inbox);
   });
 
   it('rejects malformed JSON with a typed restore error', () => {

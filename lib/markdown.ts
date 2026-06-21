@@ -12,8 +12,7 @@ export function renderDay(date: string, words: WordEntry[], quotes: QuoteEntry[]
     lines.push('## Words', '');
     for (const word of words) {
       const pinyin = word.pinyin ? ` _${word.pinyin}_` : '';
-      const tags = word.tags.length > 0 ? ` ${word.tags.map((tag) => `#${tag}`).join(' ')}` : '';
-      lines.push(`- [ ] **${esc(word.text)}**${pinyin}${tags}`);
+      lines.push(`- [ ] **${esc(word.text)}**${pinyin}`);
       if (word.note) lines.push(`  - ${esc(word.note)}`);
       for (const occurrence of word.occurrences) {
         lines.push(`  - [${esc(occurrence.sourceTitle || occurrence.sourceDomain)}](${occurrence.sourceUrl})`);

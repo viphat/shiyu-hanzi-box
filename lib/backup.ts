@@ -22,7 +22,7 @@ export function createBackup(inbox: Inbox, exportedAt = new Date()): InboxBackup
     app: BACKUP_APP,
     formatVersion: BACKUP_FORMAT_VERSION,
     exportedAt: exportedAt.toISOString(),
-    inbox: cloneJson(inbox),
+    inbox: cloneInbox(inbox),
   };
 }
 
@@ -46,7 +46,7 @@ export function parseBackup(json: string): Inbox {
     );
   }
 
-  return cloneJson(inbox);
+  return cloneInbox(inbox);
 }
 
 function readInboxPayload(value: unknown): unknown {
@@ -106,6 +106,7 @@ function isQuoteEntry(value: unknown): value is QuoteEntry {
     value.kind === 'quote' &&
     hasEntryBase(value) &&
     isString(value.category) &&
+    isStringArray(value.tags) &&
     isString(value.sourceTitle) &&
     isString(value.sourceUrl) &&
     isString(value.sourceDomain) &&
@@ -117,7 +118,6 @@ function hasEntryBase(value: Record<string, unknown>): boolean {
   return (
     isString(value.id) &&
     isString(value.text) &&
-    isStringArray(value.tags) &&
     isString(value.note) &&
     isStatus(value.status) &&
     isFiniteNumber(value.createdAt) &&
@@ -172,4 +172,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function cloneInbox(inbox: Inbox): Inbox {
+  return {
+    words: inbox.words.map((word) => {
+      const { tags: _tags, ...rest } = word as WordEntry & { tags?: unknown };
+      return cloneJson(rest) as WordEntry;
+    }),
+    quotes: cloneJson(inbox.quotes),
+  };
 }

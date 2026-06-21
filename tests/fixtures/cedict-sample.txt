@@ -1,0 +1,9 @@
+#! date=2026-06-20
+# This is a comment line
+你好 你好 [ni3 hao3] /hello/good day/
+中國 中国 [zhong1 guo2] /China/Middle Kingdom/
+行 行 [xing2] /to walk/to travel/OK/
+行 行 [hang2] /row/line/profession/
+龍 龙 [long2] /dragon/
+亂 乱 [luan4] /random text with [brackets] inside/
+INVALID LINE WITHOUT BRACKETS

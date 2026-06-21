@@ -29,9 +29,39 @@ Implemented:
   inbox.
 - New-tab dashboard with search, status filters, cards, edit controls, pinyin,
   export actions, and backup/restore controls.
+- Offline Word Insight Panel with CC-CEDICT definitions, tone chips, source
+  examples, external dictionary links, and review reveal mode.
 - Jade/ink Tailwind theme tokens and CJK font stack.
 - Unit tests for normalization, capture/dedupe, background capture paths,
   pinyin, Markdown rendering, export generation, and backup restore validation.
+
+## Word Insight Panel
+
+Expanding a saved word in the dashboard shows:
+
+- **Tone chips** — one per Chinese character, with tone marks and numbers.
+- **Definitions** — from the bundled CC-CEDICT offline dictionary.
+- **Component fallback** — for phrases with no exact match, definitions for
+  the component characters.
+- **Source examples** — the captured surrounding sentences with the word
+  highlighted, deduped to the newest three.
+- **External links** — click-only links to MDBG (Chinese-English) and
+  百度汉语 (Chinese-Chinese). Nothing is fetched until you click.
+
+Review cards gain a **显示释义** reveal button so you can test yourself before
+seeing pinyin and definitions.
+
+### Dictionary Attribution
+
+Definitions come from [CC-CEDICT](https://www.mdbg.net/chinese/dictionary?page=cc-cedict),
+licensed CC-BY-SA. See `docs/dictionaries/CC-CEDICT.md` for details and update
+instructions. The dictionary ships as a compact offline asset; the extension
+never contacts MDBG at runtime.
+
+### Privacy
+
+The Word Insight Panel is fully offline. The only outbound requests are the
+two external dictionary links, and only when you click them.
 
 ## How Capture Works
 
@@ -138,8 +168,6 @@ npm run zip
   popup captures.
 - Add review settings such as daily cap, interval presets, and review streak
   visibility.
-- Add richer context review with highlighted source sentences around saved words
-  and quotes.
 
 ## Useful Notes
 

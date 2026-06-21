@@ -38,6 +38,13 @@ npx vitest run tests/markdown.test.ts
 npx vitest run tests/export.test.ts
 ```
 
+Regenerate the CC-CEDICT compact asset under `public/dictionaries/`. Requires
+a manually-downloaded `cc-cedict.txt`; see `docs/dictionaries/CC-CEDICT.md`.
+
+```bash
+npm run build:dictionary
+```
+
 `npm run compile` is `tsc --noEmit`.
 
 ## Architecture
@@ -53,6 +60,10 @@ The central data path is:
 6. `entrypoints/newtab/App.tsx` reads and mutates the inbox through
    `entrypoints/newtab/hooks/useInbox.ts`.
 7. `lib/markdown.ts` and `lib/export.ts` render daily notes and zip exports.
+8. `lib/dictionary.ts`, `lib/dictionary-loader.ts`, and `lib/word-insight.ts`
+   add an offline Word Insight Panel: definitions, tone chips, highlighted
+   source examples, and external dictionary links — all computed at view time,
+   not persisted on `WordEntry`.
 
 Core modules:
 
@@ -63,9 +74,26 @@ Core modules:
 - `lib/capture.ts`: `saveWord` and `saveQuote`.
 - `lib/page-context.ts`: self-contained injected function.
 - `lib/pinyin.ts`: `pinyin-pro` wrapper for lazy dashboard pinyin generation.
+- `lib/pinyin-helpers.ts`: CC-CEDICT numbered pinyin → tone marks/numbers, and
+  pinyin-pro fallback for tone chips when no dictionary match exists.
+- `lib/dictionary.ts`: CC-CEDICT parsing, compact asset build/materialize,
+  lookup index, exact lookup, and component fallback segmentation.
+- `lib/dictionary-cache.ts`: IndexedDB-backed cache for the parsed index,
+  keyed by the asset hash.
+- `lib/dictionary-loader.ts`: dashboard-only fetch + cache hydrate/build for
+  the compact asset under `public/dictionaries/`.
+- `lib/word-insight.ts`: pure composition of dictionary, tone chips, source
+  examples, and external links into a `WordInsight`.
+- `lib/external-dictionaries.ts`: click-only encoded MDBG and 百度汉语 URLs.
 - `lib/markdown.ts`: pure daily Markdown rendering.
 - `lib/export.ts`: daily export map and zip byte generation.
 - `entrypoints/popup/Popup.tsx`: toolbar capture buttons.
+- `entrypoints/newtab/components/WordInsightPanel.tsx`: insight UI inside
+  `WordCard`.
+- `entrypoints/newtab/components/ReviewInsightReveal.tsx`: reveal interaction
+  in `ReviewQueue`.
+- `entrypoints/newtab/hooks/useWordInsight.ts`: loads the dictionary once per
+  dashboard session and computes insight per word.
 - `entrypoints/newtab/`: dashboard shell, toolbar, cards, lists, and storage
   hook.
 

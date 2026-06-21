@@ -1,0 +1,18 @@
+{
+  "meta": {
+    "source": "CC-CEDICT",
+    "sourceUrl": "https://www.mdbg.net/chinese/dictionary?page=cc-cedict",
+    "release": "placeholder",
+    "license": "CC-BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "hash": "placeholder",
+    "generatedAt": "2026-06-21T00:00:00.000Z"
+  },
+  "columns": {
+    "simplified": ["你好"],
+    "traditional": ["你好"],
+    "pinyin": ["ni3 hao3"],
+    "definitionRanges": [[0, 1]],
+    "definitions": ["hello"]
+  }
+}

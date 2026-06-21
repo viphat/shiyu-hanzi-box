@@ -11,6 +11,7 @@
     "build:firefox": "wxt build -b firefox",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
+    "build:dictionary": "tsx scripts/build-dictionary.ts",
     "compile": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -31,6 +32,7 @@
     "@wxt-dev/auto-icons": "^1.1.1",
     "@wxt-dev/module-react": "^1.1.5",
     "tailwindcss": "^4.3.1",
+    "tsx": "^4.22.4",
     "typescript": "^5.9.3",
     "vitest": "^4.1.9",
     "wxt": "^0.20.26"

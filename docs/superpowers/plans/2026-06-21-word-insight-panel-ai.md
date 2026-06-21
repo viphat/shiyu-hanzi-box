@@ -14,11 +14,12 @@
 
 ## File Structure
 
-**Create (pure AI modules — unit-tested, no Chrome APIs except `lib/ai/settings.ts`):**
+**Create (unit-tested AI modules — Chrome APIs isolated to `lib/ai/settings.ts` and `lib/ai/permissions.ts`):**
 - `lib/ai/settings.ts` — WXT storage for `local:aiSettings`, provider preset table, defaults.
 - `lib/ai/prompt.ts` — pure `buildMessages(word, pinyin, cedictGlosses, recentOccurrence)` returning OpenAI-style `messages[]`. Testable.
 - `lib/ai/parse.ts` — pure validation of model JSON response → `AiInsight`. Handles malformed JSON, missing/extra fields. Returns typed errors, never throws across boundary. Testable.
 - `lib/ai/client.ts` — one `fetch` to `${baseUrl}/chat/completions` with `response_format: { type: 'json_object' }`. Returns typed result or error. Testable via mocked `fetch`.
+- `lib/ai/permissions.ts` — lazy `chrome.permissions.request` wrapper plus pure origin derivation helpers.
 
 **Create (UI components):**
 - `entrypoints/newtab/components/AskAiButton.tsx` — trigger with idle / disabled-not-configured / loading / error / retry states.
@@ -29,20 +30,22 @@
 - `entrypoints/newtab/hooks/useAiInsight.ts` — orchestrates: reads settings, calls client, persists to `WordEntry.aiInsight` via `mutateInbox`. Handles all error states.
 
 **Create (tests):**
+- `tests/ai-settings.test.ts`
 - `tests/ai-prompt.test.ts`
 - `tests/ai-parse.test.ts`
 - `tests/ai-client.test.ts`
+- `tests/ai-permissions.test.ts`
+- `tests/backup-ai.test.ts`
 
 **Modify:**
 - `lib/types.ts` — add `AiInsight`, `AiSettings`, and `AiProvider` types; add `aiInsight?: AiInsight` to `WordEntry`.
-- `lib/ai/permissions.ts` — lazy `chrome.permissions.request` for the provider origin.
 - `lib/markdown.ts` — add `## AI Insight` subsection per word when `aiInsight` is present.
 - `lib/backup.ts` — update `hasEntryBase` to tolerate `aiInsight` on `WordEntry` (so old backups without it still parse, and new backups with it are preserved).
 - `lib/export.ts` — pass the dictionary index to `renderDay` so both local definitions and AI insight render in exports.
 - `entrypoints/newtab/components/WordInsightPanel.tsx` — render `AskAiButton` + `AiInsightSection` below the local sections.
 - `entrypoints/newtab/components/ReviewInsightReveal.tsx` — show persisted AI insight in the review reveal (offline).
 - `entrypoints/newtab/App.tsx` — add an AI settings gear icon in the toolbar area, and a settings modal/drawer with `AiSettingsPanel`.
-- `wxt.config.ts` — add `optional_host_permissions` for DeepSeek and OpenAI origins.
+- `wxt.config.ts` — add optional host permissions for DeepSeek/OpenAI presets and runtime custom endpoints.
 - `AGENTS.md` — note the new `lib/ai/` modules.
 - `README.md` — document the opt-in AI layer and BYO-key requirement.
 - `package.json` — no new dependencies (uses native `fetch`).
@@ -326,6 +329,7 @@ git commit -m "feat: add AI settings storage with provider presets"
 
 **Files:**
 - Create: `lib/ai/permissions.ts`
+- Create: `tests/ai-permissions.test.ts`
 - Modify: `wxt.config.ts`
 
 This task adds the manifest declaration and the lazy permission-request logic.
@@ -335,22 +339,130 @@ This task adds the manifest declaration and the lazy permission-request logic.
 In `wxt.config.ts`, add `optional_host_permissions` to the manifest object (after `permissions`):
 
 ```ts
-    optional_host_permissions: {
-      origins: [
-        'https://api.deepseek.com/*',
-        'https://api.openai.com/*',
-      ],
-    },
+    optional_host_permissions: [
+      'https://api.deepseek.com/*',
+      'https://api.openai.com/*',
+      'https://*/*',
+      'http://*/*',
+    ],
 ```
 
-- [ ] **Step 2: Create the permissions module**
+The provider-specific entries document the default scopes. The wildcard optional host entries are needed for custom endpoints discovered at runtime; `requestAiSettingsPermission` still asks Chrome for only the exact configured origin.
+
+- [ ] **Step 2: Write the failing permissions test**
+
+Create `tests/ai-permissions.test.ts`:
+
+```ts
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  originFromBaseUrl,
+  requestAiSettingsPermission,
+  requestProviderPermission,
+} from '../lib/ai/permissions';
+import type { AiSettings } from '../lib/types';
+
+const request = vi.fn();
+const contains = vi.fn();
+
+vi.mock('wxt/browser', () => ({
+  browser: {
+    permissions: {
+      request,
+      contains,
+    },
+  },
+}));
+
+const settings = (over: Partial<AiSettings> = {}): AiSettings => ({
+  enabled: true,
+  provider: 'deepseek',
+  baseUrl: 'https://api.deepseek.com/v1',
+  apiKey: 'sk-test',
+  model: 'deepseek-chat',
+  ...over,
+});
+
+describe('originFromBaseUrl', () => {
+  it('turns a base URL into a Chrome origin pattern', () => {
+    expect(originFromBaseUrl('https://api.deepseek.com/v1')).toBe(
+      'https://api.deepseek.com/*',
+    );
+  });
+
+  it('returns null for invalid URLs', () => {
+    expect(originFromBaseUrl('not a url')).toBeNull();
+  });
+});
+
+describe('requestProviderPermission', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    request.mockResolvedValue(true);
+  });
+
+  it('requests the known provider origin', async () => {
+    await requestProviderPermission('deepseek');
+    expect(request).toHaveBeenCalledWith({
+      origins: ['https://api.deepseek.com/*'],
+    });
+  });
+
+  it('requests a custom origin when supplied', async () => {
+    await requestProviderPermission('custom', 'http://localhost:11434/*');
+    expect(request).toHaveBeenCalledWith({
+      origins: ['http://localhost:11434/*'],
+    });
+  });
+});
+
+describe('requestAiSettingsPermission', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    request.mockResolvedValue(true);
+  });
+
+  it('does nothing when AI is disabled', async () => {
+    const ok = await requestAiSettingsPermission(settings({ enabled: false }));
+    expect(ok).toBe(true);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('requests custom endpoint origin when AI is enabled', async () => {
+    await requestAiSettingsPermission(settings({
+      provider: 'custom',
+      baseUrl: 'http://localhost:11434/v1',
+    }));
+    expect(request).toHaveBeenCalledWith({
+      origins: ['http://localhost:11434/*'],
+    });
+  });
+});
+```
+
+- [ ] **Step 3: Run the test to verify it fails**
+
+Run: `npx vitest run tests/ai-permissions.test.ts`
+Expected: FAIL — module not found.
+
+- [ ] **Step 4: Create the permissions module**
 
 Create `lib/ai/permissions.ts`:
 
 ```ts
 import { browser } from 'wxt/browser';
-import type { AiProvider } from '../types';
+import type { AiProvider, AiSettings } from '../types';
 import { getProviderOrigins } from './settings';
+
+export function originFromBaseUrl(baseUrl: string): string | null {
+  try {
+    const url = new URL(baseUrl);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    return `${url.origin}/*`;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Request host permissions for the given provider. Call this when the user
@@ -368,13 +480,20 @@ export async function requestProviderPermission(
   const origins = customOrigin
     ? [customOrigin]
     : presetOrigins;
-  if (origins.length === 0) return true; // custom with no origin: user handles it later
+  if (origins.length === 0) return false;
 
   try {
     return await browser.permissions.request({ origins });
   } catch {
     return false;
   }
+}
+
+export async function requestAiSettingsPermission(settings: AiSettings): Promise<boolean> {
+  if (!settings.enabled) return true;
+  const customOrigin =
+    settings.provider === 'custom' ? originFromBaseUrl(settings.baseUrl) ?? undefined : undefined;
+  return requestProviderPermission(settings.provider, customOrigin);
 }
 
 /**
@@ -393,20 +512,25 @@ export async function hasProviderPermission(
 }
 ```
 
-- [ ] **Step 3: Verify compile**
+- [ ] **Step 5: Run the permissions test to verify it passes**
+
+Run: `npx vitest run tests/ai-permissions.test.ts`
+Expected: PASS.
+
+- [ ] **Step 6: Verify compile**
 
 Run: `npm run compile`
-Expected: clean. (No test for `chrome.permissions` itself — it's a thin browser API wrapper. The behavior is tested manually in Task 13.)
+Expected: clean. (`chrome.permissions` itself is mocked in the focused test; the browser permission prompt is checked manually in Task 15.)
 
-- [ ] **Step 4: Run full tests**
+- [ ] **Step 7: Run full tests**
 
 Run: `npm test`
 Expected: all pass.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add lib/ai/permissions.ts wxt.config.ts
+git add lib/ai/permissions.ts tests/ai-permissions.test.ts wxt.config.ts
 git commit -m "feat: add lazy optional_host_permissions for AI providers"
 ```
 
@@ -637,22 +761,16 @@ describe('parseAiResponse', () => {
     expect(result.ok).toBe(false);
   });
 
-  it('tolerates missing optional fields and uses defaults', () => {
+  it('returns a parse error when required fields are missing', () => {
     const result = parseAiResponse(
       JSON.stringify({ summary: 'test' }),
       'openai',
       'gpt-4o-mini',
       'https://api.openai.com/v1',
     );
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.summary).toBe('test');
-    expect(result.value.definitions).toEqual([]);
-    expect(result.value.sampleSentences).toEqual([]);
-    expect(result.value.translations).toEqual([]);
-    expect(result.value.collocations).toEqual([]);
-    expect(result.value.notes).toBe('');
-    expect(result.value.register).toBe('neutral');
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toContain('schema');
   });
 
   it('tolerates extra unknown fields', () => {
@@ -665,25 +783,35 @@ describe('parseAiResponse', () => {
     expect(result.ok).toBe(true);
   });
 
-  it('coerces non-array fields to empty arrays', () => {
+  it('returns a parse error for non-array fields', () => {
     const result = parseAiResponse(
       JSON.stringify({ ...validBody, definitions: 'not an array' }),
       'deepseek',
       'deepseek-chat',
       '',
     );
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.definitions).toEqual([]);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toContain('schema');
+  });
+
+  it('returns a parse error when sample sentences and translations are not parallel', () => {
+    const result = parseAiResponse(
+      JSON.stringify({ ...validBody, translations: [] }),
+      'deepseek',
+      'deepseek-chat',
+      '',
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toContain('parallel');
   });
 });
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `npx vitest run tests/ai-prompt.test.ts` — oops, wrong file. Run:
-
-`npx vitest run tests/ai-parse.test.ts`
+Run: `npx vitest run tests/ai-parse.test.ts`
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement**
@@ -693,12 +821,22 @@ Create `lib/ai/parse.ts`:
 ```ts
 import type { AiInsight, AiProvider } from '../types';
 
+export type AiParseError = { ok: false; reason: string };
+
 export type AiParseResult =
   | { ok: true; value: AiInsight }
-  | { ok: false; reason: string };
+  | AiParseError;
 
 function toStringArray(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+}
+
+function hasStringArray(value: Record<string, unknown>, key: string): value is Record<string, string[]> {
+  return Array.isArray(value[key]) && (value[key] as unknown[]).every((x) => typeof x === 'string');
+}
+
+function readRequiredString(value: Record<string, unknown>, key: string): string | null {
+  return typeof value[key] === 'string' ? value[key] : null;
 }
 
 /**
@@ -723,6 +861,28 @@ export function parseAiResponse(
   }
 
   const obj = parsed as Record<string, unknown>;
+  const summary = readRequiredString(obj, 'summary');
+  const register = readRequiredString(obj, 'register');
+  const notes = readRequiredString(obj, 'notes');
+  if (
+    summary === null ||
+    register === null ||
+    notes === null ||
+    !hasStringArray(obj, 'definitions') ||
+    !hasStringArray(obj, 'sampleSentences') ||
+    !hasStringArray(obj, 'translations') ||
+    !hasStringArray(obj, 'collocations')
+  ) {
+    return { ok: false, reason: 'Response schema mismatch.' };
+  }
+
+  const definitions = toStringArray(obj.definitions);
+  const sampleSentences = toStringArray(obj.sampleSentences);
+  const translations = toStringArray(obj.translations);
+  const collocations = toStringArray(obj.collocations);
+  if (sampleSentences.length !== translations.length) {
+    return { ok: false, reason: 'Response schema mismatch: sampleSentences and translations must be parallel.' };
+  }
 
   return {
     ok: true,
@@ -731,13 +891,13 @@ export function parseAiResponse(
       model,
       baseUrl,
       generatedAt: Date.now(),
-      summary: typeof obj.summary === 'string' ? obj.summary : '',
-      register: typeof obj.register === 'string' ? obj.register : 'neutral',
-      definitions: toStringArray(obj.definitions),
-      sampleSentences: toStringArray(obj.sampleSentences),
-      translations: toStringArray(obj.translations),
-      collocations: toStringArray(obj.collocations),
-      notes: typeof obj.notes === 'string' ? obj.notes : '',
+      summary,
+      register,
+      definitions,
+      sampleSentences,
+      translations,
+      collocations,
+      notes,
     },
   };
 }
@@ -1010,48 +1170,93 @@ git commit -m "feat: add AI client with typed error handling"
 **Files:**
 - Create: `entrypoints/newtab/hooks/useAiInsight.ts`
 
-Orchestrates: reads settings → calls client → persists result to `WordEntry.aiInsight` via `mutateInbox` → handles all error states. No test (it glues tested modules; behavior is covered by the pure module tests).
+Orchestrates: reads settings → calls client → persists result to `WordEntry.aiInsight` via `mutateInbox` → handles all error states. The initial settings read is local-only so the button can render disabled before click; no provider request happens until `requestInsight`. No test (it glues tested modules; behavior is covered by the pure module tests).
 
 - [ ] **Step 1: Implement**
 
 Create `entrypoints/newtab/hooks/useAiInsight.ts`:
 
 ```ts
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fetchAiInsight, type AiClientResult } from '@/lib/ai/client';
 import { buildMessages } from '@/lib/ai/prompt';
 import { getAiSettings } from '@/lib/ai/settings';
 import { mutateInbox } from '@/lib/storage';
-import type { AiInsight, WordEntry } from '@/lib/types';
+import type {
+  AiInsight,
+  AiSettings,
+  DictionaryEntry,
+  Occurrence,
+  WordEntry,
+} from '@/lib/types';
 
 export type AiRequestState =
+  | 'checking'
   | 'idle'
   | 'loading'
   | 'disabled'
   | 'error';
 
-export function useAiInsight(word: WordEntry) {
-  const [state, setState] = useState<AiRequestState>('idle');
+function isConfigured(settings: AiSettings): boolean {
+  return (
+    settings.enabled &&
+    settings.apiKey.trim() !== '' &&
+    settings.baseUrl.trim() !== '' &&
+    settings.model.trim() !== ''
+  );
+}
+
+function newestOccurrence(word: WordEntry): Occurrence | undefined {
+  return [...word.occurrences].sort((a, b) => b.capturedAt - a.capturedAt)[0];
+}
+
+export function useAiInsight(word: WordEntry, cedictEntries: DictionaryEntry[]) {
+  const [settings, setSettings] = useState<AiSettings | null>(null);
+  const [state, setState] = useState<AiRequestState>('checking');
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    let alive = true;
+
+    getAiSettings()
+      .then((next) => {
+        if (!alive) return;
+        setSettings(next);
+        if (isConfigured(next)) {
+          setState('idle');
+          setError('');
+        } else {
+          setState('disabled');
+          setError('Configure AI to use this.');
+        }
+      })
+      .catch(() => {
+        if (!alive) return;
+        setState('disabled');
+        setError('Configure AI to use this.');
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   async function requestInsight() {
+    if (!settings || !isConfigured(settings)) {
+      setState('disabled');
+      setError('Configure AI to use this.');
+      return;
+    }
+
     setState('loading');
     setError('');
 
     try {
-      const settings = await getAiSettings();
-      if (!settings.enabled || !settings.apiKey) {
-        setState('disabled');
-        setError('Configure AI to use this.');
-        return;
-      }
-
-      const recentOccurrence = word.occurrences[0];
+      const recentOccurrence = newestOccurrence(word);
       const messages = buildMessages(
         word,
         word.pinyin,
-        [], // CEDICT entries are not passed here to keep the prompt focused;
-            // the model generates richer definitions from its training data.
+        cedictEntries,
         recentOccurrence,
       );
 
@@ -1132,11 +1337,24 @@ export function AskAiButton({
   onAsk: () => void;
   onRetry: () => void;
 }) {
-  if (state === 'disabled') {
+  if (state === 'checking' || state === 'disabled') {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs text-muted">
-        <Sparkles className="h-3 w-3" /> AI 释义未配置
-      </span>
+      <div className="space-y-1">
+        <button
+          disabled
+          className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs text-muted opacity-60"
+        >
+          {state === 'checking' ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Sparkles className="h-3 w-3" />
+          )}
+          {state === 'checking' ? '检查 AI 设置…' : 'Ask AI'}
+        </button>
+        <p className="text-[11px] text-muted">
+          {error || 'Configure AI to use this.'}
+        </p>
+      </div>
     );
   }
 
@@ -1158,7 +1376,7 @@ export function AskAiButton({
         ) : (
           <Sparkles className="h-3 w-3" />
         )}
-        {state === 'loading' ? '正在生成…' : state === 'error' ? '重试' : 'AI 释义'}
+        {state === 'loading' ? '正在生成…' : state === 'error' ? '重试' : 'Ask AI'}
       </button>
       {state === 'error' && (
         <p className="text-[11px] text-cinnabar">{error}</p>
@@ -1286,7 +1504,10 @@ import { AiInsightSection } from './AiInsightSection';
 Inside the `WordInsightPanel` component function, after `const { insight, loading } = useWordInsight(word);`, add:
 
 ```tsx
-  const { state: aiState, error: aiError, requestInsight } = useAiInsight(word);
+  const { state: aiState, error: aiError, requestInsight } = useAiInsight(
+    word,
+    insight?.exactEntries ?? [],
+  );
 ```
 
 Then in the JSX, immediately before the closing `</div>` (after the `<p className="text-[10px] text-muted">Dictionary: CC-CEDICT</p>` line), add:
@@ -1393,49 +1614,53 @@ import { useState } from 'react';
 import type { AiSettings } from '@/lib/types';
 import {
   applyPreset,
-  DEFAULT_SETTINGS,
   PROVIDER_PRESETS,
 } from '@/lib/ai/settings';
 
 export function AiSettingsPanel({
   settings,
+  onClose,
   onSave,
   onTestConnection,
   testing,
   testResult,
 }: {
   settings: AiSettings;
-  onSave: (next: AiSettings) => void;
-  onTestConnection: () => Promise<{ ok: boolean; message: string }>;
+  onClose: () => void;
+  onSave: (next: AiSettings) => Promise<boolean>;
+  onTestConnection: (next: AiSettings) => Promise<{ ok: boolean; message: string }>;
   testing: boolean;
   testResult: { ok: boolean; message: string } | null;
 }) {
   const [draft, setDraft] = useState<AiSettings>({ ...settings });
   const [showKey, setShowKey] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   function handleProviderChange(provider: string) {
     const next = applyPreset(draft, provider as AiSettings['provider']);
     setDraft(next);
   }
 
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        title="AI 设置"
-        className="rounded-sm border border-border bg-transparent p-1.5 text-muted transition hover:border-border-hover hover:bg-paper-input hover:text-ink-secondary"
-      >
-        <SparklesIcon className="h-4 w-4" />
-      </button>
-    );
+  async function handleSave() {
+    setSaveError('');
+    const ok = await onSave(draft);
+    if (ok) {
+      onClose();
+      return;
+    }
+    setSaveError('Provider permission was not granted.');
   }
+
+  const canTest =
+    draft.apiKey.trim() !== '' &&
+    draft.baseUrl.trim() !== '' &&
+    draft.model.trim() !== '';
 
   return (
     <div className="rounded-sm border border-border bg-paper-light p-4 shadow-sm">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-ink tracking-[2px]">AI 设置</p>
-        <button onClick={() => setOpen(false)} className="text-muted hover:text-ink-secondary text-xs">
+        <button onClick={onClose} className="text-muted hover:text-ink-secondary text-xs">
           关闭
         </button>
       </div>
@@ -1516,14 +1741,14 @@ export function AiSettingsPanel({
         {/* Actions */}
         <div className="flex gap-2 pt-2">
           <button
-            onClick={() => { onSave(draft); setOpen(false); }}
+            onClick={() => void handleSave()}
             className="inline-flex items-center gap-1 rounded-sm bg-cinnabar px-3 py-1.5 text-xs font-medium text-white shadow-sm tracking-[1px] transition hover:brightness-95"
           >
             <Save className="h-3 w-3" /> 保存
           </button>
           <button
-            onClick={onTestConnection}
-            disabled={testing || !draft.apiKey}
+            onClick={() => void onTestConnection(draft)}
+            disabled={testing || !canTest}
             className="inline-flex items-center gap-1 rounded-sm border border-border px-3 py-1.5 text-xs font-medium text-ink-secondary tracking-[1px] transition hover:border-border-hover hover:bg-paper-input disabled:opacity-50"
           >
             {testing ? '...' : testResult ? (testResult.ok ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />) : <Wifi className="h-3 w-3" />}
@@ -1534,17 +1759,12 @@ export function AiSettingsPanel({
               {testResult.message}
             </span>
           )}
+          {saveError && (
+            <span className="text-[11px] text-cinnabar">{saveError}</span>
+          )}
         </div>
       </div>
     </div>
-  );
-}
-
-function SparklesIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 3l1.9 5.9a2 2 0 0 0 1.2 1.2L21 12l-5.9 1.9a2 2 0 0 0-1.2 1.2L12 21l-1.9-5.9a2 2 0 0 0-1.2-1.2L3 12l5.9-1.9a2 2 0 0 0 1.2-1.2L12 3z" />
-    </svg>
   );
 }
 ```
@@ -1554,21 +1774,22 @@ function SparklesIcon({ className }: { className?: string }) {
 In `entrypoints/newtab/App.tsx`, add imports:
 
 ```tsx
-import { useState as useState2 } from 'react';
+import { Sparkles } from 'lucide-react';
 import { AiSettingsPanel } from './components/AiSettingsPanel';
 import { getAiSettings, setAiSettings } from '@/lib/ai/settings';
+import { requestAiSettingsPermission } from '@/lib/ai/permissions';
 import { fetchAiInsight } from '@/lib/ai/client';
 import type { AiSettings } from '@/lib/types';
 ```
 
-> Note: if `useState` is already imported, just add `useState as useState2` or rename appropriately. Adjust to avoid a naming conflict.
+> Note: if `App.tsx` already imports from `lucide-react`, add `Sparkles` to that existing import. Use the existing React `useState` import rather than adding a second alias.
 
 Add a settings state in the App component (after the existing `const [statusFilter, ...]` line):
 
 ```tsx
-  const [aiSettings, setAiSettingsState] = useState2<AiSettings | null>(null);
-  const [aiTesting, setAiTesting] = useState2(false);
-  const [aiTestResult, setAiTestResult] = useState2<{ ok: boolean; message: string } | null>(null);
+  const [aiSettings, setAiSettingsState] = useState<AiSettings | null>(null);
+  const [aiTesting, setAiTesting] = useState(false);
+  const [aiTestResult, setAiTestResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   // Load AI settings lazily when the panel is opened.
   async function openAiSettings() {
@@ -1577,27 +1798,51 @@ Add a settings state in the App component (after the existing `const [statusFilt
     setAiTestResult(null);
   }
 
-  async function saveAiSettings(next: AiSettings) {
+  async function saveAiSettings(next: AiSettings): Promise<boolean> {
+    const granted = await requestAiSettingsPermission(next);
+    if (!granted) {
+      setAiTestResult({ ok: false, message: 'Provider permission was not granted.' });
+      return false;
+    }
     await setAiSettings(next);
     setAiSettingsState(next);
+    return true;
   }
 
-  async function testAiConnection() {
-    if (!aiSettings) return;
+  async function testAiConnection(next: AiSettings): Promise<{ ok: boolean; message: string }> {
     setAiTesting(true);
+    setAiTestResult(null);
     try {
+      const granted = await requestAiSettingsPermission({ ...next, enabled: true });
+      if (!granted) {
+        const denied = { ok: false, message: 'Provider permission was not granted.' };
+        setAiTestResult(denied);
+        return denied;
+      }
+
       const result = await fetchAiInsight({
-        baseUrl: aiSettings.baseUrl,
-        apiKey: aiSettings.apiKey,
-        model: aiSettings.model,
-        messages: [{ role: 'user', content: 'ping' }],
-        provider: aiSettings.provider,
+        baseUrl: next.baseUrl,
+        apiKey: next.apiKey,
+        model: next.model,
+        messages: [
+          {
+            role: 'system',
+            content: 'Return valid JSON only with keys summary, register, definitions, sampleSentences, translations, collocations, notes.',
+          },
+          { role: 'user', content: 'Connection test for 你好.' },
+        ],
+        provider: next.provider,
       });
-      setAiTestResult({ ok: result.ok, message: result.ok ? '连接成功' : result.reason });
+      const display = { ok: result.ok, message: result.ok ? '连接成功' : result.reason };
+      setAiTestResult(display);
+      return display;
     } catch {
-      setAiTestResult({ ok: false, message: '连接失败' });
+      const failed = { ok: false, message: '连接失败' };
+      setAiTestResult(failed);
+      return failed;
+    } finally {
+      setAiTesting(false);
     }
-    setAiTesting(false);
   }
 ```
 
@@ -1607,6 +1852,7 @@ Then render the settings panel inside the `<main>` block, between the `</Toolbar
         {aiSettings && (
           <AiSettingsPanel
             settings={aiSettings}
+            onClose={() => setAiSettingsState(null)}
             onSave={saveAiSettings}
             onTestConnection={testAiConnection}
             testing={aiTesting}
@@ -1624,7 +1870,7 @@ And add a trigger button in the toolbar row — in the `<Toolbar>` call area, ad
             title="AI 设置"
             className="rounded-sm border border-border bg-transparent p-1.5 text-muted transition hover:border-border-hover hover:bg-paper-input hover:text-ink-secondary"
           >
-            ✦
+            <Sparkles className="h-4 w-4" />
           </button>
         </div>
 ```
@@ -1681,7 +1927,7 @@ describe('renderDay with AI insight', () => {
   it('includes an AI Insight subsection when the word has aiInsight', () => {
     const w: WordEntry = { ...word, aiInsight };
     const md = renderDay(day, [w], []);
-    expect(md).toContain('AI Insight');
+    expect(md).toContain('## AI Insight');
     expect(md).toContain('hello greeting');
     expect(md).toContain('你好世界。');
     expect(md).toContain('Hello world.');
@@ -1706,21 +1952,23 @@ In `lib/markdown.ts`, inside the `for (const word of words)` loop, after the dic
 ```ts
       if (word.aiInsight) {
         const ai = word.aiInsight;
-        lines.push('  - AI Insight:');
-        if (ai.summary) lines.push(`    - _${esc(ai.summary)}_ (${esc(ai.register)})`);
+        lines.push('');
+        lines.push('## AI Insight');
+        lines.push(`- ${esc(word.text)}`);
+        if (ai.summary) lines.push(`  - _${esc(ai.summary)}_ (${esc(ai.register)})`);
         for (const def of ai.definitions) {
-          lines.push(`    - ${esc(def)}`);
+          lines.push(`  - ${esc(def)}`);
         }
         for (let i = 0; i < ai.sampleSentences.length; i += 1) {
-          lines.push(`    - ${esc(ai.sampleSentences[i])}`);
+          lines.push(`  - ${esc(ai.sampleSentences[i])}`);
           if (ai.translations[i]) {
-            lines.push(`      ${esc(ai.translations[i])}`);
+            lines.push(`    ${esc(ai.translations[i])}`);
           }
         }
         if (ai.collocations.length > 0) {
-          lines.push(`    - 搭配: ${ai.collocations.map((c) => esc(c)).join(', ')}`);
+          lines.push(`  - 搭配: ${ai.collocations.map((c) => esc(c)).join(', ')}`);
         }
-        if (ai.notes) lines.push(`    - ${esc(ai.notes)}`);
+        if (ai.notes) lines.push(`  - ${esc(ai.notes)}`);
       }
 ```
 
@@ -1747,10 +1995,20 @@ git commit -m "feat: include AI insight in markdown export"
 
 **Files:**
 - Modify: `lib/backup.ts`
+- Create: `tests/backup-ai.test.ts`
 
 The backup parser's `hasEntryBase` function explicitly checks known fields. An old backup without `aiInsight` must still parse. A new backup with `aiInsight` must preserve it. Currently `hasEntryBase` does not reject unknown fields (it only checks known ones), and `cloneJson` copies everything — so this should already work. But we add an explicit comment and a test to prevent regressions.
 
-- [ ] **Step 1: Add a failing test for backup round-trip with aiInsight**
+- [ ] **Step 1: Add an explicit backup compatibility comment**
+
+In `lib/backup.ts`, near `hasEntryBase`, add:
+
+```ts
+  // Optional fields added after backup format v1, such as WordEntry.aiInsight,
+  // are intentionally not checked here; cloneJson preserves them on round-trip.
+```
+
+- [ ] **Step 2: Add a regression test for backup round-trip with aiInsight**
 
 Append to `tests/markdown.test.ts` or create `tests/backup-ai.test.ts`. Let me put it in a focused file:
 
@@ -1805,23 +2063,17 @@ describe('backup round-trip with aiInsight', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it passes (or fails)**
+- [ ] **Step 3: Run the test to verify it passes**
 
 Run: `npx vitest run tests/backup-ai.test.ts`
-Expected: PASS — the existing backup code already tolerates unknown optional fields because `hasEntryBase` only checks known fields and `cloneJson` copies everything. If this passes, no code change is needed in `backup.ts`; just add a comment.
+Expected: PASS — the existing backup code already tolerates unknown optional fields because `hasEntryBase` only checks known fields and `cloneJson` copies everything.
 
-If it **fails**, add a comment in `lib/backup.ts` near `hasEntryBase`:
-```ts
-  // Note: aiInsight is an optional field on WordEntry added after format version 1.
-  // It is not checked here; cloneJson preserves it on round-trip.
-```
-
-- [ ] **Step 3: Run compile + full tests**
+- [ ] **Step 4: Run compile + full tests**
 
 Run: `npm run compile && npm test`
 Expected: clean.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add tests/backup-ai.test.ts lib/backup.ts
@@ -1917,7 +2169,7 @@ Expected: all tests pass (Plan A + Plan B).
 - [ ] **Step 3: Run build and inspect manifest**
 
 Run: `npm run build && cat .output/chrome-mv3/manifest.json`
-Expected: build succeeds; manifest now includes `optional_host_permissions` with DeepSeek and OpenAI origins. No new required permissions were added.
+Expected: build succeeds; manifest now includes `optional_host_permissions` with DeepSeek/OpenAI preset origins plus `https://*/*` and `http://*/*` for runtime custom endpoints. No new required permissions were added.
 
 - [ ] **Step 4: Manual dashboard check**
 

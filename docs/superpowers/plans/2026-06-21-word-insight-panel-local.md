@@ -8,6 +8,8 @@
 
 **Tech Stack:** TypeScript, WXT 0.20.26, React 19, Tailwind 4, `pinyin-pro` 3.28, `fflate` (already a dep), Vitest 4, `@webext-core/fake-browser`. Imports use `@/` alias in `entrypoints/` and `tests/`, relative imports in `lib/`.
 
+**Scope:** This is the local-only foundation from the spec. It intentionally does not implement the optional AI Insight Layer, `WordEntry.aiInsight`, AI provider settings, AI host permissions, or AI Markdown export. Those spec sections require a separate follow-up plan.
+
 ---
 
 ## File Structure
@@ -16,7 +18,7 @@
 - `lib/dictionary.ts` — parse CC-CEDICT text lines; build compact asset; build lookup indexes; exact + component lookup. Pure.
 - `lib/dictionary-cache.ts` — IndexedDB get/set for the parsed index, keyed by asset hash. Thin browser-bound wrapper.
 - `lib/dictionary-loader.ts` — fetch manifest + compact JSON from `public/`, hydrate from or rebuild the IndexedDB cache.
-- `lib/pinyin-helpers.ts` — convert CC-CEDICT numbered pinyin (`Ni3 Hao3`) to marks/numbers; `pinyin-pro` fallback for tone chips. Pure.
+- `lib/pinyin-helpers.ts` — convert CC-CEDICT numbered pinyin (`Ni3 Hao3`) to marks/numbers without relying on `pinyin-pro` for Latin input; `pinyin-pro` fallback for Chinese-character tone chips. Pure.
 - `lib/word-insight.ts` — combine dictionary lookup, tone analysis, occurrence highlighting, external links into a `WordInsight`. Pure.
 - `lib/external-dictionaries.ts` — build encoded, click-only MDBG and 百度汉语 URLs. Pure.
 
@@ -43,17 +45,18 @@
 - `tests/dictionary.test.ts`
 - `tests/dictionary-build.test.ts`
 - `tests/dictionary-cache.test.ts`
+- `tests/dictionary-loader.test.ts`
 - `tests/pinyin-helpers.test.ts`
 - `tests/word-insight.test.ts`
 - `tests/external-dictionaries.test.ts`
-- `tests/review-insight.test.ts`
 
 **Modify:**
 - `lib/types.ts` — add non-persisted insight domain types (`WordInsight`, `DictionaryEntry`, `ToneChip`, `HighlightedExample`, `ExternalDictionaryLink`, asset meta shapes). Persisted `WordEntry` is unchanged.
-- `lib/markdown.ts` — add a "## Dictionary" subsection per word when CEDICT definitions are available (regenerable, so not persisted). Render local definitions under each word in the daily note.
+- `lib/markdown.ts` — add local dictionary lines per word when a dictionary index is available (regenerable, so not persisted). Render local definitions under each word in the daily note.
+- `lib/export.ts` — accept an optional dictionary index and pass it into `renderDay` for Markdown/zip export.
+- `entrypoints/newtab/components/Toolbar.tsx` — load the dashboard dictionary before Markdown/zip export and gracefully export without dictionary lines if the asset is unavailable.
 - `entrypoints/newtab/components/WordCard.tsx` — render `WordInsightPanel` when expanded.
 - `entrypoints/newtab/components/ReviewQueue.tsx` — add reveal interaction to word cards.
-- `entrypoints/newtab/App.tsx` — show a "Dictionary: CC-CEDICT" attribution line in the dashboard footer.
 - `README.md` — document the new study workflow, attribution, and privacy boundary.
 - `AGENTS.md` — note the new modules and the dictionary asset strategy in the architecture section.
 - `package.json` — add `build:dictionary` script.
@@ -116,7 +119,7 @@ export interface CompactDictionaryAsset {
     simplified: string[];
     traditional: string[];
     pinyin: string[];
-    /** [startIndex, count] into the shared definitions[] pool, per entry. */
+    /** [startIndex, count] into the contiguous definitions[] pool, per entry. */
     definitionRanges: Array<[number, number]>;
     definitions: string[];
   };
@@ -129,6 +132,14 @@ export interface DictionaryEntry {
   simplified: string;
   pinyin: string;
   definitions: string[];
+}
+
+/** Runtime lookup index materialized from the compact asset. Never persisted in chrome.storage. */
+export interface DictionaryIndex {
+  /** key = normalized simplified/traditional form; value = matching entries in dictionary order. */
+  byForm: Map<string, DictionaryEntry[]>;
+  /** Longest normalized dictionary key length, used by component segmentation. */
+  maxKeyLength: number;
 }
 
 /** One syllable's tone info for the tone-chip display. */
@@ -207,18 +218,18 @@ Comment lines start with `#`. The first comment line of the form `#! date=...` c
 Create `tests/fixtures/cedict-sample.txt`:
 
 ```
-#! CC-CEDICT CLIENT_{this is not a real release}_2026-06-20
+#! date=2026-06-20
 # This is a comment line
 你好 你好 [ni3 hao3] /hello/good day/
-中 国 中國 [zhong1 guo2] /China/Middle Kingdom/
+中國 中国 [zhong1 guo2] /China/Middle Kingdom/
 行 行 [xing2] /to walk/to travel/OK/
 行 行 [hang2] /row/line/profession/
 龍 龙 [long2] /dragon/
-乱 亂 [luan4] /random text with [brackets] inside/
+亂 乱 [luan4] /random text with [brackets] inside/
 INVALID LINE WITHOUT BRACKETS
 ```
 
-Note: the sample deliberately uses multi-char "words" and single-char entries, duplicate pinyin keys for 行, a traditional-only form, and an invalid line.
+Note: the sample deliberately uses multi-char words, single-character entries, duplicate pinyin keys for 行, a traditional/simplified pair for 龍/龙, definitions containing brackets, and one invalid line.
 
 - [ ] **Step 2: Write the failing test**
 
@@ -265,13 +276,13 @@ describe('parseCedictLine', () => {
 
   it('preserves bracketed text inside definitions', () => {
     const entry = parseCedictLine(
-      '乱 亂 [luan4] /random text with [brackets] inside/',
+      '亂 乱 [luan4] /random text with [brackets] inside/',
     );
     expect(entry!.definitions).toEqual(['random text with [brackets] inside']);
   });
 
   it('drops the trailing empty definition from a trailing slash', () => {
-    const entry = parseCedictLine('中 国 中國 [zhong1 guo2] /China/Middle Kingdom/');
+    const entry = parseCedictLine('中國 中国 [zhong1 guo2] /China/Middle Kingdom/');
     expect(entry!.definitions).toEqual(['China', 'Middle Kingdom']);
   });
 });
@@ -323,6 +334,11 @@ export interface ParsedCedictEntry {
   definitions: string[];
 }
 
+export interface ParseCedictStats {
+  entries: ParsedCedictEntry[];
+  skipped: number;
+}
+
 const LINE_RE =
   /^(\S+)\s+(\S+)\s+\[([^\]]+)\]\s+\/(.*)\/\s*$/;
 
@@ -348,12 +364,15 @@ export function parseCedictLine(line: string): ParsedCedictEntry | null {
  * Parse an entire CC-CEDICT document. When `withStats` is set, also returns
  * the count of lines that were skipped (comments do not count as skipped).
  */
+export function parseCedictText(text: string): ParsedCedictEntry[];
 export function parseCedictText(
   text: string,
-  options: { withStats?: true } = {},
-):
-  | ParsedCedictEntry[]
-  | { entries: ParsedCedictEntry[]; skipped: number } {
+  options: { withStats: true },
+): ParseCedictStats;
+export function parseCedictText(
+  text: string,
+  options: { withStats?: boolean } = {},
+): ParsedCedictEntry[] | ParseCedictStats {
   const entries: ParsedCedictEntry[] = [];
   let skipped = 0;
   for (const line of text.split('\n')) {
@@ -408,7 +427,7 @@ git commit -m "feat: add CC-CEDICT line parser"
 - Modify: `lib/dictionary.ts` (add `buildCompactAsset`, `materializeEntry`, and helpers)
 - Create: `tests/dictionary-build.test.ts`
 
-The compact asset dedupes the definitions pool and stores `[start, count]` ranges so a 125k-entry dictionary stays small.
+The compact asset stores definitions in a contiguous pool and dedupes identical definition sequences while preserving `[start, count]` ranges, so materialization is correct and the asset stays compact.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -444,7 +463,7 @@ describe('buildCompactAsset', () => {
     expect(asset.columns.definitionRanges).toHaveLength(6);
   });
 
-  it('dedupes identical definitions across entries', () => {
+  it('dedupes identical definition sequences across entries', () => {
     const asset = buildCompactAsset('A A [a1] /shared def/\nB B [b1] /shared def/', {
       sourceUrl: '',
       license: '',
@@ -465,6 +484,21 @@ describe('buildCompactAsset', () => {
       licenseUrl: '',
     });
     expect(asset.columns.definitionRanges[0]).toEqual([0, 2]); // hello, good day
+  });
+
+  it('keeps repeated single definitions from corrupting later multi-definition ranges', () => {
+    const asset = buildCompactAsset(
+      [
+        'A A [a1] /first/shared/',
+        'B B [b1] /other/',
+        'C C [c1] /shared/',
+      ].join('\n'),
+      { sourceUrl: '', license: '', licenseUrl: '' },
+    );
+    const entries = materializeEntries(asset);
+    expect(entries[0].definitions).toEqual(['first', 'shared']);
+    expect(entries[1].definitions).toEqual(['other']);
+    expect(entries[2].definitions).toEqual(['shared']);
   });
 });
 
@@ -499,7 +533,6 @@ Append to `lib/dictionary.ts` (after the existing exports):
 
 ```ts
 
-import { createHash } from 'node:crypto';
 import type { CompactDictionaryAsset } from './types';
 
 export interface BuildCompactAssetOptions {
@@ -510,7 +543,8 @@ export interface BuildCompactAssetOptions {
 
 /**
  * Build a compact columnar asset from raw CC-CEDICT text. Definitions are
- * deduped into a shared pool and each entry stores a [start, count] range.
+ * stored contiguously and identical definition sequences are deduped. Each entry
+ * stores a [start, count] range into the definitions pool.
  */
 export function buildCompactAsset(
   text: string,
@@ -524,26 +558,24 @@ export function buildCompactAsset(
   const pinyin: string[] = [];
   const definitionRanges: Array<[number, number]> = [];
   const definitions: string[] = [];
-  const defIndex = new Map<string, number>();
+  const defSequenceIndex = new Map<string, [number, number]>();
 
   for (const entry of entries) {
     simplified.push(entry.simplified);
     traditional.push(entry.traditional);
     pinyin.push(entry.pinyin);
-    let start = -1;
-    let count = 0;
-    for (const def of entry.definitions) {
-      let idx = defIndex.get(def);
-      if (idx === undefined) {
-        idx = definitions.length;
-        defIndex.set(def, idx);
-        definitions.push(def);
-      }
-      if (start === -1) start = idx;
-      count += 1;
+    const sequenceKey = JSON.stringify(entry.definitions);
+    const existingRange = defSequenceIndex.get(sequenceKey);
+    if (existingRange) {
+      definitionRanges.push(existingRange);
+      continue;
     }
-    if (start === -1) start = 0; // guard; parser guarantees >=1 def
-    definitionRanges.push([start, count]);
+
+    const start = definitions.length;
+    definitions.push(...entry.definitions);
+    const range: [number, number] = [start, entry.definitions.length];
+    defSequenceIndex.set(sequenceKey, range);
+    definitionRanges.push(range);
   }
 
   const meta = {
@@ -577,7 +609,12 @@ export function materializeEntries(asset: CompactDictionaryAsset): DictionaryEnt
 
 function hashAsset(columns: CompactDictionaryAsset['columns']): string {
   const json = JSON.stringify(columns);
-  return createHash('sha256').update(json).digest('hex').slice(0, 12);
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < json.length; i += 1) {
+    hash ^= json.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
 }
 ```
 
@@ -603,7 +640,7 @@ git commit -m "feat: build and materialize compact CC-CEDICT asset"
 ## Task 4: Lookup indexes and exact lookup (TDD)
 
 **Files:**
-- Modify: `lib/dictionary.ts` (add `DictionaryIndex`, `buildIndex`, `lookupExact`)
+- Modify: `lib/dictionary.ts` (use the `DictionaryIndex` type from `lib/types.ts`; add `buildIndex`, `lookupExact`)
 - Create: append to `tests/dictionary.test.ts`
 
 - [ ] **Step 1: Append lookup tests to `tests/dictionary.test.ts`**
@@ -616,7 +653,7 @@ import type { DictionaryEntry } from '../lib/types';
 
 const sampleEntries: DictionaryEntry[] = [
   { index: 0, traditional: '你好', simplified: '你好', pinyin: 'ni3 hao3', definitions: ['hello', 'good day'] },
-  { index: 1, traditional: '中國', simplified: '中 国', pinyin: 'zhong1 guo2', definitions: ['China'] },
+  { index: 1, traditional: '中國', simplified: '中国', pinyin: 'zhong1 guo2', definitions: ['China'] },
   { index: 2, traditional: '行', simplified: '行', pinyin: 'xing2', definitions: ['to walk'] },
   { index: 3, traditional: '行', simplified: '行', pinyin: 'hang2', definitions: ['row'] },
   { index: 4, traditional: '龍', simplified: '龙', pinyin: 'long2', definitions: ['dragon'] },
@@ -647,7 +684,7 @@ describe('buildIndex + lookupExact', () => {
     expect(lookupExact(index, '不存在的词')).toEqual([]);
   });
 
-  it('matches a multi-char simplified entry containing a space', () => {
+  it('normalizes whitespace in lookup keys', () => {
     const hits = lookupExact(index, '中 国');
     expect(hits).toHaveLength(1);
     expect(hits[0].definitions).toEqual(['China']);
@@ -666,14 +703,8 @@ Append to `lib/dictionary.ts`:
 
 ```ts
 
-/**
- * Two parallel lookup maps keyed by normalized surface form. Each value is the
- * list of entries (in original order) sharing that surface form.
- */
-export interface DictionaryIndex {
-  /** key = normalized form (whitespace removed) of simplified/traditional. */
-  byForm: Map<string, DictionaryEntry[]>;
-}
+// Also change the existing top import to:
+// import type { CompactDictionaryAsset, DictionaryEntry, DictionaryIndex } from './types';
 
 const NO_WHITESPACE = /\s+/g;
 
@@ -684,15 +715,17 @@ function formKey(surface: string): string {
 /** Build a lookup index over a materialized entry list. */
 export function buildIndex(entries: DictionaryEntry[]): DictionaryIndex {
   const byForm = new Map<string, DictionaryEntry[]>();
+  let maxKeyLength = 0;
   for (const entry of entries) {
-    for (const surface of [entry.simplified, entry.traditional]) {
+    for (const surface of new Set([entry.simplified, entry.traditional])) {
       const key = formKey(surface);
       const list = byForm.get(key);
       if (list) list.push(entry);
       else byForm.set(key, [entry]);
+      maxKeyLength = Math.max(maxKeyLength, Array.from(key).length);
     }
   }
-  return { byForm };
+  return { byForm, maxKeyLength };
 }
 
 /** Return all entries whose simplified or traditional form matches `surface`. */
@@ -774,6 +807,22 @@ describe('segmentComponents', () => {
     expect(segs[1].entry?.simplified).toBe('龙');
   });
 
+  it('can choose dictionary entries longer than four characters', () => {
+    const longIndex = buildIndex([
+      ...sampleEntries,
+      {
+        index: 6,
+        traditional: '中华人民共和国',
+        simplified: '中华人民共和国',
+        pinyin: 'zhong1 hua2 ren2 min2 gong4 he2 guo2',
+        definitions: ['People’s Republic of China'],
+      },
+    ]);
+    const segs = segmentComponents(longIndex, '中华人民共和国龙');
+    expect(segs[0].entry?.simplified).toBe('中华人民共和国');
+    expect(segs[1].entry?.simplified).toBe('龙');
+  });
+
   it('skips non-Chinese characters without matching them', () => {
     const segs = segmentComponents(idx, '龙abc云');
     const chinese = segs.filter((s) => /[\u4e00-\u9fff]/.test(s.text));
@@ -802,7 +851,6 @@ Append to `lib/dictionary.ts`:
 export const MAX_COMPONENT_LOOKUP_CHARS = 16;
 
 const CJK = /[\u3400-\u9fff\uf900-\ufaff]/;
-const MAX_CHAR = 4; // longest CEDICT entries are ~4 chars
 
 export interface ComponentSegment {
   text: string;
@@ -832,7 +880,7 @@ export function segmentComponents(
       continue;
     }
     let matched: { end: number; entry: DictionaryEntry } | null = null;
-    for (let len = Math.min(MAX_CHAR, chars.length - i); len >= 1; len -= 1) {
+    for (let len = Math.min(index.maxKeyLength, chars.length - i); len >= 1; len -= 1) {
       const slice = chars.slice(i, i + len).join('');
       const hits = lookupExact(index, slice);
       if (hits.length > 0) {
@@ -895,7 +943,7 @@ import type { ToneChip } from '../lib/types';
 
 describe('cedictPinyinToChips', () => {
   it('converts numbered CEDICT pinyin into tone chips', () => {
-    const chips = cedictPinyinToChips('ni3 hao3');
+    const chips = cedictPinyinToChips('ni3 hao3', '你好');
     expect(chips).toHaveLength(2);
     expect(chips[0]).toMatchObject<ToneChip>({
       text: '你',
@@ -907,14 +955,20 @@ describe('cedictPinyinToChips', () => {
   });
 
   it('maps neutral tone to 0', () => {
-    const chips = cedictPinyinToChips('ni3 hao0');
+    const chips = cedictPinyinToChips('ni3 hao5', '你好');
     expect(chips[1].tone).toBe(0);
-    expect(chips[1].numbered).toBe('hao0');
+    expect(chips[1].numbered).toBe('hao5');
   });
 
   it('returns one chip per space-separated syllable', () => {
-    const chips = cedictPinyinToChips('zhong1 guo2');
+    const chips = cedictPinyinToChips('zhong1 guo2', '中国');
     expect(chips.map((c) => c.mark)).toEqual(['zhōng', 'guó']);
+  });
+
+  it('handles u-colon umlaut notation used by CEDICT', () => {
+    const chips = cedictPinyinToChips('lu:4', '绿');
+    expect(chips[0].mark).toBe('lǜ');
+    expect(chips[0].tone).toBe(4);
   });
 });
 
@@ -949,41 +1003,47 @@ import type { ToneChip } from './types';
 
 const CJK = /[\u3400-\u9fff]/;
 const TONE_NUM: Record<string, 0 | 1 | 2 | 3 | 4> = {
-  '0': 0, '1': 1, '2': 2, '3': 3, '4': 4,
+  '0': 0,
+  '1': 1,
+  '2': 2,
+  '3': 3,
+  '4': 4,
+  '5': 0,
+};
+
+const MARKS: Record<string, [string, string, string, string]> = {
+  a: ['ā', 'á', 'ǎ', 'à'],
+  e: ['ē', 'é', 'ě', 'è'],
+  i: ['ī', 'í', 'ǐ', 'ì'],
+  o: ['ō', 'ó', 'ǒ', 'ò'],
+  u: ['ū', 'ú', 'ǔ', 'ù'],
+  ü: ['ǖ', 'ǘ', 'ǚ', 'ǜ'],
 };
 
 /**
  * Convert a CC-CEDICT numbered pinyin string ("ni3 hao3") into per-syllable
- * tone chips. The `text` field is left empty because CEDICT pinyin does not
- * carry character alignment; the caller fills it from the captured word.
+ * tone chips aligned to the Chinese characters in `word`.
  */
 export function cedictPinyinToChips(
   cedictPinyin: string,
-): Omit<ToneChip, 'text'>[] {
+  word: string,
+): ToneChip[] {
+  const chars = chineseChars(word);
   return cedictPinyin
     .trim()
     .split(/\s+/)
     .filter((syl) => syl.length > 0)
-    .map((syl) => {
+    .map((syl, index) => {
       const toneDigit = syl.slice(-1);
       const tone = TONE_NUM[toneDigit] ?? 0;
-      // pinyin-pro re-derives marks from the numbered syllable.
-      const mark = pinyin(syl, { toneType: 'symbol', nonZh: 'consecutive' }).trim();
-      return { mark, numbered: syl, tone, source: 'dictionary' as const };
+      return {
+        text: chars[index] ?? '',
+        mark: markNumberedPinyin(syl, tone),
+        numbered: syl,
+        tone,
+        source: 'dictionary' as const,
+      };
     });
-}
-
-/**
- * Fill in the `text` field of CEDICT chips by zipping them against the Chinese
- * characters of the captured word. If counts mismatch, the chips are returned
- * with empty `text` (the UI renders the mark/number only).
- */
-export function alignChipsToText(
-  chips: Omit<ToneChip, 'text'>[],
-  word: string,
-): ToneChip[] {
-  const chars = Array.from(word).filter((ch) => CJK.test(ch));
-  return chips.map((chip, i) => ({ ...chip, text: chars[i] ?? '' }));
 }
 
 /**
@@ -991,7 +1051,7 @@ export function alignChipsToText(
  * exact dictionary match exists.
  */
 export function inferToneChips(word: string): ToneChip[] {
-  const chars = Array.from(word).filter((ch) => CJK.test(ch));
+  const chars = chineseChars(word);
   return chars.map((ch) => {
     const all = pinyin(ch, {
       type: 'all',
@@ -1001,10 +1061,41 @@ export function inferToneChips(word: string): ToneChip[] {
     // pinyin-pro returns an array of per-character objects with type:'all'.
     const item = Array.isArray(all) ? all[0] : all;
     const mark = pinyin(ch, { toneType: 'symbol', nonZh: 'removed' }).trim();
-    const tone = (Number(item?.tone ?? 0) as 0 | 1 | 2 | 3 | 4);
-    const numbered = pinyin(ch, { toneType: 'num', nonZh: 'removed' }).trim();
+    const tone = (Number(item?.num ?? 0) as 0 | 1 | 2 | 3 | 4);
+    const numbered = String(item?.pinyin ?? pinyin(ch, { toneType: 'num', nonZh: 'removed' })).trim();
     return { text: ch, mark, numbered, tone, source: 'pinyin-pro' as const };
   });
+}
+
+function chineseChars(word: string): string[] {
+  return Array.from(word).filter((ch) => CJK.test(ch));
+}
+
+function markNumberedPinyin(numbered: string, tone: 0 | 1 | 2 | 3 | 4): string {
+  const base = numbered.replace(/[0-5]$/, '').replace(/u:/g, 'ü').replace(/v/g, 'ü');
+  if (tone === 0) return base;
+
+  const lower = base.toLowerCase();
+  const vowelIndex = chooseToneVowelIndex(lower);
+  if (vowelIndex === -1) return base;
+
+  const vowel = lower[vowelIndex];
+  const marked = MARKS[vowel]?.[tone - 1];
+  if (!marked) return base;
+  return base.slice(0, vowelIndex) + marked + base.slice(vowelIndex + 1);
+}
+
+function chooseToneVowelIndex(syllable: string): number {
+  const a = syllable.indexOf('a');
+  if (a !== -1) return a;
+  const e = syllable.indexOf('e');
+  if (e !== -1) return e;
+  const ou = syllable.indexOf('ou');
+  if (ou !== -1) return ou;
+  for (let i = syllable.length - 1; i >= 0; i -= 1) {
+    if ('ioüu'.includes(syllable[i])) return i;
+  }
+  return -1;
 }
 ```
 
@@ -1214,6 +1305,23 @@ describe('buildHighlightedExamples', () => {
     expect(ex[0].ranges).toEqual([]);
     expect(ex[0].snippet).toContain('这里');
   });
+
+  it('falls back to simplified/traditional variants when captured form is absent', () => {
+    const ex = buildHighlightedExamples('龍', [
+      occ({ surrounding: '这里 出现 的 是 龙', capturedAt: 1 }),
+    ], ['龙']);
+    expect(ex[0].ranges).toHaveLength(1);
+    expect(ex[0].ranges[0].text).toBe('龙');
+  });
+
+  it('clips long surrounding text to a compact snippet around the match', () => {
+    const ex = buildHighlightedExamples('龙', [
+      occ({ surrounding: `${'前'.repeat(200)}龙${'后'.repeat(200)}`, capturedAt: 1 }),
+    ]);
+    expect(ex[0].snippet.length).toBeLessThan(180);
+    expect(ex[0].snippet).toContain('龙');
+    expect(ex[0].ranges[0].text).toBe('龙');
+  });
 });
 ```
 
@@ -1239,8 +1347,10 @@ const SCAN_LIMIT = 1000;
 export function buildHighlightedExamples(
   word: string,
   occurrences: Occurrence[],
+  variants: string[] = [],
 ): HighlightedExample[] {
   if (occurrences.length === 0) return [];
+  const needles = uniqueNeedles([word, ...variants]);
 
   // Dedupe by surrounding text; keep the newest capturedAt per unique text.
   const newestBySurrounding = new Map<string, Occurrence>();
@@ -1257,28 +1367,65 @@ export function buildHighlightedExamples(
 
   return top.map((occ) => {
     const windowed = occ.surrounding.slice(0, SCAN_LIMIT);
-    const ranges = findRanges(word, windowed);
+    const rawRanges = findRanges(needles, windowed);
+    const { snippet, ranges } = clipSnippet(windowed, rawRanges);
     return {
       sourceTitle: occ.sourceTitle,
       sourceUrl: occ.sourceUrl,
       capturedAt: occ.capturedAt,
-      snippet: windowed,
+      snippet,
       ranges,
     };
   });
 }
 
-function findRanges(needle: string, haystack: string): HighlightRange[] {
-  if (!needle || !haystack) return [];
+function findRanges(needles: string[], haystack: string): HighlightRange[] {
+  if (needles.length === 0 || !haystack) return [];
   const ranges: HighlightRange[] = [];
-  let from = 0;
-  while (from <= haystack.length) {
-    const idx = haystack.indexOf(needle, from);
-    if (idx === -1) break;
-    ranges.push({ start: idx, end: idx + needle.length, text: needle });
-    from = idx + needle.length;
+  for (const needle of needles) {
+    let from = 0;
+    while (from <= haystack.length) {
+      const idx = haystack.indexOf(needle, from);
+      if (idx === -1) break;
+      ranges.push({ start: idx, end: idx + needle.length, text: needle });
+      from = idx + needle.length;
+    }
   }
-  return ranges;
+  return ranges.sort((a, b) => a.start - b.start || b.end - a.end);
+}
+
+function uniqueNeedles(values: string[]): string[] {
+  return Array.from(new Set(values.filter((value) => value.length > 0)));
+}
+
+const SNIPPET_RADIUS = 64;
+const EMPTY_MATCH_SNIPPET = 160;
+
+function clipSnippet(
+  text: string,
+  ranges: HighlightRange[],
+): { snippet: string; ranges: HighlightRange[] } {
+  if (text.length === 0) return { snippet: '', ranges: [] };
+  if (text.length <= EMPTY_MATCH_SNIPPET) return { snippet: text, ranges };
+  if (ranges.length === 0) {
+    return { snippet: text.slice(0, EMPTY_MATCH_SNIPPET), ranges: [] };
+  }
+
+  const first = ranges[0];
+  const start = Math.max(0, first.start - SNIPPET_RADIUS);
+  const end = Math.min(text.length, first.end + SNIPPET_RADIUS);
+  const prefix = start > 0 ? '…' : '';
+  const suffix = end < text.length ? '…' : '';
+  const snippet = `${prefix}${text.slice(start, end)}${suffix}`;
+  const prefixOffset = prefix.length;
+  const adjusted = ranges
+    .filter((range) => range.start >= start && range.end <= end)
+    .map((range) => ({
+      ...range,
+      start: range.start - start + prefixOffset,
+      end: range.end - start + prefixOffset,
+    }));
+  return { snippet, ranges: adjusted };
 }
 ```
 
@@ -1315,9 +1462,9 @@ Append:
 
 ```ts
 import { computeWordInsight } from '../lib/word-insight';
-import { buildIndex, type DictionaryIndex } from '../lib/dictionary';
+import { buildIndex } from '../lib/dictionary';
 import { materializeEntries } from '../lib/dictionary';
-import type { CompactDictionaryAsset, WordEntry } from '../lib/types';
+import type { CompactDictionaryAsset, DictionaryIndex, WordEntry } from '../lib/types';
 
 const asset: CompactDictionaryAsset = {
   meta: {
@@ -1383,6 +1530,13 @@ describe('computeWordInsight', () => {
     expect(insight.externalLinks.map((l) => l.label)).toEqual(['MDBG', '百度汉语']);
   });
 
+  it('tries the normalized key when captured text is decorated', () => {
+    const w = word({ text: '你好！', normalized: '你好' });
+    const insight = computeWordInsight(w, index);
+    expect(insight.status).toBe('ready');
+    expect(insight.exactEntries[0].simplified).toBe('你好');
+  });
+
   it('uses pinyin-pro tone chips when no exact match exists', () => {
     const w = word({ text: '不存在词', normalized: '不存在词' });
     const insight = computeWordInsight(w, index);
@@ -1434,11 +1588,10 @@ Append to `lib/word-insight.ts`:
 
 ```ts
 
-import type { DictionaryIndex } from './dictionary';
 import { lookupExact, segmentComponents } from './dictionary';
-import { alignChipsToText, cedictPinyinToChips, inferToneChips } from './pinyin-helpers';
+import { cedictPinyinToChips, inferToneChips } from './pinyin-helpers';
 import { buildExternalLinks } from './external-dictionaries';
-import type { DictionaryEntry, WordEntry, WordInsight } from './types';
+import type { DictionaryEntry, DictionaryIndex, WordEntry, WordInsight } from './types';
 
 const MAX_EXACT_ENTRIES = 5;
 
@@ -1454,9 +1607,9 @@ export function computeWordInsight(
 ): WordInsight {
   const displayText = word.text;
   const externalLinks = buildExternalLinks(displayText);
-  const examples = buildHighlightedExamples(displayText, word.occurrences);
 
   if (index === null) {
+    const examples = buildHighlightedExamples(displayText, word.occurrences);
     return {
       displayText,
       exactEntries: [],
@@ -1468,13 +1621,24 @@ export function computeWordInsight(
     };
   }
 
-  const exactRaw = lookupExact(index, displayText);
+  const exactRaw = uniqueEntries([
+    ...lookupExact(index, displayText),
+    ...lookupExact(index, word.normalized),
+  ]);
   const exactEntries = exactRaw.slice(0, MAX_EXACT_ENTRIES);
+  const highlightVariants = exactEntries.flatMap((entry) => [
+    entry.simplified,
+    entry.traditional,
+  ]);
+  const examples = buildHighlightedExamples(
+    displayText,
+    word.occurrences,
+    highlightVariants,
+  );
 
   if (exactEntries.length > 0) {
     const primaryPinyin = exactEntries[0].pinyin;
-    const baseChips = cedictPinyinToChips(primaryPinyin);
-    const toneChips = alignChipsToText(baseChips, displayText);
+    const toneChips = cedictPinyinToChips(primaryPinyin, displayText);
     return {
       displayText,
       exactEntries,
@@ -1501,6 +1665,17 @@ export function computeWordInsight(
     externalLinks,
     status: 'no-definition',
   };
+}
+
+function uniqueEntries(entries: DictionaryEntry[]): DictionaryEntry[] {
+  const seen = new Set<number>();
+  const out: DictionaryEntry[] = [];
+  for (const entry of entries) {
+    if (seen.has(entry.index)) continue;
+    seen.add(entry.index);
+    out.push(entry);
+  }
+  return out;
 }
 ```
 
@@ -1538,8 +1713,7 @@ Create `tests/dictionary-cache.test.ts`:
 ```ts
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearDictionaryCache, getDictionaryCache, setDictionaryCache } from '../lib/dictionary-cache';
-import type { DictionaryIndex } from '../lib/dictionary';
-import type { DictionaryEntry } from '../lib/types';
+import type { DictionaryEntry, DictionaryIndex } from '../lib/types';
 
 const entries: DictionaryEntry[] = [
   { index: 0, traditional: '你好', simplified: '你好', pinyin: 'ni3 hao3', definitions: ['hello'] },
@@ -1550,6 +1724,7 @@ const entries: DictionaryEntry[] = [
 describe('dictionary cache serialization boundary', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('serializes and deserializes an index round-trip via a fake storage backend', async () => {
@@ -1566,11 +1741,12 @@ describe('dictionary cache serialization boundary', () => {
       },
     });
 
-    const index: DictionaryIndex = { byForm: new Map([['你好', entries]]) };
+    const index: DictionaryIndex = { byForm: new Map([['你好', entries]]), maxKeyLength: 2 };
     await setDictionaryCache('hash123', index);
     const restored = await getDictionaryCache('hash123');
     expect(restored).not.toBeNull();
     expect(restored!.byForm.get('你好')).toEqual(entries);
+    expect(restored!.maxKeyLength).toBe(2);
 
     await clearDictionaryCache('hash123');
     expect(await getDictionaryCache('hash123')).toBeNull();
@@ -1660,6 +1836,7 @@ function openDb(): Promise<IDBDatabase> {
 interface SerializedIndex {
   v: 1;
   pairs: Array<[string, DictionaryEntry[]]>;
+  maxKeyLength: number;
 }
 
 export async function getDictionaryCache(
@@ -1669,7 +1846,10 @@ export async function getDictionaryCache(
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as SerializedIndex;
-    return { byForm: new Map(parsed.pairs) };
+    return {
+      byForm: new Map(parsed.pairs),
+      maxKeyLength: parsed.maxKeyLength,
+    };
   } catch {
     return null;
   }
@@ -1679,7 +1859,11 @@ export async function setDictionaryCache(
   hash: string,
   index: DictionaryIndex,
 ): Promise<void> {
-  const serialized: SerializedIndex = { v: 1, pairs: Array.from(index.byForm.entries()) };
+  const serialized: SerializedIndex = {
+    v: 1,
+    pairs: Array.from(index.byForm.entries()),
+    maxKeyLength: index.maxKeyLength,
+  };
   await backend().set(hash, JSON.stringify(serialized));
 }
 
@@ -1756,6 +1940,7 @@ vi.mock('wxt/browser', () => ({
 describe('loadDictionary', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     cache.clear();
     // Inject a fake cache backend used by dictionary-cache.ts.
     vi.stubGlobal('__dictCacheStore', {
@@ -1771,38 +1956,66 @@ describe('loadDictionary', () => {
   it('fetches the asset, builds the index, and caches it on first load', async () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue({ ok: true, text: () => Promise.resolve(JSON.stringify(asset)) } as Response);
+      .mockImplementation(async (url) => {
+        const body = String(url).endsWith('cc-cedict-manifest.json') ? meta : asset;
+        return new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      });
 
     const { index, status } = await loadDictionary();
     expect(status).toBe('built');
+    expect(fetchSpy).toHaveBeenCalledWith('https://ext/dictionaries/cc-cedict-manifest.json');
     expect(fetchSpy).toHaveBeenCalledWith('https://ext/dictionaries/cc-cedict.compact.json');
-    expect(index.byForm.get('你好')).toHaveLength(1);
+    expect(index!.byForm.get('你好')).toHaveLength(1);
     expect(cache.has('hash1')).toBe(true);
   });
 
   it('hydrates from the cache when the hash matches', async () => {
     // Seed the cache first by doing one build.
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      text: () => Promise.resolve(JSON.stringify(asset)),
-    } as Response);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const body = String(url).endsWith('cc-cedict-manifest.json') ? meta : asset;
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
     await loadDictionary();
 
     // Second load should hydrate from cache without fetching the compact asset
     // again — it still fetches the tiny manifest to read the hash.
-    const manifestSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      text: () => Promise.resolve(JSON.stringify(meta)),
-    } as Response);
+    fetchSpy.mockClear();
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify(meta), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
 
     const { index, status } = await loadDictionary();
     expect(status).toBe('cached');
-    expect(index.byForm.get('你好')).toHaveLength(1);
-    expect(manifestSpy).toHaveBeenCalledWith('https://ext/dictionaries/cc-cedict-manifest.json');
+    expect(index!.byForm.get('你好')).toHaveLength(1);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).toHaveBeenCalledWith('https://ext/dictionaries/cc-cedict-manifest.json');
   });
 
   it('returns unavailable when fetch fails', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network'));
+    const result = await loadDictionary();
+    expect(result.index).toBeNull();
+    expect(result.status).toBe('unavailable');
+  });
+
+  it('returns unavailable when manifest and compact asset hashes differ', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const body = String(url).endsWith('cc-cedict-manifest.json')
+        ? meta
+        : { ...asset, meta: { ...meta, hash: 'different' } };
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+
     const result = await loadDictionary();
     expect(result.index).toBeNull();
     expect(result.status).toBe('unavailable');
@@ -1838,24 +2051,26 @@ const ASSET_URL = 'dictionaries/cc-cedict.compact.json';
 
 /** Fetch and build (or hydrate) the dictionary index for this dashboard session. */
 export async function loadDictionary(): Promise<DictionaryLoadResult> {
+  const startedAt = nowMs();
   try {
     const manifest = await fetchJson<DictionaryAssetMeta>(MANIFEST_URL);
-    if (!manifest) return unavailable();
+    if (!manifest) return done(unavailable(), startedAt);
 
     const cached = await getDictionaryCache(manifest.hash);
     if (cached) {
-      return { index: cached, status: 'cached', meta: manifest };
+      return done({ index: cached, status: 'cached', meta: manifest }, startedAt);
     }
 
     const asset = await fetchJson<CompactDictionaryAsset>(ASSET_URL);
-    if (!asset) return unavailable();
+    if (!asset) return done(unavailable(), startedAt);
+    if (asset.meta.hash !== manifest.hash) return done(unavailable(), startedAt);
 
     const entries = materializeEntries(asset);
     const index = buildIndex(entries);
     await setDictionaryCache(manifest.hash, index);
-    return { index, status: 'built', meta: manifest };
+    return done({ index, status: 'built', meta: manifest }, startedAt);
   } catch {
-    return unavailable();
+    return done(unavailable(), startedAt);
   }
 }
 
@@ -1868,6 +2083,19 @@ async function fetchJson<T>(path: string): Promise<T | null> {
 
 function unavailable(): DictionaryLoadResult {
   return { index: null, status: 'unavailable', meta: null };
+}
+
+function done(result: DictionaryLoadResult, startedAt: number): DictionaryLoadResult {
+  if (import.meta.env.DEV) {
+    console.debug(
+      `[dictionary-loader] status=${result.status} initMs=${Math.round(nowMs() - startedAt)}`,
+    );
+  }
+  return result;
+}
+
+function nowMs(): number {
+  return typeof performance === 'undefined' ? Date.now() : performance.now();
 }
 ```
 
@@ -2064,25 +2292,28 @@ export function SourceExamples({
       {examples.map((ex, i) => (
         <HighlightedLine key={i} example={ex} />
       ))}
-      <div className="flex flex-wrap gap-2 pt-1">
-        {externalLinks.map((link) => (
-          <a
-            key={link.label}
-            href={link.url}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-sm border border-border bg-paper-input px-2 py-1 text-xs text-muted transition hover:border-cinnabar-border hover:text-cinnabar"
-          >
-            {link.label} ↗
-          </a>
-        ))}
-      </div>
+      {externalLinks.length > 0 && (
+        <div className="flex flex-wrap gap-2 pt-1">
+          {externalLinks.map((link) => (
+            <a
+              key={link.label}
+              href={link.url}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-sm border border-border bg-paper-input px-2 py-1 text-xs text-muted transition hover:border-cinnabar-border hover:text-cinnabar"
+            >
+              {link.label} ↗
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 function HighlightedLine({ example }: { example: HighlightedExample }) {
   const parts = renderWithRanges(example.snippet, example.ranges);
+  const sourceLabel = example.sourceTitle || '来源';
   return (
     <div className="rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs">
       {example.snippet ? (
@@ -2090,14 +2321,18 @@ function HighlightedLine({ example }: { example: HighlightedExample }) {
       ) : (
         <p className="text-muted">（无上下文）</p>
       )}
-      <a
-        href={example.sourceUrl}
-        target="_blank"
-        rel="noreferrer"
-        className="mt-1 inline-block text-[11px] text-muted hover:text-cinnabar"
-      >
-        {example.sourceTitle} ↗
-      </a>
+      {example.sourceUrl ? (
+        <a
+          href={example.sourceUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-1 inline-block text-[11px] text-muted hover:text-cinnabar"
+        >
+          {sourceLabel} ↗
+        </a>
+      ) : (
+        <span className="mt-1 inline-block text-[11px] text-muted">{sourceLabel}</span>
+      )}
     </div>
   );
 }
@@ -2190,7 +2425,14 @@ export function WordInsightPanel({ word }: { word: WordEntry }) {
       )}
 
       <SourceExamples examples={insight.examples} externalLinks={insight.externalLinks} />
-      <p className="text-[10px] text-muted">Dictionary: CC-CEDICT</p>
+      <a
+        href="https://www.mdbg.net/chinese/dictionary?page=cc-cedict"
+        target="_blank"
+        rel="noreferrer"
+        className="inline-block text-[10px] text-muted hover:text-cinnabar"
+      >
+        Dictionary: CC-CEDICT
+      </a>
     </div>
   );
 }
@@ -2285,7 +2527,6 @@ import { ToneChips } from './ToneChips';
 
 export function ReviewInsightReveal({ word }: { word: WordEntry }) {
   const [revealed, setRevealed] = useState(false);
-  const { insight, loading } = useWordInsight(word);
 
   if (!revealed) {
     return (
@@ -2297,6 +2538,12 @@ export function ReviewInsightReveal({ word }: { word: WordEntry }) {
       </button>
     );
   }
+
+  return <RevealedReviewInsight word={word} />;
+}
+
+function RevealedReviewInsight({ word }: { word: WordEntry }) {
+  const { insight, loading } = useWordInsight(word);
 
   if (loading || !insight) {
     return <p className="mt-3 text-xs text-muted">正在翻字典…</p>;
@@ -2311,6 +2558,11 @@ export function ReviewInsightReveal({ word }: { word: WordEntry }) {
         title="释义"
         entries={insight.exactEntries.length > 0 ? insight.exactEntries : insight.componentEntries}
       />
+      {word.note && (
+        <p className="rounded-sm border border-border bg-paper-input px-3 py-2 text-sm leading-6 text-ink-secondary">
+          {word.note}
+        </p>
+      )}
       <SourceExamples examples={topExamples} externalLinks={[]} />
     </div>
   );
@@ -2326,6 +2578,18 @@ import { ReviewInsightReveal } from './ReviewInsightReveal';
 ```
 
 In the `ReviewCard` function, immediately after the `{entry.note && (...)}` block (after line 97) and before the `<div className="mt-4 flex flex-wrap justify-end gap-2">` review-actions block, insert:
+
+First change the note block so word notes are hidden before reveal:
+
+```tsx
+      {entry.kind === 'quote' && entry.note && (
+        <p className="mt-3 rounded-sm border border-border bg-paper-input px-3 py-2 text-sm leading-6 text-ink-secondary">
+          {entry.note}
+        </p>
+      )}
+```
+
+Then insert:
 
 ```tsx
       {entry.kind === 'word' && <ReviewInsightReveal word={entry} />}
@@ -2368,7 +2632,7 @@ Create `scripts/build-dictionary.ts`:
 ```ts
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildCompactAsset } from '../lib/dictionary';
+import { buildCompactAsset, parseCedictText } from '../lib/dictionary';
 import type { CompactDictionaryAsset, DictionaryAssetMeta } from '../lib/types';
 
 const SOURCE = process.env.CEDICT_SOURCE ?? 'cc-cedict.txt';
@@ -2376,6 +2640,7 @@ const OUT_DIR = 'public/dictionaries';
 
 function main() {
   const text = readFileSync(SOURCE, 'utf8');
+  const { skipped } = parseCedictText(text, { withStats: true });
   const asset: CompactDictionaryAsset = buildCompactAsset(text, {
     sourceUrl: 'https://www.mdbg.net/chinese/dictionary?page=cc-cedict',
     license: 'CC-BY-SA 4.0',
@@ -2390,6 +2655,7 @@ function main() {
   const compactBytes = JSON.stringify(asset).length;
   console.log(`[build-dictionary] release=${meta.release} hash=${meta.hash}`);
   console.log(`[build-dictionary] entries=${asset.columns.simplified.length}`);
+  console.log(`[build-dictionary] skipped=${skipped}`);
   console.log(`[build-dictionary] compact.json bytes=${compactBytes}`);
   console.log(`[build-dictionary] wrote ${OUT_DIR}/cc-cedict-manifest.json and cc-cedict.compact.json`);
 }
@@ -2520,9 +2786,12 @@ git commit -m "feat: add dictionary build script, placeholder assets, attributio
 
 **Files:**
 - Modify: `lib/markdown.ts`
+- Modify: `lib/export.ts`
+- Modify: `entrypoints/newtab/components/Toolbar.tsx`
 - Modify: `tests/markdown.test.ts`
+- Modify: `tests/export.test.ts`
 
-Add a "Dictionary" subsection per word showing CEDICT definitions. Because the dictionary is regenerable, definitions are **not** persisted on `WordEntry`; the Markdown renderer recomputes them at export time from the loaded index.
+Add local dictionary lines per word showing CEDICT definitions. Because the dictionary is regenerable, definitions are **not** persisted on `WordEntry`; the dashboard export path loads the local dictionary index and passes it into the pure Markdown/export functions. If the dictionary asset is unavailable, exports still succeed without dictionary lines.
 
 - [ ] **Step 1: Add a failing test**
 
@@ -2558,6 +2827,13 @@ describe('renderDay with dictionary', () => {
     expect(md).toContain('**不存在**');
     expect(md).not.toContain('  - Dictionary:');
   });
+
+  it('uses the normalized key when exported word text has punctuation', () => {
+    const index = buildIndex(dictEntries);
+    const decorated: WordEntry = { ...word, text: '你好！', normalized: '你好' };
+    const md = renderDay(day, [decorated], [], index);
+    expect(md).toContain('Dictionary: _ni3 hao3_ hello; good day');
+  });
 });
 ```
 
@@ -2566,7 +2842,7 @@ describe('renderDay with dictionary', () => {
 Run: `npx vitest run tests/markdown.test.ts`
 Expected: FAIL — `renderDay` does not accept a fourth argument.
 
-- [ ] **Step 3: Implement**
+- [ ] **Step 3: Implement `renderDay` dictionary support**
 
 In `lib/markdown.ts`, replace the `renderDay` function signature and body. Change the signature from:
 
@@ -2577,8 +2853,8 @@ export function renderDay(date: string, words: WordEntry[], quotes: QuoteEntry[]
 to:
 
 ```ts
-import type { DictionaryIndex } from './dictionary';
 import { lookupExact } from './dictionary';
+import type { DictionaryIndex } from './types';
 
 export function renderDay(
   date: string,
@@ -2592,27 +2868,188 @@ Then inside the `for (const word of words)` loop, immediately after the occurren
 
 ```ts
       if (index) {
-        const entries = lookupExact(index, word.text).slice(0, 3);
+        const entries = dictionaryEntriesForWord(index, word).slice(0, 3);
         for (const entry of entries) {
           lines.push(`  - Dictionary: _${esc(entry.pinyin)}_ ${entry.definitions.map((d) => esc(d)).join('; ')}`);
         }
       }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+Then add these helpers at the end of `lib/markdown.ts`:
+
+```ts
+function dictionaryEntriesForWord(index: DictionaryIndex, word: WordEntry) {
+  return uniqueDictionaryEntries([
+    ...lookupExact(index, word.text),
+    ...lookupExact(index, word.normalized),
+  ]);
+}
+
+function uniqueDictionaryEntries(entries: ReturnType<typeof lookupExact>) {
+  const seen = new Set<number>();
+  return entries.filter((entry) => {
+    if (seen.has(entry.index)) return false;
+    seen.add(entry.index);
+    return true;
+  });
+}
+```
+
+- [ ] **Step 4: Pass the optional dictionary index through `lib/export.ts`**
+
+Modify `lib/export.ts`:
+
+```ts
+import { zip } from 'fflate';
+import { groupByDay, renderDay } from './markdown';
+import type { DictionaryIndex, Inbox, QuoteEntry, WordEntry } from './types';
+
+interface DayBucket {
+  words: WordEntry[];
+  quotes: QuoteEntry[];
+}
+
+export function buildExportMap(
+  words: WordEntry[],
+  quotes: QuoteEntry[],
+  index?: DictionaryIndex | null,
+): Map<string, string> {
+  const buckets = new Map<string, DayBucket>();
+
+  function touch(date: string): DayBucket {
+    const existing = buckets.get(date);
+    if (existing) return existing;
+
+    const bucket = { words: [], quotes: [] };
+    buckets.set(date, bucket);
+    return bucket;
+  }
+
+  for (const word of words) {
+    if (word.status === 'archived') continue;
+    const date = groupByDay(word.occurrences[0]?.capturedAt ?? word.createdAt);
+    touch(date).words.push(word);
+  }
+
+  for (const quote of quotes) {
+    if (quote.status === 'archived') continue;
+    const date = groupByDay(quote.createdAt);
+    touch(date).quotes.push(quote);
+  }
+
+  const files = new Map<string, string>();
+  for (const [date, bucket] of buckets) {
+    files.set(`daily/${date}.md`, renderDay(date, bucket.words, bucket.quotes, index));
+  }
+  return files;
+}
+
+export async function zipBytes(files: Map<string, string>): Promise<Uint8Array> {
+  const zipInput: Record<string, Uint8Array> = {};
+  for (const [path, content] of files) {
+    zipInput[path] = new TextEncoder().encode(content);
+  }
+
+  return new Promise((resolve, reject) => {
+    zip(zipInput, (err, data) => {
+      if (err) reject(err);
+      else resolve(data);
+    });
+  });
+}
+
+export async function exportInboxAsZip(
+  inbox: Inbox,
+  index?: DictionaryIndex | null,
+): Promise<Uint8Array> {
+  return zipBytes(buildExportMap(inbox.words, inbox.quotes, index));
+}
+```
+
+- [ ] **Step 5: Add an export-map test**
+
+Append to `tests/export.test.ts`:
+
+```ts
+import { buildIndex } from '../lib/dictionary';
+import type { DictionaryEntry } from '../lib/types';
+
+describe('buildExportMap with dictionary', () => {
+  it('passes dictionary definitions into daily markdown files', () => {
+    const entries: DictionaryEntry[] = [
+      {
+        index: 0,
+        traditional: '你好',
+        simplified: '你好',
+        pinyin: 'ni3 hao3',
+        definitions: ['hello'],
+      },
+    ];
+    const map = buildExportMap([word], [], buildIndex(entries));
+    expect(map.get('daily/2026-06-20.md')).toContain('Dictionary: _ni3 hao3_ hello');
+  });
+});
+```
+
+- [ ] **Step 6: Wire dashboard exports to the local dictionary loader**
+
+In `entrypoints/newtab/components/Toolbar.tsx`, add the loader import:
+
+```ts
+import { loadDictionary } from '@/lib/dictionary-loader';
+```
+
+Then add this helper inside `Toolbar`, near `downloadBlob`:
+
+```ts
+  async function dictionaryIndexForExport() {
+    const result = await loadDictionary();
+    return result.index;
+  }
+```
+
+Replace the zip and today export functions with:
+
+```ts
+  async function downloadZip() {
+    const index = await dictionaryIndexForExport();
+    const bytes = await exportInboxAsZip(inbox, index);
+    const blob = new Blob([toArrayBuffer(bytes)], { type: 'application/zip' });
+    await downloadBlob(blob, 'shiyu-hanzi-box-export.zip');
+  }
+
+  async function downloadToday() {
+    const today = new Date();
+    const date = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, '0'),
+      String(today.getDate()).padStart(2, '0'),
+    ].join('-');
+    const index = await dictionaryIndexForExport();
+    const map = buildExportMap(inbox.words, inbox.quotes, index);
+    const md = map.get(`daily/${date}.md`) ?? `# ${date}\n\n_No entries today._\n`;
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    await downloadBlob(blob, `${date}.md`);
+  }
+```
+
+- [ ] **Step 7: Run the tests to verify they pass**
 
 Run: `npx vitest run tests/markdown.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Run compile + full tests**
+Run: `npx vitest run tests/export.test.ts`
+Expected: PASS.
+
+- [ ] **Step 8: Run compile + full tests**
 
 Run: `npm run compile && npm test`
 Expected: clean.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add lib/markdown.ts tests/markdown.test.ts
+git add lib/markdown.ts lib/export.ts entrypoints/newtab/components/Toolbar.tsx tests/markdown.test.ts tests/export.test.ts
 git commit -m "feat: include local dictionary definitions in markdown export"
 ```
 
@@ -2749,12 +3186,12 @@ Expected: all tests pass.
 - [ ] **Step 3: Run build and inspect manifest**
 
 Run: `npm run build && cat .output/chrome-mv3/manifest.json`
-Expected: build succeeds; manifest retains `contextMenus`, `storage`, `activeTab`, `scripting`, `downloads`, `unlimitedStorage`, `clipboardRead`, command shortcuts, popup, and new-tab override. No new permissions added in this plan (the AI layer, which adds `optional_host_permissions`, is Plan B).
+Expected: build succeeds; manifest retains `contextMenus`, `storage`, `activeTab`, `scripting`, `downloads`, `unlimitedStorage`, `clipboardRead`, command shortcuts, popup, and new-tab override. No new permissions added in this local-only plan; the AI layer and `optional_host_permissions` require a separate follow-up plan.
 
 - [ ] **Step 4: Manual dashboard check**
 
 Run: `npm run dev`
-Then in the dashboard, expand a word that has an exact dictionary match, one with no match (component fallback), one with multiple occurrences, and one with empty surrounding. Confirm tone chips, definitions, source examples, and external links all render correctly and nothing makes a network request.
+Then in the dashboard, expand a word that has an exact dictionary match, one with no match (component fallback), one with multiple occurrences, and one with empty surrounding. Confirm tone chips, definitions, source examples, and external links all render correctly and nothing makes a network request. In the dev console, record `[dictionary-loader] status=... initMs=...`; first build should target under 1,500 ms and cached loads under 150 ms on the development machine.
 
 - [ ] **Step 5: Confirm no uncommitted changes**
 

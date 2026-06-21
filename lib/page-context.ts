@@ -6,6 +6,12 @@ export interface PageContext {
   sourceDomain: string;
 }
 
+export interface PageMetadata {
+  sourceTitle: string;
+  sourceUrl: string;
+  sourceDomain: string;
+}
+
 /**
  * Runs in the PAGE context via scripting.executeScript({ func }).
  * Must not reference outer scope.
@@ -28,17 +34,42 @@ export function readPageContext(): PageContext | null {
   }
 
   let domain = '';
+  let href = '';
   try {
     domain = location.hostname;
+    href = location.href;
   } catch {
     domain = '';
+    href = '';
   }
 
   return {
     text,
     surrounding,
     sourceTitle: document.title || domain || '',
-    sourceUrl: location.href,
+    sourceUrl: href,
+    sourceDomain: domain,
+  };
+}
+
+/**
+ * Runs in the PAGE context via scripting.executeScript({ func }).
+ * Must not reference outer scope.
+ */
+export function readPageMetadata(): PageMetadata {
+  let domain = '';
+  let href = '';
+  try {
+    domain = location.hostname;
+    href = location.href;
+  } catch {
+    domain = '';
+    href = '';
+  }
+
+  return {
+    sourceTitle: document.title || domain || '',
+    sourceUrl: href,
     sourceDomain: domain,
   };
 }

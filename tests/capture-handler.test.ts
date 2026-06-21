@@ -6,7 +6,7 @@ import {
   handleManualCapture,
 } from '../entrypoints/background/capture-handler';
 import { getInbox } from '../lib/storage';
-import { readPageContext } from '../lib/page-context';
+import { readPageContext, readPageMetadata } from '../lib/page-context';
 
 const GOOD_CTX = {
   text: '你好',
@@ -102,7 +102,7 @@ describe('handleContextMenuCapture', () => {
 });
 
 describe('handleManualCapture', () => {
-  it('saves pasted text with active tab metadata', async () => {
+  it('falls back to active tab metadata for pasted text when page metadata is unavailable', async () => {
     vi.mocked(fakeBrowser.tabs.query).mockResolvedValue([
       {
         id: 1,
@@ -111,6 +111,7 @@ describe('handleManualCapture', () => {
         url: 'https://www.youtube.com/watch?v=abc',
       } as any,
     ]);
+    vi.mocked(fakeBrowser.scripting.executeScript).mockRejectedValue(new Error('cannot access'));
 
     const result = await handleManualCapture('word', ' 中文 ');
 
@@ -120,6 +121,36 @@ describe('handleManualCapture', () => {
     expect(inbox.words[0].text).toBe('中文');
     expect(inbox.words[0].occurrences[0].sourceTitle).toBe('YouTube');
     expect(inbox.words[0].occurrences[0].sourceDomain).toBe('www.youtube.com');
+  });
+
+  it('reads page metadata for pasted text when tab metadata is sparse', async () => {
+    vi.mocked(fakeBrowser.tabs.query).mockResolvedValue([
+      {
+        id: 1,
+        active: true,
+      } as any,
+    ]);
+    vi.mocked(fakeBrowser.scripting.executeScript).mockResolvedValue([
+      {
+        result: {
+          sourceTitle: 'Reader Page',
+          sourceUrl: 'https://reader.example/article',
+          sourceDomain: 'reader.example',
+        },
+      } as any,
+    ]);
+
+    const result = await handleManualCapture('word', ' 中文 ');
+
+    const inbox = await getInbox();
+    expect(result).toEqual({ ok: true });
+    expect(fakeBrowser.scripting.executeScript).toHaveBeenCalledWith({
+      target: { tabId: 1 },
+      func: readPageMetadata,
+    });
+    expect(inbox.words[0].occurrences[0].sourceTitle).toBe('Reader Page');
+    expect(inbox.words[0].occurrences[0].sourceUrl).toBe('https://reader.example/article');
+    expect(inbox.words[0].occurrences[0].sourceDomain).toBe('reader.example');
   });
 
   it('returns no-selection for empty pasted text', async () => {

@@ -1,6 +1,6 @@
 import type { Browser } from 'wxt/browser';
 import { saveWord, saveQuote, type SourceInfo } from '@/lib/capture';
-import { readPageContext } from '@/lib/page-context';
+import { readPageContext, readPageMetadata } from '@/lib/page-context';
 
 export const MENU_SAVE_WORD = 'save-word-menu';
 export const MENU_SAVE_QUOTE = 'save-quote-menu';
@@ -93,15 +93,38 @@ export async function handleManualCapture(
     return { ok: false, reason: 'no-active-tab' };
   }
 
+  const metadata = await pageMetadataForTab(tab);
   await saveSelectedText(kind, text, {
-    sourceTitle: tab.title ?? '',
-    sourceUrl: tab.url ?? '',
-    sourceDomain: domainFromUrl(tab.url),
+    sourceTitle: metadata.sourceTitle,
+    sourceUrl: metadata.sourceUrl,
+    sourceDomain: metadata.sourceDomain,
     surrounding: '',
     capturedAt: Date.now(),
   });
   await setBadge(kind === 'word' ? 'WORD' : 'QTE', true);
   return { ok: true };
+}
+
+async function pageMetadataForTab(
+  tab: CaptureTab & { id?: number },
+): Promise<Omit<SourceInfo, 'surrounding' | 'capturedAt'>> {
+  if (tab.id) {
+    try {
+      const [res] = await browser.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: readPageMetadata,
+      });
+      if (res?.result) return res.result;
+    } catch {
+      // Fall back to tab metadata below when page scripting is restricted.
+    }
+  }
+
+  return {
+    sourceTitle: tab.title ?? '',
+    sourceUrl: tab.url ?? '',
+    sourceDomain: domainFromUrl(tab.url),
+  };
 }
 
 async function saveSelectedText(

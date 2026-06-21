@@ -83,6 +83,14 @@ describe('buildHighlightedExamples', () => {
     expect(ex[0].ranges[0].text).toBe('龙');
   });
 
+  it('keeps the longest range when variant highlights overlap', () => {
+    const ex = buildHighlightedExamples('中国人', [
+      occ({ surrounding: '中国人', capturedAt: 1 }),
+    ], ['中国']);
+    expect(ex[0].ranges).toHaveLength(1);
+    expect(ex[0].ranges[0].text).toBe('中国人');
+  });
+
   it('clips long surrounding text to a compact snippet around the match', () => {
     const ex = buildHighlightedExamples('龙', [
       occ({ surrounding: `${'前'.repeat(200)}龙${'后'.repeat(200)}`, capturedAt: 1 }),

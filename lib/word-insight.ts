@@ -64,11 +64,24 @@ function findRanges(needles: string[], haystack: string): HighlightRange[] {
       from = idx + needle.length;
     }
   }
-  return ranges.sort((a, b) => a.start - b.start || b.end - a.end);
+  return removeOverlappingRanges(
+    ranges.sort((a, b) => a.start - b.start || b.end - a.end),
+  );
 }
 
 function uniqueNeedles(values: string[]): string[] {
   return Array.from(new Set(values.filter((value) => value.length > 0)));
+}
+
+function removeOverlappingRanges(ranges: HighlightRange[]): HighlightRange[] {
+  const out: HighlightRange[] = [];
+  let coveredUntil = -1;
+  for (const range of ranges) {
+    if (range.start < coveredUntil) continue;
+    out.push(range);
+    coveredUntil = range.end;
+  }
+  return out;
 }
 
 const SNIPPET_RADIUS = 64;

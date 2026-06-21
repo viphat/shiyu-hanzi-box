@@ -25,10 +25,16 @@ place where a captured word turns into something learnable.
 ## Non-Goals
 
 - Do not add a page overlay or content-script dictionary popup in this phase.
-- Do not add AI-generated examples, translations, or explanations.
+- Do not add AI-generated examples, translations, or explanations **to the
+  default no-config experience**. AI is an explicit, opt-in layer (described in
+  the AI Insight Layer section below) added behind a user-supplied API key; it
+  never runs for users who do not configure it.
 - Do not add full flashcard scheduling changes beyond the existing review
   actions.
-- Do not require any remote API at runtime.
+- Do not require any remote API at runtime **for the default experience**. The
+  local dictionary, pinyin, tone chips, and source examples all work fully
+  offline. The optional AI layer makes a network call only when the user
+  explicitly clicks an "Ask AI" button, using a provider and key they chose.
 - Do not bundle, mirror, scrape, cache, or redistribute a Chinese-Chinese
   dictionary dataset in this phase. Native Chinese definitions must come from
   user-initiated external links unless a clearly licensed monolingual dataset is
@@ -401,7 +407,171 @@ dictionary exact match exists.
 - The implementation should report generated asset byte size, IndexedDB cache
   status, and initialization timing in development logs.
 
-## Testing Plan
+## AI Insight Layer
+
+The sections above describe the default, fully local Word Insight Panel. This
+section adds an optional AI layer on top of it, behind a user-supplied API key.
+The AI layer never runs for users who do not configure it; it degrades cleanly
+to the local panel.
+
+### Scope
+
+The AI layer enriches a word with content no local dictionary can produce:
+
+- Sample sentences using the saved word in context, with parallel English
+  translations.
+- Bilingual definitions richer than CC-CEDICT's one-line glosses.
+- Usage notes: register (书面/口语/formal/slang), collocations, common
+  mistakes, and polyphone guidance (for example when 行 should be xíng vs háng).
+- A short one-line summary gloss.
+
+The AI layer does not replace local definitions or tone chips. CEDICT
+definitions, pinyin, and source examples continue to render first and fully
+offline. The AI section appears below them only after the user explicitly
+requests it.
+
+### Provider Model
+
+Bring-your-own-key, direct from the new-tab dashboard to the provider. The
+extension never proxies through a server the project operates.
+
+- The client speaks the OpenAI-compatible `/chat/completions` API. This single
+  integration covers DeepSeek, OpenAI, and self-hosted OpenAI-compatible hosts
+  such as Ollama or LM Studio.
+- Default provider preset is DeepSeek (cheap, strong Chinese). Presets for
+  OpenAI and a custom endpoint are also offered.
+- The API key and endpoint live in `chrome.storage.local` only. They are never
+  synced, never sent anywhere except the configured provider, and never logged.
+- The settings UI must clearly disclose where the key is stored and that AI
+  requests send the saved word to the chosen provider.
+
+### Trigger And UX
+
+- AI insight is generated only when the user clicks an explicit "Ask AI" button
+  on a specific word card. Never on capture, never on card expand, never on
+  review reveal.
+- The button is disabled with a helpful state when AI is not configured
+  ("Configure AI to use this").
+- While a request is in flight, the button shows a loading state and is
+  disabled to prevent duplicate requests.
+- On success, the AI insight renders in a new section below the local insight
+  sections inside `WordInsightPanel`.
+- On error, show the error inline near the button; do not mutate `WordEntry`.
+- Review cards do not get an "Ask AI" button. Because AI insight is persisted
+  (see Data Model), the review reveal can show it offline once it exists.
+
+### Data Model
+
+Unlike local dictionary analysis, AI insight is persisted. The user paid for it
+in time and money, so it must survive backup/restore, flow into Markdown
+export, and render offline on re-open and in review cards.
+
+```ts
+interface AiInsight {
+  provider: 'deepseek' | 'openai' | 'custom';
+  model: string;          // e.g. 'deepseek-chat'
+  baseUrl: string;        // endpoint used, for traceability
+  generatedAt: number;    // epoch ms
+  summary: string;        // one-line English gloss
+  register: string;       // 书面/口语/formal/slang/...
+  definitions: string[];  // bilingual, richer than CEDICT
+  sampleSentences: string[];
+  translations: string[]; // parallel to sampleSentences
+  collocations: string[];
+  notes: string;          // nuance, common mistakes, polyphone guidance
+}
+
+// WordEntry gains: aiInsight?: AiInsight
+```
+
+Settings shape (new `local:aiSettings` storage item):
+
+```ts
+interface AiSettings {
+  enabled: boolean;
+  provider: 'deepseek' | 'openai' | 'custom';
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+}
+```
+
+Provider presets resolve `baseUrl` and default `model` from `provider`, with
+`custom` leaving them fully user-defined.
+
+### Modules And Components
+
+Modules:
+
+- `lib/ai/settings.ts`: load and save `local:aiSettings`, plus the provider
+  preset table (default `baseUrl` and `model` per provider).
+- `lib/ai/prompt.ts`: pure `buildMessages(word, pinyin, cedictGlosses,
+  recentOccurrence)` returning the OpenAI-style `messages[]` array. This is the
+  module to unit-test for prompt shape.
+- `lib/ai/parse.ts`: pure validation of the model's JSON response into an
+  `AiInsight`. Handle malformed JSON and missing fields by returning a typed
+  error, never by throwing on unexpected shapes.
+- `lib/ai/client.ts`: one `fetch` to `${baseUrl}/chat/completions` with
+  `response_format: { type: 'json_object' }`. Return a typed result or error;
+  do not throw across the boundary.
+
+Components:
+
+- `AskAiButton.tsx`: trigger with idle / disabled-not-configured / loading /
+  error / retry states.
+- `AiInsightSection.tsx`: renders a persisted `AiInsight` below the local
+  sections in `WordInsightPanel`. Includes a small "regenerate" control.
+- `AiSettingsPanel.tsx`: provider picker, masked key field, base URL (for
+  custom), model, and a "test connection" action.
+
+### Permissions
+
+AI host permissions are requested lazily via `optional_host_permissions` plus
+`chrome.permissions.request({ origins: [...] })`, fired only when the user
+enables AI or changes provider. Users who never use AI see no extra permissions
+and no network.
+
+The manifest should declare the common provider origins as optional so the
+request is scoped, for example `https://api.deepseek.com/*` and
+`https://api.openai.com/*`. Custom endpoints require the user to grant the
+origin at request time.
+
+### Error Handling
+
+- No key configured: button disabled with "Configure AI to use this".
+- 401 / 403: "API key rejected by provider."
+- 429: "Rate limited; wait and retry."
+- 5xx or network failure: "Provider unreachable; retry."
+- Malformed JSON or schema mismatch: "Unexpected response; retry." Do not
+  persist a partial insight.
+- Every error is shown inline near the button and never mutates `WordEntry`.
+
+### Review Interaction
+
+Because `aiInsight` is persisted on `WordEntry`, the review reveal shows it
+with no network call. This is the clean consequence of persisting rather than
+caching AI output: a once-paid insight is permanently available offline,
+including in review.
+
+### Export And Backup
+
+- `lib/markdown.ts` adds a `## AI Insight` subsection to the daily note when
+  `aiInsight` is present, including sample sentences and translations.
+- `lib/backup.ts` and `lib/export.ts` include `aiInsight` automatically because
+  it lives on `WordEntry` and flows through the existing `Inbox` shape.
+
+### Privacy Boundaries
+
+- The only network egress for AI is to the configured provider, on an explicit
+  button click, carrying only the saved word plus optional pinyin and one
+  recent occurrence as prompt context.
+- The API key never leaves the device except to the configured provider as an
+  auth header.
+- No telemetry, no analytics, no third-party calls.
+- When AI is disabled, the extension's network behavior is identical to the
+  default local-only experience.
+
+
 
 Add focused unit tests:
 
@@ -421,6 +591,16 @@ Add focused unit tests:
 - `tests/review-insight.test.ts` or component tests if the project adds a React
   test renderer later; otherwise keep review reveal logic in pure functions and
   test those.
+
+AI layer tests:
+
+- `tests/ai-prompt.test.ts`: `buildMessages` output shape, inclusion of pinyin
+  and CEDICT glosses, recent-occurrence inclusion, and determinism.
+- `tests/ai-parse.test.ts`: well-formed response parsing, malformed JSON,
+  missing fields, extra fields, empty arrays, and type narrowing to `AiInsight`.
+- `tests/ai-client.test.ts`: mock `fetch` and assert request shape (URL,
+  headers, `response_format`, body), then assert success, 401/403, 429, 5xx,
+  and network-error branches each return the correct typed error.
 
 Run existing verification before claiming implementation complete:
 
@@ -444,8 +624,19 @@ empty surrounding context.
 5. Add `WordInsightPanel` to expanded word cards.
 6. Add reveal mode to review cards using the same insight data.
 7. Add click-only external lookup buttons for MDBG and 百度汉语.
-8. Update README with the new study workflow, dictionary attribution, and
-   external dictionary privacy boundary.
+8. Add AI settings storage (`lib/ai/settings.ts`) with provider presets, plus
+   the `AiSettingsPanel` UI for configuring the key, endpoint, and model.
+9. Add the pure AI prompt builder (`lib/ai/prompt.ts`) and response parser
+   (`lib/ai/parse.ts`) with unit tests, before any network code.
+10. Add the AI client (`lib/ai/client.ts`), the `AskAiButton`, and the
+    `AiInsightSection`. Persist the result onto `WordEntry.aiInsight`.
+11. Add `optional_host_permissions` and lazy `chrome.permissions.request` for
+    the configured provider origin, fired on enable / provider change.
+12. Extend `lib/markdown.ts`, `lib/backup.ts`, and `lib/export.ts` to include
+    `aiInsight` when present, then show persisted AI insight in the review
+    reveal (offline).
+13. Update README with the new study workflow, dictionary attribution, external
+    dictionary privacy boundary, and the opt-in AI layer.
 
 ## Acceptance Criteria
 
@@ -481,3 +672,15 @@ empty surrounding context.
 - First dictionary initialization and subsequent cache-hit timings are measured
   against the budgets in the Privacy And Performance section.
 - Dictionary attribution is visible in the repo and accessible from the UI.
+- AI insight never runs until the user explicitly clicks "Ask AI" on a word
+  card, and never runs at all when AI is not configured.
+- AI results are persisted on `WordEntry.aiInsight`, survive backup/restore,
+  and render offline on re-open and in the review reveal.
+- AI content flows into the daily Markdown export under a `## AI Insight`
+  subsection when present.
+- The only AI network egress is to the configured provider on an explicit
+  click; the API key is stored locally and sent only to that provider.
+- Enabling AI requests the provider origin via `optional_host_permissions`;
+  users who never enable AI see no extra host permissions.
+- AI failures (no key, 401/403, 429, 5xx/network, malformed JSON) each show a
+  specific inline message and never mutate `WordEntry`.

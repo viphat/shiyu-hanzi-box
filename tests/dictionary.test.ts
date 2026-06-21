@@ -2,10 +2,13 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  buildIndex,
   parseCedictLine,
   parseCedictText,
   extractRelease,
+  lookupExact,
 } from '../lib/dictionary';
+import type { DictionaryEntry } from '../lib/types';
 
 const sample = readFileSync(
   join(import.meta.dirname, 'fixtures/cedict-sample.txt'),
@@ -72,5 +75,45 @@ describe('extractRelease', () => {
     expect(extractRelease('# just a comment\n你好 你好 [ni3 hao3] /hi/')).toBe(
       'unknown',
     );
+  });
+});
+
+const sampleEntries: DictionaryEntry[] = [
+  { index: 0, traditional: '你好', simplified: '你好', pinyin: 'ni3 hao3', definitions: ['hello', 'good day'] },
+  { index: 1, traditional: '中國', simplified: '中国', pinyin: 'zhong1 guo2', definitions: ['China'] },
+  { index: 2, traditional: '行', simplified: '行', pinyin: 'xing2', definitions: ['to walk'] },
+  { index: 3, traditional: '行', simplified: '行', pinyin: 'hang2', definitions: ['row'] },
+  { index: 4, traditional: '龍', simplified: '龙', pinyin: 'long2', definitions: ['dragon'] },
+];
+
+describe('buildIndex + lookupExact', () => {
+  const index = buildIndex(sampleEntries);
+
+  it('finds entries by simplified form', () => {
+    const hits = lookupExact(index, '你好');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].pinyin).toBe('ni3 hao3');
+  });
+
+  it('finds entries by traditional form', () => {
+    const hits = lookupExact(index, '龍');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].definitions).toEqual(['dragon']);
+  });
+
+  it('returns all entries when simplified maps to multiple (polyphone)', () => {
+    const hits = lookupExact(index, '行');
+    expect(hits).toHaveLength(2);
+    expect(hits.map((h) => h.pinyin).sort()).toEqual(['hang2', 'xing2']);
+  });
+
+  it('returns an empty array when no match', () => {
+    expect(lookupExact(index, '不存在的词')).toEqual([]);
+  });
+
+  it('normalizes whitespace in lookup keys', () => {
+    const hits = lookupExact(index, '中 国');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].definitions).toEqual(['China']);
   });
 });

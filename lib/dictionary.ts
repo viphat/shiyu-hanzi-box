@@ -1,4 +1,4 @@
-import type { CompactDictionaryAsset, DictionaryEntry } from './types';
+import type { CompactDictionaryAsset, DictionaryEntry, DictionaryIndex } from './types';
 
 /** A raw parsed entry before it is materialized into the compact asset. */
 export interface ParsedCedictEntry {
@@ -154,4 +154,31 @@ function hashAsset(columns: CompactDictionaryAsset['columns']): string {
     hash = Math.imul(hash, 0x01000193);
   }
   return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+const NO_WHITESPACE = /\s+/g;
+
+function formKey(surface: string): string {
+  return surface.replace(NO_WHITESPACE, '').toLowerCase();
+}
+
+/** Build a lookup index over a materialized entry list. */
+export function buildIndex(entries: DictionaryEntry[]): DictionaryIndex {
+  const byForm = new Map<string, DictionaryEntry[]>();
+  let maxKeyLength = 0;
+  for (const entry of entries) {
+    for (const surface of new Set([entry.simplified, entry.traditional])) {
+      const key = formKey(surface);
+      const list = byForm.get(key);
+      if (list) list.push(entry);
+      else byForm.set(key, [entry]);
+      maxKeyLength = Math.max(maxKeyLength, Array.from(key).length);
+    }
+  }
+  return { byForm, maxKeyLength };
+}
+
+/** Return all entries whose simplified or traditional form matches `surface`. */
+export function lookupExact(index: DictionaryIndex, surface: string): DictionaryEntry[] {
+  return index.byForm.get(formKey(surface)) ?? [];
 }

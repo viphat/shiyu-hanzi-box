@@ -29,6 +29,10 @@ place where a captured word turns into something learnable.
 - Do not add full flashcard scheduling changes beyond the existing review
   actions.
 - Do not require any remote API at runtime.
+- Do not bundle, mirror, scrape, cache, or redistribute a Chinese-Chinese
+  dictionary dataset in this phase. Native Chinese definitions must come from
+  user-initiated external links unless a clearly licensed monolingual dataset is
+  selected in a future spec.
 - Do not bring back word tags as part of this feature; the insight panel should
   work from word text, pinyin, notes, and occurrences.
 
@@ -63,6 +67,9 @@ Each word card gains an expanded insight area with four sections:
 4. **Component fallback** for phrases that have no exact dictionary match:
    segment the phrase by longest dictionary matches, then fall back to
    single-character entries before leaving any Chinese character undefined.
+5. **External dictionary links** for deeper lookup: one Chinese-English link to
+   MDBG and one Chinese-Chinese link to 百度汉语. These are normal outbound links
+   only; no content is fetched, embedded, scraped, cached, or previewed.
 
 The review queue gains a compact reveal interaction:
 
@@ -103,7 +110,9 @@ material. The implementation docs should cite those principles and make the
 dictionary asset boundary visible.
 
 The extension should not perform automated scripted access against MDBG at
-runtime. Dictionary updates should be a manual or developer-run build step.
+runtime. It also should not perform automated scripted access against
+Chinese-Chinese dictionary sites such as 百度汉语. Dictionary updates should be a
+manual or developer-run build step.
 
 References:
 
@@ -111,6 +120,7 @@ References:
 - CC-CEDICT wiki: https://cc-cedict.org/wiki/
 - Creative Commons FAQ: https://creativecommons.org/faq/
 - Creative Commons licenses: https://creativecommons.org/cc-licenses/
+- 百度汉语: https://dict.baidu.com/
 - pinyin-pro options: https://pinyin-pro.cn/en/use/pinyin.html
 
 ## Data Model
@@ -180,6 +190,11 @@ interface WordInsight {
   componentEntries: DictionaryEntry[];
   toneChips: ToneChip[];
   examples: HighlightedExample[];
+  externalLinks: Array<{
+    label: 'MDBG' | '百度汉语';
+    language: 'Chinese-English' | 'Chinese-Chinese';
+    url: string;
+  }>;
   status: 'ready' | 'no-definition' | 'dictionary-unavailable';
 }
 ```
@@ -202,6 +217,8 @@ Add these modules:
   IndexedDB cache.
 - `lib/word-insight.ts`: combine dictionary lookup, fallback segmentation,
   pinyin/tone analysis, and occurrence highlighting into a `WordInsight`.
+- `lib/external-dictionaries.ts`: build encoded, click-only dictionary URLs for
+  MDBG and 百度汉语 without fetching remote content.
 
 Add this build script:
 
@@ -286,10 +303,33 @@ No-definition fallback:
 
 - Still show tone chips and source examples.
 - Show a clear empty state: "No local dictionary match yet."
-- Provide a normal user-click external dictionary search link to MDBG:
+- Provide normal user-click external dictionary search links:
   `https://www.mdbg.net/chinese/dictionary?wd=<encoded word>`.
+- Provide a Chinese-Chinese lookup link to 百度汉语:
+  `https://hanyu.baidu.com/s?wd=<encoded word>`.
 - Do not prefetch, ping, or otherwise send the saved word outside the extension
-  before the user clicks the link.
+  before the user clicks either link.
+
+## External Dictionary Links
+
+The insight panel should always offer optional external lookup actions, even
+when local CC-CEDICT definitions exist:
+
+- **MDBG** for Chinese-English lookup.
+- **百度汉语** for Chinese-Chinese lookup.
+
+These links are off-network until clicked. The extension must not fetch,
+preview, scrape, iframe, cache, or store remote dictionary page content. Opening
+either link should use a normal browser tab/window navigation initiated by the
+user. The link label should make the destination clear before navigation.
+Chinese-Chinese support in this phase is therefore a lookup-link surface, not an
+in-app native definition surface. Do not copy remote Chinese-Chinese definition
+text into extension storage, Markdown exports, backups, or generated assets.
+
+Use the captured display form as the query text by default. If the user captured
+traditional text, pass the traditional captured form rather than forcing the
+normalized simplified/dedupe key. This keeps external lookup behavior aligned
+with what the user saw while reading.
 
 ## Tone Behavior
 
@@ -326,7 +366,8 @@ dictionary exact match exists.
 ## Error Handling
 
 - If the dictionary asset cannot be loaded, show the panel with tone chips and
-  source examples, plus a small "dictionary unavailable" message.
+  source examples, external dictionary links, plus a small "dictionary
+  unavailable" message.
 - If a CC-CEDICT line cannot be parsed during asset generation, skip it and
   report the count in the generator output.
 - If a source URL is missing, render the source title as plain text.
@@ -345,6 +386,8 @@ dictionary exact match exists.
 - Runtime dictionary lookup is fully local.
 - The dictionary asset should be loaded only in the dashboard, not in the
   background service worker or popup.
+- External dictionary pages are never contacted automatically. MDBG and 百度汉语
+  receive the query only after an explicit user click.
 - Capture must remain fast and should not do dictionary lookup.
 - Review should compute insight only after reveal, or lazily when the card is
   opened.
@@ -374,7 +417,7 @@ Add focused unit tests:
 - `tests/word-insight.test.ts`: exact match, no-definition fallback, component
   fallback, single-character fallback, dictionary-driven tone chips,
   pinyin-pro fallback tone chips, source sentence highlighting, occurrence
-  deduping, and long-input segmentation caps.
+  deduping, external link generation, and long-input segmentation caps.
 - `tests/review-insight.test.ts` or component tests if the project adds a React
   test renderer later; otherwise keep review reveal logic in pure functions and
   test those.
@@ -400,7 +443,9 @@ empty surrounding context.
 4. Add pure word insight computation and tests.
 5. Add `WordInsightPanel` to expanded word cards.
 6. Add reveal mode to review cards using the same insight data.
-7. Update README with the new study workflow and dictionary attribution.
+7. Add click-only external lookup buttons for MDBG and 百度汉语.
+8. Update README with the new study workflow, dictionary attribution, and
+   external dictionary privacy boundary.
 
 ## Acceptance Criteria
 
@@ -425,8 +470,14 @@ empty surrounding context.
 - Review cards can hide insight until reveal.
 - No runtime network request is required for definitions, pinyin, tone display,
   or examples.
-- The only external lookup is a user-click MDBG link using
+- No Chinese-Chinese dictionary data is bundled, mirrored, scraped, cached, or
+  redistributed.
+- External lookup includes a user-click MDBG link using
   `https://www.mdbg.net/chinese/dictionary?wd=<encoded word>`.
+- External lookup also includes a user-click 百度汉语 link using
+  `https://hanyu.baidu.com/s?wd=<encoded word>`.
+- The extension does not fetch either external dictionary page before the user
+  clicks its link.
 - First dictionary initialization and subsequent cache-hit timings are measured
   against the budgets in the Privacy And Performance section.
 - Dictionary attribution is visible in the repo and accessible from the UI.

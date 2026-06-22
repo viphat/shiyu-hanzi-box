@@ -555,10 +555,10 @@ contextMenus: Adds user-triggered "save as word", "save as quote", and "open das
 Run:
 
 ```bash
-rg -n "entrypoints/newtab|newtab\\.html|new-tab override|New-tab dashboard|uses a new-tab override" README.md AGENTS.md docs/chrome-web-store-reviewer-notes.md docs/chrome-web-store-dashboard-checklist.md entrypoints tests
+rg -n --glob '!tests/dashboard-access.test.ts' "entrypoints/newtab|newtab\\.html|new-tab override|New-tab dashboard|uses a new-tab override" README.md AGENTS.md docs/chrome-web-store.md docs/chrome-web-store-reviewer-notes.md docs/chrome-web-store-dashboard-checklist.md entrypoints tests
 ```
 
-Expected: no matches in current source, tests, README, AGENTS, or Chrome Web Store docs.
+Expected: no matches in current source, non-guard tests, README, AGENTS, or Chrome Web Store docs.
 
 - [ ] **Step 7: Run docs/source guard tests**
 

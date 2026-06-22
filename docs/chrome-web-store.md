@@ -25,8 +25,8 @@ notes.
 
 ## Permission Audit
 
-- `contextMenus`: Adds "save as word" and "save as quote" actions for selected
-  page text.
+- `contextMenus`: Adds user-triggered "save as word", "save as quote", and
+  "open dashboard" actions.
 - `storage`: Stores the local inbox, settings, API keys, AI results, and runtime
   metadata in extension storage.
 - `activeTab`: Lets user-triggered capture read the active tab only after a

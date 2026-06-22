@@ -27,7 +27,7 @@ describe('background context menus', () => {
     vi.spyOn(fakeBrowser.runtime.onInstalled, 'addListener').mockImplementation((listener) => {
       installedListener = listener as InstalledListener;
     });
-    vi.spyOn(fakeBrowser.contextMenus, 'create').mockImplementation(() => undefined);
+    vi.spyOn(fakeBrowser.contextMenus, 'create').mockImplementation(() => '' as any);
     vi.spyOn(fakeBrowser.contextMenus.onClicked, 'addListener').mockImplementation((listener) => {
       menuClickListener = listener as MenuClickListener;
     });

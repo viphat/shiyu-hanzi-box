@@ -12,8 +12,10 @@ The implementation plan is in:
 - `docs/superpowers/plans/2026-06-20-shiyu-hanzi-box.md`
 - `docs/superpowers/specs/2026-06-20-shiyu-hanzi-box-design.md`
 - `docs/superpowers/plans/2026-06-21-word-insight-panel-ai.md`
+- `docs/superpowers/specs/2026-06-22-traditional-chinese-conversion-design.md`
+- `docs/superpowers/plans/2026-06-22-traditional-chinese-conversion.md`
 
-Tasks 0 through 15 have landed.
+Tasks 0 through 15 and the Traditional Chinese conversion feature have landed.
 
 ## Commands
 
@@ -35,6 +37,7 @@ npx vitest run tests/normalize.test.ts
 npx vitest run tests/capture.test.ts
 npx vitest run tests/capture-handler.test.ts
 npx vitest run tests/pinyin.test.ts
+npx vitest run tests/traditional.test.ts
 npx vitest run tests/markdown.test.ts
 npx vitest run tests/export.test.ts
 ```
@@ -67,6 +70,10 @@ The central data path is:
    not persisted on `WordEntry`.
 9. `lib/ai/*` adds an opt-in BYO-key AI layer. AI insight is generated only
    after an explicit user click, then persisted on `WordEntry.aiInsight`.
+10. `lib/traditional.ts` and `entrypoints/newtab/components/TraditionalButton.tsx`
+    add one-click Simplified → Taiwan Traditional conversion for word and quote
+    cards. Converted text is generated only after an explicit user click, then
+    persisted on `EntryBase.traditionalText`.
 
 Core modules:
 
@@ -77,6 +84,8 @@ Core modules:
 - `lib/capture.ts`: `saveWord` and `saveQuote`.
 - `lib/page-context.ts`: self-contained injected function.
 - `lib/pinyin.ts`: `pinyin-pro` wrapper for lazy dashboard pinyin generation.
+- `lib/traditional.ts`: `opencc-js` wrapper for lazy dashboard Simplified →
+  Taiwan Traditional conversion using `cn -> twp`.
 - `lib/pinyin-helpers.ts`: CC-CEDICT numbered pinyin → tone marks/numbers, and
   pinyin-pro fallback for tone chips when no dictionary match exists.
 - `lib/dictionary.ts`: CC-CEDICT parsing, compact asset build/materialize,
@@ -109,6 +118,8 @@ Core modules:
   disabled / loading / error / retry states.
 - `entrypoints/newtab/components/AiInsightSection.tsx`: renders persisted AI
   insight below local sections.
+- `entrypoints/newtab/components/TraditionalButton.tsx`: generate / show / hide
+  control for cached Taiwan Traditional text on word and quote cards.
 - `entrypoints/newtab/components/ReviewInsightReveal.tsx`: reveal interaction
   in `ReviewQueue`.
 - `entrypoints/newtab/hooks/useWordInsight.ts`: loads the dictionary once per
@@ -135,6 +146,9 @@ Core modules:
 - Keep injected functions self-contained. `readPageContext` must not depend on
   imported closure state because it is serialized into the active tab.
 - Prefer pure modules for behavior that can be unit-tested without Chrome APIs.
+- Keep Traditional conversion as a display annotation. Do not use
+  `traditionalText` for capture, normalize, dedupe, review scheduling, Markdown
+  export, or zip export behavior.
 - Use `@/*` imports where existing WXT code does, and relative imports where the
   file already uses that style.
 - Use `apply_patch` for manual edits.

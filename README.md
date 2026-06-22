@@ -29,6 +29,8 @@ Implemented:
   inbox.
 - New-tab dashboard with search, status filters, cards, edit controls, pinyin,
   export actions, and backup/restore controls.
+- One-click Simplified to Taiwan Traditional conversion on word and quote cards,
+  powered by OpenCC and cached on each entry.
 - Offline Word Insight Panel with CC-CEDICT definitions, tone chips, source
   examples, external dictionary links, and review reveal mode.
 - Opt-in AI Insight layer with BYO API key, provider picker, generated bilingual
@@ -56,6 +58,18 @@ Expanding a saved word in the dashboard shows:
 
 Review cards gain a **显示释义** reveal button so you can test yourself before
 seeing pinyin and definitions.
+
+### Traditional Chinese Conversion
+
+Word and quote cards include a small **繁** conversion control. The first click
+converts the saved entry text from Simplified Chinese to Taiwan-style
+Traditional Chinese using `opencc-js` with the `cn -> twp` phrase config, then
+caches the result on the entry as `traditionalText`. After conversion, the same
+control toggles the Traditional rendering on or off for the current dashboard
+session.
+
+The conversion is local and synchronous. It does not add permissions, make
+network requests, affect capture dedupe, or change Markdown/zip exports.
 
 ### AI Insight (opt-in)
 
@@ -149,7 +163,7 @@ flowchart LR
 ```
 
 Words and quotes share common metadata such as `id`, `text`, `note`, `status`,
-`createdAt`, `updatedAt`, and optional `pinyin`.
+`createdAt`, `updatedAt`, optional `pinyin`, and optional `traditionalText`.
 
 Words also store a `normalized` dedupe key and an `occurrences[]` list containing
 source page metadata. Quotes store source metadata directly, keep optional tags,
@@ -177,7 +191,7 @@ entrypoints/
     hooks/useAiInsight.ts # AI insight request + persistence hook
     hooks/useInbox.ts    # live WXT inbox storage hook
     hooks/useSettings.ts # live WXT settings storage hook
-    components/          # toolbar, word/quote cards, lists, pinyin button
+    components/          # toolbar, word/quote cards, lists, pinyin/traditional controls
 lib/
   ai/
     client.ts            # OpenAI-compatible fetch wrapper
@@ -196,6 +210,7 @@ lib/
   normalize.ts           # word normalization
   page-context.ts        # injected selection reader
   pinyin.ts              # pinyin-pro wrapper
+  traditional.ts         # opencc-js Simplified -> Taiwan Traditional wrapper
   storage.ts             # WXT storage item and serialized mutations
   settings.ts            # WXT app settings storage and helpers
   types.ts               # persisted data shapes
@@ -206,6 +221,7 @@ tests/
   markdown.test.ts
   normalize.test.ts
   pinyin.test.ts
+  traditional.test.ts
 ```
 
 Design and implementation planning live under `docs/superpowers/`.

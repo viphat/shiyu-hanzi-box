@@ -127,8 +127,10 @@ Filtered records are expected for Kaikki dumps: the importer only keeps unique
 Chinese headwords that contain at least one Han character and at least one
 usable `glosses` or `raw_glosses` definition. Kaikki also includes Chinese
 records such as Latin-script loanwords, redirects, and no-gloss character
-metadata; those are ignored because they cannot improve the Hanzi fallback
-dictionary.
+metadata; no-definition records are ignored because they cannot improve the
+Hanzi fallback dictionary. Definition-bearing records can still contribute
+lookup aliases from their `forms`, so Simplified variants such as `滞涨` can
+resolve through Traditional Kaikki headwords such as `滯漲`.
 
 Kaikki data comes from [Kaikki/Wiktextract](https://kaikki.org/) and its
 published dictionary dumps. Review the Kaikki source page and Wiktionary license

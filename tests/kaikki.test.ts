@@ -6,6 +6,7 @@ import {
   manualKaikkiDownloadUrl,
   parseKaikkiJsonl,
 } from '../lib/kaikki';
+import { buildIndex, lookupExact } from '../lib/dictionary';
 
 describe('parseKaikkiJsonl', () => {
   it('parses Chinese JSONL entries and skips invalid or unsupported lines', () => {
@@ -65,6 +66,33 @@ describe('parseKaikkiJsonl', () => {
     );
 
     expect(result.entries[0].definitions).toEqual(['Classical Chinese']);
+  });
+
+  it('imports Kaikki forms as variants while filtering no-gloss soft redirects', () => {
+    const jsonl = [
+      JSON.stringify({
+        word: '滯漲',
+        lang_code: 'zh',
+        sounds: [{ zh_pron: 'zhìzhàng', tags: ['Mandarin', 'Pinyin'] }],
+        forms: [{ form: '滞涨', tags: ['Simplified-Chinese'] }],
+        senses: [{ glosses: ['stagflation'] }],
+      }),
+      JSON.stringify({
+        word: '滞涨',
+        lang_code: 'zh',
+        pos: 'soft-redirect',
+        senses: [{ tags: ['no-gloss'] }],
+      }),
+    ].join('\n');
+
+    const result = parseKaikkiJsonl(jsonl);
+    const hits = lookupExact(buildIndex(result.entries), '滞涨');
+
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0].variants).toEqual(['滞涨']);
+    expect(result.skipped).toBe(1);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].definitions).toEqual(['stagflation']);
   });
 });
 

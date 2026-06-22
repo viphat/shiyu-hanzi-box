@@ -146,13 +146,15 @@ export interface DictionaryEntry {
   simplified: string;
   pinyin: string;
   definitions: string[];
+  /** Additional runtime lookup forms, e.g. Kaikki simplified aliases. */
+  variants?: string[];
   /** Runtime-only source label. Cached/generated assets do not need this field. */
   source?: DictionarySourceId;
 }
 
 /** Runtime lookup index materialized from the compact asset. Never persisted in chrome.storage. */
 export interface DictionaryIndex {
-  /** key = normalized simplified/traditional form; value = matching entries in dictionary order. */
+  /** key = normalized simplified/traditional/variant form; value = matching entries in dictionary order. */
   byForm: Map<string, DictionaryEntry[]>;
   /** Longest normalized dictionary key length, used by component segmentation. */
   maxKeyLength: number;

@@ -121,7 +121,10 @@ Core modules:
 - `lib/kaikki.ts`: Kaikki JSONL parser, streaming parser, URL validation, and
   entry hashing. The parser intentionally filters out records without Han
   characters or without usable `glosses` / `raw_glosses`; progress UI should
-  describe these as filtered records rather than failed imports.
+  describe these as filtered records rather than failed imports. Definition
+  bearing records may index Han-character `forms` as runtime lookup variants;
+  no-gloss soft redirects stay filtered unless the target definition appears on
+  another record with that form.
 - `entrypoints/newtab/`: dashboard shell, toolbar, cards, lists, and storage
   hook.
 

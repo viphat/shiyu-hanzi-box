@@ -172,7 +172,7 @@ export function buildIndex(entries: DictionaryEntry[]): DictionaryIndex {
   const byForm = new Map<string, DictionaryEntry[]>();
   let maxKeyLength = 0;
   for (const entry of entries) {
-    for (const surface of new Set([entry.simplified, entry.traditional])) {
+    for (const surface of new Set([entry.simplified, entry.traditional, ...(entry.variants ?? [])])) {
       const key = formKey(surface);
       const list = byForm.get(key);
       if (list) list.push(entry);

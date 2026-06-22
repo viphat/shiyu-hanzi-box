@@ -12,12 +12,17 @@ interface KaikkiSound {
   'zh-pron'?: unknown;
 }
 
+interface KaikkiForm {
+  form?: unknown;
+}
+
 interface KaikkiRecord {
   word?: unknown;
   lang?: unknown;
   lang_code?: unknown;
   senses?: unknown;
   sounds?: unknown;
+  forms?: unknown;
 }
 
 export interface KaikkiParseResult {
@@ -45,7 +50,7 @@ export function parseKaikkiJsonl(jsonl: string): KaikkiParseResult {
 }
 
 export function createKaikkiJsonlStreamParser(): KaikkiJsonlStreamParser {
-  const bySurface = new Map<string, { pinyin: string; definitions: string[] }>();
+  const bySurface = new Map<string, { pinyin: string; definitions: string[]; variants: string[] }>();
   let skipped = 0;
   let pending = '';
 
@@ -73,27 +78,35 @@ export function createKaikkiJsonlStreamParser(): KaikkiJsonlStreamParser {
       return;
     }
 
+    const pinyin = extractPinyin(record);
+    const variants = extractVariants(record, surface);
     const existing = bySurface.get(surface);
     if (existing) {
       existing.definitions = unique([...existing.definitions, ...definitions]);
-      if (!existing.pinyin) existing.pinyin = extractPinyin(record);
+      existing.variants = unique([...existing.variants, ...variants]);
+      if (!existing.pinyin) existing.pinyin = pinyin;
     } else {
       bySurface.set(surface, {
-        pinyin: extractPinyin(record),
+        pinyin,
         definitions,
+        variants,
       });
     }
   }
 
   function result(): KaikkiParseResult {
     return {
-      entries: Array.from(bySurface.entries()).map(([surface, entry], index) => ({
-        index,
-        traditional: surface,
-        simplified: surface,
-        pinyin: entry.pinyin,
-        definitions: entry.definitions,
-      })),
+      entries: Array.from(bySurface.entries()).map(([surface, entry], index) => {
+        const dictionaryEntry: DictionaryEntry = {
+          index,
+          traditional: surface,
+          simplified: surface,
+          pinyin: entry.pinyin,
+          definitions: entry.definitions,
+        };
+        if (entry.variants.length > 0) dictionaryEntry.variants = entry.variants;
+        return dictionaryEntry;
+      }),
       skipped,
     };
   }
@@ -138,6 +151,15 @@ function extractPinyin(record: KaikkiRecord): string {
     }
   }
   return '';
+}
+
+function extractVariants(record: KaikkiRecord, surface: string): string[] {
+  if (!Array.isArray(record.forms)) return [];
+  return unique(
+    (record.forms as KaikkiForm[])
+      .map((form) => (typeof form.form === 'string' ? form.form.trim() : ''))
+      .filter((form) => form.length > 0 && form !== surface && CJK.test(form)),
+  );
 }
 
 function stringArray(value: unknown): string[] {

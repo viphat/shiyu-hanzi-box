@@ -123,6 +123,24 @@ describe('buildIndex + lookupExact', () => {
     expect(hits).toHaveLength(1);
     expect(hits[0].definitions).toEqual(['China']);
   });
+
+  it('finds runtime entries by imported variant forms', () => {
+    const variantIndex = buildIndex([
+      {
+        index: 0,
+        traditional: '滯漲',
+        simplified: '滯漲',
+        pinyin: 'zhìzhàng',
+        definitions: ['stagflation'],
+        variants: ['滞涨'],
+      },
+    ]);
+
+    const hits = lookupExact(variantIndex, '滞涨');
+
+    expect(hits).toHaveLength(1);
+    expect(hits[0].definitions).toEqual(['stagflation']);
+  });
 });
 
 describe('segmentComponents', () => {

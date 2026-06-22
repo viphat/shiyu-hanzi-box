@@ -152,6 +152,7 @@ export function computeWordInsight(
   const highlightVariants = exactEntries.flatMap((entry) => [
     entry.simplified,
     entry.traditional,
+    ...(entry.variants ?? []),
   ]);
   const examples = buildHighlightedExamples(
     displayText,

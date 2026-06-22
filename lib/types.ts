@@ -27,6 +27,8 @@ interface EntryBase {
   createdAt: number;
   updatedAt: number;
   pinyin?: string;
+  /** Cached Simplified to Traditional (Taiwan) form, generated on demand. */
+  traditionalText?: string;
   review?: ReviewState;
 }
 

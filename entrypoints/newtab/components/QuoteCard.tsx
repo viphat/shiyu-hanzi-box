@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { t } from '@/lib/i18n';
 import type { QuoteEntry, UiLocale } from '@/lib/types';
+import { TraditionalButton } from './TraditionalButton';
 
 export function QuoteCard({
   quote,
@@ -14,6 +15,7 @@ export function QuoteCard({
   locale: UiLocale;
 }) {
   const [note, setNote] = useState(quote.note);
+  const [showTraditional, setShowTraditional] = useState(false);
 
   return (
     <div className="rounded-sm border border-border bg-paper-light p-4 shadow-sm transition hover:border-border-hover hover:shadow-md">
@@ -26,6 +28,9 @@ export function QuoteCard({
           」
         </span>
       </blockquote>
+      {showTraditional && quote.traditionalText && (
+        <p className="mt-2 pl-5 text-sm italic text-cinnabar">{quote.traditionalText}</p>
+      )}
       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">
         <input
           value={quote.category}
@@ -42,6 +47,14 @@ export function QuoteCard({
             {quote.sourceTitle || quote.sourceDomain}
           </a>
         )}
+        <TraditionalButton
+          text={quote.text}
+          existing={quote.traditionalText}
+          onGenerated={(traditionalText) => onUpdate({ traditionalText })}
+          shown={showTraditional}
+          onToggle={() => setShowTraditional((value) => !value)}
+          locale={locale}
+        />
       </div>
       <textarea
         value={note}

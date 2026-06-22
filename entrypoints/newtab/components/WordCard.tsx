@@ -12,6 +12,7 @@ import {
 import { t } from '@/lib/i18n';
 import type { UiLocale, WordEntry } from '@/lib/types';
 import { PinyinButton } from './PinyinButton';
+import { TraditionalButton } from './TraditionalButton';
 import { WordInsightPanel } from './WordInsightPanel';
 
 export function WordCard({
@@ -27,6 +28,7 @@ export function WordCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [note, setNote] = useState(word.note);
+  const [showTraditional, setShowTraditional] = useState(false);
   const occurrences = displayableOccurrences(word.occurrences);
   const latest = latestDisplayableOccurrence(word.occurrences);
   const latestLabel = latest ? occurrenceSourceLabel(latest) : '';
@@ -53,6 +55,14 @@ export function WordCard({
               onGenerated={(pinyin) => onUpdate({ pinyin })}
               locale={locale}
             />
+            <TraditionalButton
+              text={word.text}
+              existing={word.traditionalText}
+              onGenerated={(traditionalText) => onUpdate({ traditionalText })}
+              shown={showTraditional}
+              onToggle={() => setShowTraditional((value) => !value)}
+              locale={locale}
+            />
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-7">
             {occurrences.length > 0 && (
@@ -64,6 +74,9 @@ export function WordCard({
               <span className="truncate rounded-sm border border-border bg-paper-input px-2 py-0.5 text-xs text-muted">
                 {latestLabel}
               </span>
+            )}
+            {showTraditional && word.traditionalText && (
+              <span className="text-xs italic text-cinnabar">{word.traditionalText}</span>
             )}
           </div>
         </div>

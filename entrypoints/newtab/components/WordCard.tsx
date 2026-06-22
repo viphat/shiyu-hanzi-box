@@ -84,7 +84,7 @@ export function WordCard({
               onClick={() => onUpdate({ status: 'reviewed' })}
               className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-cinnabar-border bg-cinnabar-light text-xs font-semibold text-cinnabar transition hover:bg-cinnabar hover:text-white"
             >
-              {locale === 'en' ? 'R' : '阅'}
+              {t(locale, 'word.markReviewedShort')}
             </button>
           )}
           {word.status !== 'archived' && (
@@ -93,7 +93,7 @@ export function WordCard({
               onClick={() => onUpdate({ status: 'archived' })}
               className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-border bg-transparent text-xs font-semibold text-muted transition hover:border-border-hover hover:bg-paper-input hover:text-ink-secondary"
             >
-              {locale === 'en' ? 'A' : '档'}
+              {t(locale, 'word.archiveShort')}
             </button>
           )}
           <button
@@ -101,7 +101,7 @@ export function WordCard({
             onClick={onDelete}
             className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-border bg-transparent text-xs font-semibold text-muted transition hover:border-cinnabar-border hover:bg-cinnabar-light hover:text-cinnabar"
           >
-            {locale === 'en' ? 'D' : '删'}
+            {t(locale, 'word.deleteShort')}
           </button>
         </div>
       </div>

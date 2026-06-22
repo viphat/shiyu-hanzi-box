@@ -58,7 +58,7 @@ export function QuoteCard({
             title={t(locale, 'word.markReviewed')}
             className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-cinnabar-border bg-cinnabar-light text-xs font-semibold text-cinnabar transition hover:bg-cinnabar hover:text-white"
           >
-            {locale === 'en' ? 'R' : '阅'}
+            {t(locale, 'word.markReviewedShort')}
           </button>
         )}
         {quote.status !== 'archived' && (
@@ -67,7 +67,7 @@ export function QuoteCard({
             title={t(locale, 'word.archive')}
             className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-border bg-transparent text-xs font-semibold text-muted transition hover:border-border-hover hover:bg-paper-input hover:text-ink-secondary"
           >
-            {locale === 'en' ? 'A' : '档'}
+            {t(locale, 'word.archiveShort')}
           </button>
         )}
         <button
@@ -75,7 +75,7 @@ export function QuoteCard({
           title={t(locale, 'word.delete')}
           className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-border bg-transparent text-xs font-semibold text-muted transition hover:border-cinnabar-border hover:bg-cinnabar-light hover:text-cinnabar"
         >
-          {locale === 'en' ? 'D' : '删'}
+          {t(locale, 'word.deleteShort')}
         </button>
       </div>
     </div>

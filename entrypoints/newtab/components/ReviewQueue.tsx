@@ -108,21 +108,21 @@ function ReviewCard({
       <div className="mt-4 flex flex-wrap justify-end gap-2">
         <button
           onClick={onView}
-          title={locale === 'en' ? 'Mark viewed and schedule the next review' : '标记已阅并安排下次复习'}
+          title={t(locale, 'review.markViewedTitle')}
           className="inline-flex items-center gap-1 rounded-sm bg-cinnabar px-3 py-2 text-sm font-medium text-white shadow-sm tracking-[2px] transition hover:brightness-95"
         >
           <Eye className="h-4 w-4" /> {t(locale, 'review.markViewed')}
         </button>
         <button
           onClick={onSkip}
-          title={locale === 'en' ? 'Review this card tomorrow' : '这张卡片明日再看'}
+          title={t(locale, 'review.tomorrowTitle')}
           className="inline-flex items-center gap-1 rounded-sm border border-border bg-transparent px-3 py-2 text-sm font-medium text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input"
         >
           <SkipForward className="h-4 w-4" /> {t(locale, 'review.tomorrow')}
         </button>
         <button
           onClick={onRepeat}
-          title={locale === 'en' ? 'Move to the end of today’s queue' : '移到今日队尾'}
+          title={t(locale, 'review.laterTitle')}
           className="inline-flex items-center gap-1 rounded-sm border border-border bg-transparent px-3 py-2 text-sm font-medium text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input"
         >
           <Repeat2 className="h-4 w-4" /> {t(locale, 'review.later')}

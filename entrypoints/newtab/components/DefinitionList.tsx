@@ -1,4 +1,5 @@
 import type { DictionaryEntry, UiLocale } from '@/lib/types';
+import { t } from '@/lib/i18n';
 
 export function DefinitionList({
   title,
@@ -25,7 +26,7 @@ export function DefinitionList({
               {entry.pinyin && <span className="text-xs text-cinnabar">{entry.pinyin}</span>}
               {entry.source === 'kaikki' && (
                 <span className="rounded-sm border border-cinnabar-border bg-cinnabar-light px-1.5 py-0.5 text-[10px] text-cinnabar">
-                  {locale === 'en' ? 'Kaikki' : 'Kaikki 补充'}
+                  {t(locale, 'dictionary.kaikkiBadge')}
                 </span>
               )}
             </div>

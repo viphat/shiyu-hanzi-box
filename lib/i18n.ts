@@ -25,21 +25,29 @@ export const messages = {
     'toolbar.restoring': 'Restoring...',
     'toolbar.settings': 'Settings',
     'toolbar.backupReady': 'Backup JSON is ready.',
+    'toolbar.restoreConfirm': 'Restore {count} entries from "{name}"? This replaces the current local collection.',
+    'toolbar.restoreSuccess': 'Restored {count} entries from backup.',
     'toolbar.restoreFailed': 'Could not restore this backup file.',
     'review.emptyTitle': 'Review is clear today',
     'review.emptyBody': 'New words and quotes appear here until you archive them.',
     'review.kindWord': 'Word',
     'review.kindQuote': 'Quote',
     'review.markViewed': 'Viewed',
+    'review.markViewedTitle': 'Mark viewed and schedule the next review',
     'review.tomorrow': 'Tomorrow',
+    'review.tomorrowTitle': 'Review this card tomorrow',
     'review.later': 'Later',
+    'review.laterTitle': 'Move to the end of today\'s queue',
     'review.showDefinitions': 'Show definitions',
     'word.emptyTitle': 'No words yet',
     'word.emptyBody': 'Save a word from a web page and it will unfold here.',
     'word.encounters': 'encounters',
     'word.markReviewed': 'Mark reviewing',
+    'word.markReviewedShort': 'R',
     'word.archive': 'Archive',
+    'word.archiveShort': 'A',
     'word.delete': 'Delete',
+    'word.deleteShort': 'D',
     'word.openAiInsight': 'Open AI insight',
     'word.allEncounters': 'All encounters',
     'word.notePlaceholder': 'Write your own understanding...',
@@ -55,6 +63,7 @@ export const messages = {
     'insight.source': 'Source',
     'dictionary.ccCedict': 'Dictionary: CC-CEDICT',
     'dictionary.kaikki': 'Kaikki extension dictionary',
+    'dictionary.kaikkiBadge': 'Kaikki',
     'settings.title': 'Settings',
     'settings.back': 'Back to dashboard',
     'settings.language': 'Language',
@@ -120,21 +129,29 @@ export const messages = {
     'toolbar.restoring': '还原中...',
     'toolbar.settings': '设置',
     'toolbar.backupReady': '备份 JSON 已备好。',
+    'toolbar.restoreConfirm': '要从「{name}」还原 {count} 条记录吗？这会替换当前本地收藏箱。',
+    'toolbar.restoreSuccess': '已从备份还原 {count} 条记录。',
     'toolbar.restoreFailed': '无法还原这个备份文件。',
     'review.emptyTitle': '今日复习清空了',
     'review.emptyBody': '新拾到的词句会先出现在这里，直到你把它们归档。',
     'review.kindWord': '词',
     'review.kindQuote': '句',
     'review.markViewed': '已阅',
+    'review.markViewedTitle': '标记已阅并安排下次复习',
     'review.tomorrow': '明日',
+    'review.tomorrowTitle': '这张卡片明日再看',
     'review.later': '稍后',
+    'review.laterTitle': '移到今日队尾',
     'review.showDefinitions': '显示释义',
     'word.emptyTitle': '还没有词语',
     'word.emptyBody': '去网页里拾一个字词，收藏箱会在这里展开。',
     'word.encounters': '次相遇',
     'word.markReviewed': '标为复习中',
+    'word.markReviewedShort': '阅',
     'word.archive': '归档',
+    'word.archiveShort': '档',
     'word.delete': '删除',
+    'word.deleteShort': '删',
     'word.openAiInsight': '打开 AI 释义',
     'word.allEncounters': '所有相遇',
     'word.notePlaceholder': '写一点自己的理解...',
@@ -150,6 +167,7 @@ export const messages = {
     'insight.source': '来源',
     'dictionary.ccCedict': 'Dictionary: CC-CEDICT',
     'dictionary.kaikki': 'Kaikki 扩展词典',
+    'dictionary.kaikkiBadge': 'Kaikki 补充',
     'settings.title': '设置',
     'settings.back': '返回主页',
     'settings.language': '界面语言',
@@ -197,4 +215,16 @@ export type MessageKey = keyof typeof messages.en;
 
 export function t(locale: UiLocale, key: MessageKey): string {
   return messages[locale][key] ?? String(key);
+}
+
+export function formatMessage(
+  locale: UiLocale,
+  key: MessageKey,
+  values: Record<string, string | number>,
+): string {
+  return t(locale, key).replace(/\{(\w+)\}/g, (match, name: string) => {
+    return Object.prototype.hasOwnProperty.call(values, name)
+      ? String(values[name])
+      : match;
+  });
 }

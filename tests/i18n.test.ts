@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { t } from '../lib/i18n';
+import { formatMessage, t } from '../lib/i18n';
 
 describe('i18n messages', () => {
   it('returns English settings labels', () => {
@@ -18,5 +18,12 @@ describe('i18n messages', () => {
 
   it('falls back to the key when a message is missing', () => {
     expect(t('en', 'missing.key' as never)).toBe('missing.key');
+  });
+
+  it('formats messages with named values', () => {
+    expect(formatMessage('en', 'toolbar.restoreSuccess', { count: 3 })).toBe('Restored 3 entries from backup.');
+    expect(formatMessage('zh-CN', 'toolbar.restoreConfirm', { count: 3, name: 'notes.json' })).toBe(
+      '要从「notes.json」还原 3 条记录吗？这会替换当前本地收藏箱。',
+    );
   });
 });

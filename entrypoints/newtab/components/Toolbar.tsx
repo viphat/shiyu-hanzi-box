@@ -4,7 +4,7 @@ import { browser } from 'wxt/browser';
 import { BackupParseError, parseBackup, serializeBackup } from '@/lib/backup';
 import { loadDictionary } from '@/lib/dictionary-loader';
 import { buildExportMap, exportInboxAsZip } from '@/lib/export';
-import { t } from '@/lib/i18n';
+import { formatMessage, t } from '@/lib/i18n';
 import type { Inbox, UiLocale } from '@/lib/types';
 
 export function Toolbar({
@@ -91,9 +91,7 @@ export function Toolbar({
       const restored = parseBackup(await file.text());
       const count = restored.words.length + restored.quotes.length;
       const confirmed = window.confirm(
-        locale === 'en'
-          ? `Restore ${count} entries from "${file.name}"? This replaces the current local collection.`
-          : `要从「${file.name}」还原 ${count} 条记录吗？这会替换当前本地收藏箱。`,
+        formatMessage(locale, 'toolbar.restoreConfirm', { count, name: file.name }),
       );
 
       if (!confirmed) return;
@@ -101,7 +99,7 @@ export function Toolbar({
       await onRestore(restored);
       setMessage({
         tone: 'success',
-        text: locale === 'en' ? `Restored ${count} entries from backup.` : `已从备份还原 ${count} 条记录。`,
+        text: formatMessage(locale, 'toolbar.restoreSuccess', { count }),
       });
     } catch (error) {
       setMessage({

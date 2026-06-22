@@ -20,6 +20,15 @@ describe('i18n messages', () => {
     expect(t('en', 'missing.key' as never)).toBe('missing.key');
   });
 
+  it('returns Traditional conversion labels in both locales', () => {
+    expect(t('en', 'traditional.generate')).toBe('Traditional');
+    expect(t('en', 'traditional.show')).toBe('Show Traditional');
+    expect(t('en', 'traditional.hide')).toBe('Hide Traditional');
+    expect(t('zh-CN', 'traditional.generate')).toBe('繁體');
+    expect(t('zh-CN', 'traditional.show')).toBe('显示繁體');
+    expect(t('zh-CN', 'traditional.hide')).toBe('隐藏繁體');
+  });
+
   it('formats messages with named values', () => {
     expect(formatMessage('en', 'toolbar.restoreSuccess', { count: 3 })).toBe('Restored 3 entries from backup.');
     expect(formatMessage('zh-CN', 'toolbar.restoreConfirm', { count: 3, name: 'notes.json' })).toBe(

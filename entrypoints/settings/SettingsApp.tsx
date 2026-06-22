@@ -16,7 +16,7 @@ import {
   setUiLocale,
 } from '@/lib/settings';
 import type { AiSettings, UiLocale } from '@/lib/types';
-import { useSettings } from '../newtab/hooks/useSettings';
+import { useSettings } from '../dashboard/hooks/useSettings';
 import { AiSettingsPanel } from './AiSettingsPanel';
 import type {
   KaikkiImportProgress,
@@ -240,7 +240,7 @@ export function SettingsApp() {
       <header className="cinnabar-header-accent border-b-2 border-border-strong bg-paper-light">
         <div className="mx-auto max-w-4xl px-5 py-6">
           <a
-            href={browser.runtime.getURL('/newtab.html')}
+            href={browser.runtime.getURL('/dashboard.html')}
             className="mb-5 inline-flex items-center gap-1 text-xs text-muted hover:text-cinnabar"
           >
             <ArrowLeft className="h-3.5 w-3.5" />

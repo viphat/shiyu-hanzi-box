@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { AiInsightSection } from '../entrypoints/newtab/components/AiInsightSection';
-import { AskAiButton } from '../entrypoints/newtab/components/AskAiButton';
+import { AiInsightSection } from '../entrypoints/dashboard/components/AiInsightSection';
+import { AskAiButton } from '../entrypoints/dashboard/components/AskAiButton';
 import type { AiInsight } from '../lib/types';
 
 const insight: AiInsight = {

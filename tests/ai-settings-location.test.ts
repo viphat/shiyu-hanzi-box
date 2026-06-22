@@ -22,7 +22,7 @@ describe('AI settings UI ownership', () => {
   });
 
   it('does not expose a separate AI settings button on the dashboard home page', () => {
-    const source = readFileSync('entrypoints/newtab/App.tsx', 'utf8');
+    const source = readFileSync('entrypoints/dashboard/App.tsx', 'utf8');
 
     expect(source).not.toContain('AiSettingsPanel');
     expect(source).not.toContain('openAiSettings');

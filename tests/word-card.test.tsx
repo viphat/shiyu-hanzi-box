@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { WordCard } from '../entrypoints/newtab/components/WordCard';
+import { WordCard } from '../entrypoints/dashboard/components/WordCard';
 import { messages, t } from '../lib/i18n';
 import type { WordEntry } from '../lib/types';
 

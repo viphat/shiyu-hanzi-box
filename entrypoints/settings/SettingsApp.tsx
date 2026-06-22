@@ -2,7 +2,7 @@ import { ArrowLeft, Database, Download, Globe2, Trash2, Upload } from 'lucide-re
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { browser } from 'wxt/browser';
 import iconUrl from '../../assets/icon.png';
-import { fetchAiInsight } from '@/lib/ai/client';
+import { testAiConnection as testAiProviderConnection } from '@/lib/ai/client';
 import { requestAiSettingsPermission } from '@/lib/ai/permissions';
 import { DEFAULT_AI_SETTINGS, getAiSettings, setAiSettings } from '@/lib/ai/settings';
 import { t } from '@/lib/i18n';
@@ -217,20 +217,13 @@ export function SettingsApp() {
         return denied;
       }
 
-      const result = await fetchAiInsight({
+      const result = await testAiProviderConnection({
         baseUrl: next.baseUrl,
         apiKey: next.apiKey,
         model: next.model,
-        messages: [
-          {
-            role: 'system',
-            content: 'Return valid JSON only with keys summary, register, definitions, sampleSentences, translations, collocations, notes.',
-          },
-          { role: 'user', content: 'Connection test for 你好.' },
-        ],
         provider: next.provider,
       });
-      const display = { ok: result.ok, message: result.ok ? '连接成功' : result.reason };
+      const display = { ok: result.ok, message: result.message };
       setAiTestResult(display);
       return display;
     } catch {

@@ -114,7 +114,7 @@ export function AiSettingsPanel({
             type="url"
             value={draft.baseUrl}
             onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })}
-            placeholder="https://api.deepseek.com/v1"
+            placeholder="https://api.deepseek.com"
             className="w-full rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs text-ink outline-none focus:border-cinnabar-fade"
           />
         </div>
@@ -125,7 +125,7 @@ export function AiSettingsPanel({
             type="text"
             value={draft.model}
             onChange={(event) => setDraft({ ...draft, model: event.target.value })}
-            placeholder="deepseek-chat"
+            placeholder="deepseek-v4-flash"
             className="w-full rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs text-ink outline-none focus:border-cinnabar-fade"
           />
         </div>

@@ -59,6 +59,15 @@ describe('buildMessages', () => {
     expect(system).toContain('json');
   });
 
+  it('includes an example JSON object for providers that require JSON-mode guidance', () => {
+    const messages = buildMessages(word, undefined, [], undefined);
+    const system = messages[0].content;
+
+    expect(system).toContain('Example JSON output');
+    expect(system).toContain('"definitions":');
+    expect(system).toContain('"collocations":');
+  });
+
   it('the user message contains the word text', () => {
     const messages = buildMessages(word, undefined, [], undefined);
     const user = messages[1].content;

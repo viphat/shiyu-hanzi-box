@@ -10,7 +10,8 @@ import {
 describe('PROVIDER_PRESETS', () => {
   it('uses DeepSeek as the default preset', () => {
     expect(PROVIDER_PRESETS[0].provider).toBe('deepseek');
-    expect(PROVIDER_PRESETS[0].baseUrl).toContain('deepseek.com');
+    expect(PROVIDER_PRESETS[0].baseUrl).toBe('https://api.deepseek.com');
+    expect(PROVIDER_PRESETS[0].model).toBe('deepseek-v4-flash');
   });
 
   it('includes OpenAI with a host-permission origin', () => {

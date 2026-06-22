@@ -19,8 +19,8 @@ export const PROVIDER_PRESETS: Array<{
 }> = [
   {
     provider: 'deepseek',
-    baseUrl: 'https://api.deepseek.com/v1',
-    model: 'deepseek-chat',
+    baseUrl: 'https://api.deepseek.com',
+    model: 'deepseek-v4-flash',
     label: 'DeepSeek',
   },
   {

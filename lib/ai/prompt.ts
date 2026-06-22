@@ -15,6 +15,17 @@ const SYSTEM_PROMPT = `You are a Chinese-English dictionary assistant. Given a C
 - "collocations": an array of 2-4 common collocations or phrases
 - "notes": usage notes covering nuance, register, common mistakes, or polyphone guidance
 
+Example JSON output:
+{
+  "summary": "to travel; movement",
+  "register": "neutral",
+  "definitions": ["出行 - to go out or travel"],
+  "sampleSentences": ["周末出行的人很多。", "这条路线方便出行。"],
+  "translations": ["Many people travel on weekends.", "This route is convenient for getting around."],
+  "collocations": ["出行方式", "绿色出行"],
+  "notes": "Use for trips or everyday movement; tone is neutral."
+}
+
 Respond with valid json only. No markdown, no code fences, no commentary.`;
 
 export function buildMessages(

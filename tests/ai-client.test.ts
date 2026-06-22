@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchAiInsight } from '../lib/ai/client';
+import { fetchAiInsight, testAiConnection } from '../lib/ai/client';
 
 const VALID_RESPONSE_BODY = JSON.stringify({
   summary: 'hello',
@@ -34,16 +34,16 @@ describe('fetchAiInsight', () => {
     fetchSpy.mockResolvedValue(VALID_COMPLETION);
 
     await fetchAiInsight({
-      baseUrl: 'https://api.deepseek.com/v1',
+      baseUrl: 'https://api.deepseek.com',
       apiKey: 'sk-test',
-      model: 'deepseek-chat',
+      model: 'deepseek-v4-flash',
       messages: [{ role: 'user', content: '你好' }],
       provider: 'deepseek',
     });
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0];
-    expect(url).toBe('https://api.deepseek.com/v1/chat/completions');
+    expect(url).toBe('https://api.deepseek.com/chat/completions');
     expect((init!.headers as Record<string, string>).Authorization).toBe('Bearer sk-test');
     expect((init!.headers as Record<string, string>)['Content-Type']).toBe('application/json');
   });
@@ -52,26 +52,41 @@ describe('fetchAiInsight', () => {
     fetchSpy.mockResolvedValue(VALID_COMPLETION);
 
     await fetchAiInsight({
-      baseUrl: 'https://api.deepseek.com/v1',
+      baseUrl: 'https://api.deepseek.com',
       apiKey: 'sk-test',
-      model: 'deepseek-chat',
+      model: 'deepseek-v4-flash',
       messages: [{ role: 'user', content: 'test' }],
       provider: 'deepseek',
     });
 
     const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string);
     expect(body.response_format).toEqual({ type: 'json_object' });
-    expect(body.model).toBe('deepseek-chat');
+    expect(body.model).toBe('deepseek-v4-flash');
     expect(body.messages).toEqual([{ role: 'user', content: 'test' }]);
+  });
+
+  it('normalizes DeepSeek model version names to API model ids', async () => {
+    fetchSpy.mockResolvedValue(VALID_COMPLETION);
+
+    await fetchAiInsight({
+      baseUrl: 'https://api.deepseek.com',
+      apiKey: 'sk-test',
+      model: 'DeepSeek-V4-Flash',
+      messages: [{ role: 'user', content: 'test' }],
+      provider: 'deepseek',
+    });
+
+    const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string);
+    expect(body.model).toBe('deepseek-v4-flash');
   });
 
   it('returns the parsed AiInsight on success', async () => {
     fetchSpy.mockResolvedValue(VALID_COMPLETION);
 
     const result = await fetchAiInsight({
-      baseUrl: 'https://api.deepseek.com/v1',
+      baseUrl: 'https://api.deepseek.com',
       apiKey: 'sk-test',
-      model: 'deepseek-chat',
+      model: 'deepseek-v4-flash',
       messages: [{ role: 'user', content: 'test' }],
       provider: 'deepseek',
     });
@@ -85,7 +100,7 @@ describe('fetchAiInsight', () => {
     fetchSpy.mockResolvedValue({ ok: false, status: 401, json: async () => ({}) } as Response);
 
     const result = await fetchAiInsight({
-      baseUrl: 'https://api.deepseek.com/v1',
+      baseUrl: 'https://api.deepseek.com',
       apiKey: 'sk-bad',
       model: 'm',
       messages: [],
@@ -101,7 +116,7 @@ describe('fetchAiInsight', () => {
     fetchSpy.mockResolvedValue({ ok: false, status: 429, json: async () => ({}) } as Response);
 
     const result = await fetchAiInsight({
-      baseUrl: 'https://api.deepseek.com/v1',
+      baseUrl: 'https://api.deepseek.com',
       apiKey: 'sk',
       model: 'm',
       messages: [],
@@ -113,11 +128,32 @@ describe('fetchAiInsight', () => {
     expect(result.reason).toContain('Rate limited');
   });
 
+  it('includes provider error messages for non-auth request failures', async () => {
+    fetchSpy.mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: { message: 'Model Not Exist' } }),
+    } as Response);
+
+    const result = await fetchAiInsight({
+      baseUrl: 'https://api.deepseek.com',
+      apiKey: 'sk',
+      model: 'DeepSeek-V4-Flash',
+      messages: [],
+      provider: 'deepseek',
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toContain('HTTP 400');
+    expect(result.reason).toContain('Model Not Exist');
+  });
+
   it('returns an "unreachable" error on 5xx', async () => {
     fetchSpy.mockResolvedValue({ ok: false, status: 502, json: async () => ({}) } as Response);
 
     const result = await fetchAiInsight({
-      baseUrl: 'https://api.deepseek.com/v1',
+      baseUrl: 'https://api.deepseek.com',
       apiKey: 'sk',
       model: 'm',
       messages: [],
@@ -133,7 +169,7 @@ describe('fetchAiInsight', () => {
     fetchSpy.mockRejectedValue(new TypeError('Failed to fetch'));
 
     const result = await fetchAiInsight({
-      baseUrl: 'https://api.deepseek.com/v1',
+      baseUrl: 'https://api.deepseek.com',
       apiKey: 'sk',
       model: 'm',
       messages: [],
@@ -153,7 +189,7 @@ describe('fetchAiInsight', () => {
     } as unknown as Response);
 
     const result = await fetchAiInsight({
-      baseUrl: 'https://api.deepseek.com/v1',
+      baseUrl: 'https://api.deepseek.com',
       apiKey: 'sk',
       model: 'm',
       messages: [],
@@ -163,5 +199,59 @@ describe('fetchAiInsight', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.reason).toContain('Unexpected');
+  });
+});
+
+describe('testAiConnection', () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    fetchSpy = vi.spyOn(globalThis, 'fetch');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('succeeds for valid JSON without requiring the full insight schema', async () => {
+    fetchSpy.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [{ message: { content: '{"ok":true}' } }],
+      }),
+    } as unknown as Response);
+
+    const result = await testAiConnection({
+      baseUrl: 'https://api.deepseek.com',
+      apiKey: 'sk-test',
+      model: 'DeepSeek-V4-Flash',
+      provider: 'deepseek',
+    });
+
+    expect(result).toEqual({ ok: true, message: '连接成功' });
+    const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string);
+    expect(body.model).toBe('deepseek-v4-flash');
+    expect(body.response_format).toEqual({ type: 'json_object' });
+  });
+
+  it('returns schema-oriented feedback only when the provider content is not JSON', async () => {
+    fetchSpy.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [{ message: { content: 'hello' } }],
+      }),
+    } as unknown as Response);
+
+    const result = await testAiConnection({
+      baseUrl: 'https://api.deepseek.com',
+      apiKey: 'sk-test',
+      model: 'deepseek-v4-flash',
+      provider: 'deepseek',
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('valid JSON');
   });
 });

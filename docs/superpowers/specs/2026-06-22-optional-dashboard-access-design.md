@@ -149,10 +149,18 @@ if (info.menuItemId === MENU_OPEN_DASHBOARD) {
 
 ### Popup Button
 
-In `entrypoints/popup/Popup.tsx`, add a visible secondary action:
+In `entrypoints/popup/Popup.tsx`, add a visible secondary action using the
+existing locale table, not a hard-coded English label:
 
 ```text
 Open dashboard
+```
+
+Add a `popup.openDashboard` message in both supported locales:
+
+```text
+en: Open dashboard
+zh-CN: 打开收藏箱
 ```
 
 Click behavior:
@@ -185,21 +193,32 @@ Use TDD where practical.
 Focused tests:
 
 - Add or update a background/context-menu test to verify the action menu item is
-  registered and opens `/dashboard.html`.
+  registered and opens `/dashboard.html`. `@webext-core/fake-browser` does not
+  implement `contextMenus.create` or `contextMenus.onClicked.addListener`, so
+  mock those APIs with Vitest spies. Import the background default export, call
+  its `main()` function, capture the registered click listener, then invoke that
+  listener with `MENU_OPEN_DASHBOARD` and assert `browser.tabs.create`.
 - Update source-location tests from `entrypoints/newtab` to
   `entrypoints/dashboard`.
 - Add a popup component/source test that verifies an "Open dashboard" action
-  exists and targets `/dashboard.html`, or cover it in a component test if the
-  current test harness supports the browser mock cleanly.
+  exists through `popup.openDashboard` in both locales and targets
+  `/dashboard.html`, or cover it in a component test if the current test harness
+  supports the browser mock cleanly.
+- Update i18n tests for the new `popup.openDashboard` messages.
 
 Build verification:
 
 ```bash
+npx wxt prepare
 npm run compile
 npm test
 npm run build
 cat .output/chrome-mv3/manifest.json
 ```
+
+`npx wxt prepare` is required before the first compile after the entrypoint
+rename because WXT's generated `.wxt/types/paths.d.ts` must learn that
+`/dashboard.html` exists and `/newtab.html` does not.
 
 Expected manifest checks:
 
@@ -216,7 +235,7 @@ Update current docs that say the dashboard replaces new tab:
 - `README.md`
 - `docs/chrome-web-store-reviewer-notes.md`
 - `docs/chrome-web-store-dashboard-checklist.md`
-- Current AGENTS summary, if desired
+- `AGENTS.md`
 
 Historical plans/specs can remain as history unless a current statement would
 mislead Chrome Web Store submission notes.

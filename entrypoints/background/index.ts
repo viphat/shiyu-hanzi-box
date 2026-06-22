@@ -1,6 +1,7 @@
 import {
   handleCapture,
   handleContextMenuCapture,
+  MENU_OPEN_DASHBOARD,
   MENU_SAVE_WORD,
   MENU_SAVE_QUOTE,
 } from './capture-handler';
@@ -17,6 +18,11 @@ export default defineBackground(() => {
       title: 'Save as quote (拾语汉字box)',
       contexts: ['selection'],
     });
+    browser.contextMenus.create({
+      id: MENU_OPEN_DASHBOARD,
+      title: 'Open dashboard (拾语汉字box)',
+      contexts: ['action'],
+    });
   });
 
   browser.contextMenus.onClicked.addListener((info, tab) => {
@@ -24,6 +30,10 @@ export default defineBackground(() => {
       void handleContextMenuCapture('word', info, tab);
     } else if (info.menuItemId === MENU_SAVE_QUOTE) {
       void handleContextMenuCapture('quote', info, tab);
+    } else if (info.menuItemId === MENU_OPEN_DASHBOARD) {
+      void browser.tabs.create({
+        url: browser.runtime.getURL('/dashboard.html'),
+      });
     }
   });
 

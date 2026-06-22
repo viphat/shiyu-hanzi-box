@@ -4,6 +4,7 @@ import { readPageContext, readPageMetadata } from '@/lib/page-context';
 
 export const MENU_SAVE_WORD = 'save-word-menu';
 export const MENU_SAVE_QUOTE = 'save-quote-menu';
+export const MENU_OPEN_DASHBOARD = 'open-dashboard';
 
 export type CaptureResult =
   | { ok: true }

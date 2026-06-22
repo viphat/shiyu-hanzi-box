@@ -219,6 +219,38 @@ describe('computeWordInsight', () => {
     expect(insight.toneChips[0].source).toBe('pinyin-pro');
   });
 
+  it('dedupes Kaikki exact entries that render the same definitions', () => {
+    const fallbackIndex = buildIndex([
+      {
+        index: 0,
+        traditional: '滯漲',
+        simplified: '滯漲',
+        pinyin: 'zhìzhàng',
+        definitions: ['stagflation', 'to experience stagflation'],
+        variants: ['滞涨'],
+        source: 'kaikki',
+      },
+      {
+        index: 1,
+        traditional: '滯脹',
+        simplified: '滯脹',
+        pinyin: 'zhìzhàng',
+        definitions: ['stagflation', 'to experience stagflation'],
+        variants: ['滞胀', '滯漲', '滞涨'],
+        source: 'kaikki',
+      },
+    ]);
+    const w = word({ text: '滞涨', normalized: '滞涨' });
+    const insight = computeWordInsight(w, fallbackIndex);
+
+    expect(insight.status).toBe('ready');
+    expect(insight.exactEntries).toHaveLength(1);
+    expect(insight.exactEntries[0].definitions).toEqual([
+      'stagflation',
+      'to experience stagflation',
+    ]);
+  });
+
   it('returns dictionary-unavailable status when index is null', () => {
     const w = word({ text: '你好' });
     const insight = computeWordInsight(w, null);

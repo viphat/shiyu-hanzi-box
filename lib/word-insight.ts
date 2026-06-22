@@ -196,10 +196,18 @@ function uniqueEntries(entries: DictionaryEntry[]): DictionaryEntry[] {
   const seen = new Set<string>();
   const out: DictionaryEntry[] = [];
   for (const entry of entries) {
-    const key = `${entry.source ?? 'dictionary'}:${entry.index}`;
+    const key = displayKey(entry);
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(entry);
   }
   return out;
+}
+
+function displayKey(entry: DictionaryEntry): string {
+  return JSON.stringify([
+    entry.source ?? 'dictionary',
+    entry.pinyin,
+    entry.definitions,
+  ]);
 }

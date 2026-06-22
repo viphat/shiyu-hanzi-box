@@ -84,11 +84,18 @@ UI components should not import `ts-fsrs` directly. They should call project
 helpers such as:
 
 ```ts
-buildSrsQueue(inbox, now)
-answerReview(entry, rating, now)
-previewReview(entry, now)
+buildSrsQueue(inbox, now, settings)
+answerReview(entry, rating, now, settings)
+previewReview(entry, now, settings)
+postponeReview(entry, now, settings, days = 1)
 migrateReviewState(entry)
 ```
+
+The SRS module should also expose a small scheduler factory, for example
+`createSrsScheduler(settings)`, so `desiredRetention`, `maximumIntervalDays`,
+and `enableFuzz` are the single source of truth for the `ts-fsrs` scheduler
+parameters. Tests should pass settings with fuzz disabled rather than reaching
+into `ts-fsrs` directly.
 
 ## Data Model
 
@@ -140,13 +147,13 @@ Compatibility rule:
 - Existing entries without `scheduler` are treated as `fixed-v1`.
 - Existing entries without `review` are treated as new FSRS cards due at
   `createdAt`.
-- Once a user answers a migrated card, persist it as `fsrs-v1`.
+- Once a user answers or postpones a migrated card, persist it as `fsrs-v1`.
 
 ## Migration Strategy
 
 Use lazy migration, not a one-time storage migration.
 
-When the queue is built or an item is reviewed:
+When the queue is built, an item is reviewed, or an item is postponed:
 
 1. If `entry.review?.scheduler === 'fsrs-v1'`, use it directly.
 2. If `entry.review` is missing, initialize an FSRS new card with
@@ -172,6 +179,12 @@ export interface SrsSettings {
   newCardsPerDay: number; // default 20
   enableFuzz: boolean; // default true in production, false in tests
 }
+
+export interface AppSettings {
+  uiLocale: UiLocale;
+  kaikki: KaikkiSettings;
+  srs: SrsSettings;
+}
 ```
 
 Recommended first UI:
@@ -183,16 +196,24 @@ Recommended first UI:
 Avoid exposing FSRS parameters directly in the first version. They are powerful
 but too fiddly for this extension's audience.
 
+Existing installs already have `local:settings` without an `srs` key. Add a
+settings normalization helper that deep-merges stored settings with
+`DEFAULT_SETTINGS` before dashboard reads, settings-page reads, watches, and
+mutations use the value. The storage fallback only handles missing storage; it
+does not fill newly-added nested settings on existing installs.
+
 ## Review Flow
 
 Change review cards from "mark viewed" to active recall:
 
 1. Show the prompt first.
    - For words: show Hanzi and source label.
-   - For quotes: show quote text and category/source label.
+   - For quotes: show category/source label first, then ask the user to recall
+     the quote text; the quote text itself belongs in the answer area after
+     reveal.
 2. Hide answer details initially.
    - For words: pinyin, local definitions, source examples, AI insight.
-   - For quotes: note/source details if present.
+   - For quotes: quote text, note, and source details if present.
 3. User clicks **Reveal**.
 4. User chooses one of four rating buttons:
    - **Again:** forgot or could not recall.
@@ -206,6 +227,13 @@ The current "Tomorrow" action should become a secondary **Postpone** action.
 Postpone should not create a review log entry and should not alter stability or
 difficulty.
 
+Postpone still needs to persist a new `dueAt`. If the card has no review state,
+persist it as an `fsrs-v1` `new` card with zero counts and no
+stability/difficulty. If the card has an old fixed-ladder review state, lazily
+migrate it first, then change only `dueAt`, `scheduledDays`, `updatedAt`, and
+queue positioning fields. This prevents postponed migrated cards from remaining
+in the old scheduler indefinitely.
+
 ## Scheduling Rules
 
 Use full timestamps, not only start-of-day dates.
@@ -218,6 +246,16 @@ Queue rules:
 
 - Main queue includes items with `dueAt <= now`.
 - "Due today" stat can count items with `dueAt <= endOfDay(now)`.
+- New-card limiting applies only to cards whose migrated state is `new`.
+  Learning, relearning, and long-term review cards are never hidden by the
+  daily new-card limit.
+- `newCardsPerDay` is enforced at queue-build time by counting review log
+  entries from the current local day where `stateBefore === 'new'`, then showing
+  at most the remaining number of due new cards. New cards hidden by the cap
+  are not mutated; they become eligible after the next local day begins or after
+  the user raises the setting.
+- "New available today" is the smaller of remaining new-card capacity and due
+  new cards currently hidden or visible by the cap.
 - Learning/relearning cards due now sort before long-term review cards.
 - Repeated same-session cards sort behind untouched due cards unless FSRS
   returns a due timestamp that is already due.
@@ -265,18 +303,22 @@ Expected creates:
 
 Expected modifications:
 
-- `package.json` and lockfile: add `ts-fsrs`.
+- `package.json` and lockfile: add `ts-fsrs`. The current package requires
+  Node `>=20`; document this in `package.json` `engines` or project docs if the
+  repo starts enforcing runtime versions.
 - `lib/types.ts`: extend review types.
 - `lib/review.ts`: either replace internals with SRS helpers or become a
   compatibility re-export layer.
 - `lib/backup.ts`: validate new persisted review fields.
 - `lib/markdown.ts`: optional concise review metadata.
-- `entrypoints/dashboard/App.tsx` or `entrypoints/newtab/App.tsx`: use the new
-  queue and rating handlers, depending on whether the optional dashboard spec has
-  landed first.
+- `entrypoints/newtab/App.tsx`, plus any dashboard entrypoint that exists when
+  this work starts: use the new queue and rating handlers.
 - `entrypoints/*/components/ReviewQueue.tsx`: reveal-then-rate flow.
 - `lib/settings.ts`, `entrypoints/settings/SettingsApp.tsx`, and `lib/i18n.ts`:
   SRS settings UI and localized labels.
+- `entrypoints/newtab/hooks/useSettings.ts` and popup/settings consumers: read
+  settings through the normalization helper so old stored settings gain `srs`
+  defaults.
 - `README.md`: describe real SRS and rating meanings.
 
 ## Testing Strategy
@@ -290,16 +332,22 @@ Focused tests:
   - Migrates old fixed-ladder review state without losing due dates.
   - Schedules different intervals for Again, Hard, Good, and Easy.
   - Preserves deterministic results with fuzz disabled.
+  - Passes SRS settings into queue, preview, answer, and scheduler construction.
   - Builds due-now queues using `dueAt <= now`, not end-of-day.
+  - Enforces `newCardsPerDay` only for new cards and never for learning,
+    relearning, or review cards.
   - Appends review logs only for actual ratings.
   - Postpone changes due date without changing memory state.
 - `tests/review.test.ts`
   - Either update to the new SRS API or reduce to compatibility coverage.
 - `tests/backup.test.ts`
   - Accepts valid `fsrs-v1` review state and rejects malformed values.
+- `tests/settings.test.ts`
+  - Normalizes older persisted settings that do not yet contain `srs`.
 - Component/source tests
   - Review UI has Reveal and Again/Hard/Good/Easy controls.
   - Existing local insight reveal still works after answer reveal.
+  - Quote review prompts hide quote text until reveal.
 
 Full verification:
 
@@ -320,8 +368,8 @@ The safest rollout is additive and lazy:
 5. Add settings.
 6. Update docs.
 
-No automatic bulk migration is needed. Old items migrate when displayed or
-reviewed.
+No automatic bulk migration is needed. Old items migrate when displayed,
+reviewed, or postponed.
 
 ## Acceptance Criteria
 
@@ -333,9 +381,14 @@ reviewed.
 5. Existing fixed-ladder review states migrate without losing due dates.
 6. Queue membership uses `dueAt <= now`.
 7. SRS settings exist with desired retention defaulting to `0.90`.
-8. Backup/restore preserves SRS state.
-9. `npm run compile`, `npm test`, and `npm run build` pass.
-10. No network access is required for SRS.
+8. Older stored `local:settings` values without `srs` are normalized to include
+   default SRS settings.
+9. `newCardsPerDay` limits only new cards; due learning, relearning, and review
+   cards remain visible.
+10. Quote review prompts hide the quote text until Reveal.
+11. Backup/restore preserves SRS state.
+12. `npm run compile`, `npm test`, and `npm run build` pass.
+13. No network access is required for SRS.
 
 ## References
 

@@ -87,7 +87,7 @@ Capture selected Chinese words, phrases, and quotes while reading, store them lo
 Use these explanations in the permissions/privacy sections.
 
 ```text
-contextMenus: Adds user-triggered "save as word" and "save as quote" actions for selected page text.
+contextMenus: Adds user-triggered "save as word", "save as quote", and "open dashboard" actions.
 ```
 
 ```text

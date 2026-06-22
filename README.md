@@ -27,8 +27,9 @@ Implemented:
 - Daily Markdown rendering and zip export helpers.
 - Versioned JSON backup export and validated restore import for the full local
   inbox.
-- New-tab dashboard with search, status filters, cards, edit controls, pinyin,
-  export actions, and backup/restore controls.
+- Dashboard page opened from the toolbar popup or extension action menu, with
+  search, status filters, cards, edit controls, pinyin, export actions, and
+  backup/restore controls.
 - One-click Simplified to Taiwan Traditional conversion on word and quote cards,
   powered by OpenCC and cached on each entry.
 - Offline Word Insight Panel with CC-CEDICT definitions, tone chips, source
@@ -184,7 +185,7 @@ entrypoints/
     index.html
     main.tsx
     SettingsApp.tsx      # locale + AI key + optional Kaikki dictionary settings
-  newtab/
+  dashboard/
     index.html
     main.tsx
     App.tsx              # dashboard shell, filters, list wiring
@@ -223,6 +224,8 @@ tests/
   pinyin.test.ts
   traditional.test.ts
 ```
+
+The dashboard UI lives in `entrypoints/dashboard/`.
 
 Design and implementation planning live under `docs/superpowers/`.
 

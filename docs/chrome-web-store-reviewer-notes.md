@@ -26,8 +26,8 @@ Use this flow for reviewer instructions or your own pre-submit smoke test.
    word.
 5. Select a longer Chinese sentence or passage.
 6. Right-click the selection and save it as a quote.
-7. Open a new tab. The extension dashboard should appear because the extension
-   uses a new-tab override.
+7. Open the dashboard from the toolbar popup by clicking the extension icon and
+   choosing **Open dashboard**.
 8. Confirm the saved word and quote appear in the dashboard.
 9. Expand the saved word. Local dictionary definitions, tone chips, source
    examples, and external dictionary links should appear without AI.
@@ -50,7 +50,7 @@ manual fallback.
 2. Try saving the current selection as a word or quote.
 3. If capture is unavailable, paste or type Chinese text into the fallback box.
 4. Click the save button.
-5. Confirm the entry appears in the new-tab dashboard.
+5. Open the dashboard from the popup and confirm the entry appears there.
 
 ## Privacy Boundary To Highlight
 

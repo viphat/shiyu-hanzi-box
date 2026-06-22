@@ -61,8 +61,8 @@ The central data path is:
 3. `lib/page-context.ts` reads selected text and page metadata in the page.
 4. `lib/capture.ts` decides word vs quote behavior.
 5. `lib/storage.ts` persists the inbox with WXT storage.
-6. `entrypoints/newtab/App.tsx` reads and mutates the inbox through
-   `entrypoints/newtab/hooks/useInbox.ts`.
+6. `entrypoints/dashboard/App.tsx` reads and mutates the inbox through
+   `entrypoints/dashboard/hooks/useInbox.ts`.
 7. `lib/markdown.ts` and `lib/export.ts` render daily notes and zip exports.
 8. `lib/dictionary.ts`, `lib/dictionary-loader.ts`, and `lib/word-insight.ts`
    add an offline Word Insight Panel: definitions, tone chips, highlighted
@@ -70,7 +70,7 @@ The central data path is:
    not persisted on `WordEntry`.
 9. `lib/ai/*` adds an opt-in BYO-key AI layer. AI insight is generated only
    after an explicit user click, then persisted on `WordEntry.aiInsight`.
-10. `lib/traditional.ts` and `entrypoints/newtab/components/TraditionalButton.tsx`
+10. `lib/traditional.ts` and `entrypoints/dashboard/components/TraditionalButton.tsx`
     add one-click Simplified → Taiwan Traditional conversion for word and quote
     cards. Converted text is generated only after an explicit user click, then
     persisted on `EntryBase.traditionalText`.
@@ -110,21 +110,21 @@ Core modules:
 - `lib/markdown.ts`: pure daily Markdown rendering.
 - `lib/export.ts`: daily export map and zip byte generation.
 - `entrypoints/popup/Popup.tsx`: toolbar capture buttons.
-- `entrypoints/newtab/components/WordInsightPanel.tsx`: insight UI inside
+- `entrypoints/dashboard/components/WordInsightPanel.tsx`: insight UI inside
   `WordCard`.
 - `entrypoints/settings/AiSettingsPanel.tsx`: provider picker,
   masked key, model, test connection.
-- `entrypoints/newtab/components/AskAiButton.tsx`: trigger with idle /
+- `entrypoints/dashboard/components/AskAiButton.tsx`: trigger with idle /
   disabled / loading / error / retry states.
-- `entrypoints/newtab/components/AiInsightSection.tsx`: renders persisted AI
+- `entrypoints/dashboard/components/AiInsightSection.tsx`: renders persisted AI
   insight below local sections.
-- `entrypoints/newtab/components/TraditionalButton.tsx`: generate / show / hide
+- `entrypoints/dashboard/components/TraditionalButton.tsx`: generate / show / hide
   control for cached Taiwan Traditional text on word and quote cards.
-- `entrypoints/newtab/components/ReviewInsightReveal.tsx`: reveal interaction
+- `entrypoints/dashboard/components/ReviewInsightReveal.tsx`: reveal interaction
   in `ReviewQueue`.
-- `entrypoints/newtab/hooks/useWordInsight.ts`: loads the dictionary once per
+- `entrypoints/dashboard/hooks/useWordInsight.ts`: loads the dictionary once per
   dashboard session and computes insight per word.
-- `entrypoints/newtab/hooks/useAiInsight.ts`: orchestrates settings → client
+- `entrypoints/dashboard/hooks/useAiInsight.ts`: orchestrates settings → client
   → persist on `WordEntry`.
 - `entrypoints/settings/kaikki-import.worker.ts`: streams a user-selected
   Kaikki JSONL file off the settings UI thread, reports progress, builds the
@@ -136,7 +136,7 @@ Core modules:
   bearing records may index Han-character `forms` as runtime lookup variants;
   no-gloss soft redirects stay filtered unless the target definition appears on
   another record with that form.
-- `entrypoints/newtab/`: dashboard shell, toolbar, cards, lists, and storage
+- `entrypoints/dashboard/`: dashboard shell, toolbar, cards, lists, and storage
   hook.
 
 ## Conventions
@@ -195,4 +195,4 @@ cat .output/chrome-mv3/manifest.json
 
 Expected manifest features include `contextMenus`, `storage`, `activeTab`,
 `scripting`, `downloads`, `unlimitedStorage`, command shortcuts, a toolbar
-popup, a new-tab override, and an MV3 background service worker.
+popup, and an MV3 background service worker.

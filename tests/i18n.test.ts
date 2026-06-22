@@ -29,6 +29,11 @@ describe('i18n messages', () => {
     expect(t('zh-CN', 'traditional.hide')).toBe('隐藏繁體');
   });
 
+  it('returns popup dashboard labels in both locales', () => {
+    expect(t('en', 'popup.openDashboard')).toBe('Open dashboard');
+    expect(t('zh-CN', 'popup.openDashboard')).toBe('打开收藏箱');
+  });
+
   it('formats messages with named values', () => {
     expect(formatMessage('en', 'toolbar.restoreSuccess', { count: 3 })).toBe('Restored 3 entries from backup.');
     expect(formatMessage('zh-CN', 'toolbar.restoreConfirm', { count: 3, name: 'notes.json' })).toBe(

@@ -1,5 +1,5 @@
 import { Download, FileText, Search, Settings, Upload } from 'lucide-react';
-import { useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useRef, useState, type ChangeEvent } from 'react';
 import { browser } from 'wxt/browser';
 import { BackupParseError, parseBackup, serializeBackup } from '@/lib/backup';
 import { loadDictionary } from '@/lib/dictionary-loader';
@@ -13,14 +13,12 @@ export function Toolbar({
   onQuery,
   onRestore,
   locale,
-  extraActions,
 }: {
   inbox: Inbox;
   query: string;
   onQuery: (query: string) => void;
   onRestore: (inbox: Inbox) => Promise<void> | void;
   locale: UiLocale;
-  extraActions?: ReactNode;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [restoring, setRestoring] = useState(false);
@@ -181,7 +179,6 @@ export function Toolbar({
         >
           <Settings className="h-4 w-4" /> {t(locale, 'toolbar.settings')}
         </button>
-        {extraActions}
       </div>
       {message ? (
         <p

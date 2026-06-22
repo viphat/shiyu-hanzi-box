@@ -103,7 +103,7 @@ Core modules:
 - `entrypoints/popup/Popup.tsx`: toolbar capture buttons.
 - `entrypoints/newtab/components/WordInsightPanel.tsx`: insight UI inside
   `WordCard`.
-- `entrypoints/newtab/components/AiSettingsPanel.tsx`: provider picker,
+- `entrypoints/settings/AiSettingsPanel.tsx`: provider picker,
   masked key, model, test connection.
 - `entrypoints/newtab/components/AskAiButton.tsx`: trigger with idle /
   disabled / loading / error / retry states.

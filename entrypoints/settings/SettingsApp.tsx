@@ -1,8 +1,10 @@
-import { ArrowLeft, Database, Download, Globe2, KeyRound, Save, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, Database, Download, Globe2, Trash2, Upload } from 'lucide-react';
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { browser } from 'wxt/browser';
 import iconUrl from '../../assets/icon.png';
-import { DEFAULT_AI_SETTINGS, getAiSettings, setAiApiKey, setAiSettings } from '@/lib/ai/settings';
+import { fetchAiInsight } from '@/lib/ai/client';
+import { requestAiSettingsPermission } from '@/lib/ai/permissions';
+import { DEFAULT_AI_SETTINGS, getAiSettings, setAiSettings } from '@/lib/ai/settings';
 import { buildIndex } from '@/lib/dictionary';
 import { t } from '@/lib/i18n';
 import { hashKaikkiEntries, isAllowedKaikkiUrl, parseKaikkiJsonl } from '@/lib/kaikki';
@@ -14,8 +16,9 @@ import {
   resetKaikki,
   setUiLocale,
 } from '@/lib/settings';
-import type { UiLocale } from '@/lib/types';
+import type { AiSettings, UiLocale } from '@/lib/types';
 import { useSettings } from '../newtab/hooks/useSettings';
+import { AiSettingsPanel } from './AiSettingsPanel';
 
 type Message = { tone: 'success' | 'error'; text: string } | null;
 
@@ -25,8 +28,8 @@ export function SettingsApp() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sourceUrl, setSourceUrl] = useState(settings.kaikki.sourceUrl);
   const [aiSettings, setAiSettingsState] = useState(DEFAULT_AI_SETTINGS);
-  const [aiApiKeyDraft, setAiApiKeyDraft] = useState(DEFAULT_AI_SETTINGS.apiKey);
-  const [savingAiKey, setSavingAiKey] = useState(false);
+  const [aiTesting, setAiTesting] = useState(false);
+  const [aiTestResult, setAiTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<Message>(null);
 
@@ -39,7 +42,6 @@ export function SettingsApp() {
     getAiSettings().then((next) => {
       if (!mounted) return;
       setAiSettingsState(next);
-      setAiApiKeyDraft(next.apiKey);
     });
     return () => {
       mounted = false;
@@ -141,19 +143,52 @@ export function SettingsApp() {
     setMessage({ tone: 'success', text: t(locale, 'settings.saved') });
   }
 
-  async function saveAiApiKey() {
-    setSavingAiKey(true);
+  async function saveAiSettings(next: AiSettings): Promise<boolean> {
     setMessage(null);
+    const granted = await requestAiSettingsPermission(next);
+    if (!granted) {
+      setAiTestResult({ ok: false, message: 'Provider permission was not granted.' });
+      return false;
+    }
+    await setAiSettings(next);
+    setAiSettingsState(next);
+    setMessage({ tone: 'success', text: t(locale, 'settings.saved') });
+    return true;
+  }
+
+  async function testAiConnection(next: AiSettings): Promise<{ ok: boolean; message: string }> {
+    setAiTesting(true);
+    setAiTestResult(null);
     try {
-      const next = setAiApiKey(aiSettings, aiApiKeyDraft);
-      await setAiSettings(next);
-      setAiSettingsState(next);
-      setAiApiKeyDraft(next.apiKey);
-      setMessage({ tone: 'success', text: t(locale, 'settings.saved') });
+      const granted = await requestAiSettingsPermission({ ...next, enabled: true });
+      if (!granted) {
+        const denied = { ok: false, message: 'Provider permission was not granted.' };
+        setAiTestResult(denied);
+        return denied;
+      }
+
+      const result = await fetchAiInsight({
+        baseUrl: next.baseUrl,
+        apiKey: next.apiKey,
+        model: next.model,
+        messages: [
+          {
+            role: 'system',
+            content: 'Return valid JSON only with keys summary, register, definitions, sampleSentences, translations, collocations, notes.',
+          },
+          { role: 'user', content: 'Connection test for 你好.' },
+        ],
+        provider: next.provider,
+      });
+      const display = { ok: result.ok, message: result.ok ? '连接成功' : result.reason };
+      setAiTestResult(display);
+      return display;
     } catch {
-      setMessage({ tone: 'error', text: t(locale, 'settings.failed') });
+      const failed = { ok: false, message: '连接失败' };
+      setAiTestResult(failed);
+      return failed;
     } finally {
-      setSavingAiKey(false);
+      setAiTesting(false);
     }
   }
 
@@ -213,14 +248,6 @@ export function SettingsApp() {
             {t(locale, 'dictionary.ccCedict')}
           </a>
         </section>
-
-        <AiApiKeySection
-          locale={locale}
-          apiKey={aiApiKeyDraft}
-          saving={savingAiKey}
-          onApiKeyChange={setAiApiKeyDraft}
-          onSave={saveAiApiKey}
-        />
 
         <section className="rounded-sm border border-border bg-paper-light p-4 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
@@ -298,6 +325,14 @@ export function SettingsApp() {
           </dl>
         </section>
 
+        <AiSettingsPanel
+          settings={aiSettings}
+          onSave={saveAiSettings}
+          onTestConnection={testAiConnection}
+          testing={aiTesting}
+          testResult={aiTestResult}
+        />
+
         {message ? (
           <p
             role="status"
@@ -308,57 +343,5 @@ export function SettingsApp() {
         ) : null}
       </main>
     </div>
-  );
-}
-
-export function AiApiKeySection({
-  locale,
-  apiKey,
-  saving,
-  onApiKeyChange,
-  onSave,
-}: {
-  locale: UiLocale;
-  apiKey: string;
-  saving: boolean;
-  onApiKeyChange: (apiKey: string) => void;
-  onSave: () => void | Promise<void>;
-}) {
-  return (
-    <section className="rounded-sm border border-border bg-paper-light p-4 shadow-sm">
-      <div className="mb-3 flex items-center gap-2">
-        <KeyRound className="h-4 w-4 text-cinnabar" />
-        <h2 className="text-sm font-semibold tracking-[2px]">{t(locale, 'settings.aiTitle')}</h2>
-      </div>
-      <p className="mb-3 text-xs leading-6 text-muted">{t(locale, 'settings.aiBody')}</p>
-      <form
-        className="flex flex-col gap-3 sm:flex-row sm:items-end"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void onSave();
-        }}
-      >
-        <label className="block flex-1 text-xs font-medium tracking-[1px] text-muted">
-          {t(locale, 'settings.aiApiKey')}
-          <input
-            type="password"
-            value={apiKey}
-            onChange={(event) => onApiKeyChange(event.target.value)}
-            placeholder={t(locale, 'settings.aiApiKeyPlaceholder')}
-            autoComplete="off"
-            className="mt-1 w-full rounded-sm border border-border bg-paper-input px-3 py-2 text-sm text-ink outline-none transition focus:border-cinnabar-fade"
-          />
-        </label>
-        <button
-          type="submit"
-          disabled={saving}
-          className="inline-flex items-center justify-center gap-1 rounded-sm bg-cinnabar px-3 py-2.5 text-sm text-white shadow-sm tracking-[1px] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <Save className="h-4 w-4" />
-          {saving ? t(locale, 'settings.saving') : t(locale, 'settings.saveApiKey')}
-        </button>
-      </form>
-      <p className="mt-2 text-[11px] leading-5 text-muted">{t(locale, 'settings.aiKeyHelp')}</p>
-    </section>
   );
 }

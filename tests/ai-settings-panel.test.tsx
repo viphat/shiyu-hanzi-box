@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { AiSettingsPanel } from '../entrypoints/newtab/components/AiSettingsPanel';
+import { AiSettingsPanel } from '../entrypoints/settings/AiSettingsPanel';
 import { DEFAULT_SETTINGS } from '../lib/ai/settings';
 
 describe('AiSettingsPanel', () => {

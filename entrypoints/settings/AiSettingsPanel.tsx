@@ -12,7 +12,7 @@ export function AiSettingsPanel({
   testResult,
 }: {
   settings: AiSettings;
-  onClose: () => void;
+  onClose?: () => void;
   onSave: (next: AiSettings) => Promise<boolean>;
   onTestConnection: (next: AiSettings) => Promise<{ ok: boolean; message: string }>;
   testing: boolean;
@@ -30,7 +30,7 @@ export function AiSettingsPanel({
     setSaveError('');
     const ok = await onSave(draft);
     if (ok) {
-      onClose();
+      onClose?.();
       return;
     }
     setSaveError('Provider permission was not granted.');
@@ -42,16 +42,18 @@ export function AiSettingsPanel({
     draft.model.trim() !== '';
 
   return (
-    <div className="rounded-sm border border-border bg-paper-light p-4 shadow-sm">
+    <section className="rounded-sm border border-border bg-paper-light p-4 shadow-sm">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-ink tracking-[2px]">AI 设置</p>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-xs text-muted hover:text-ink-secondary"
-        >
-          关闭
-        </button>
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-xs text-muted hover:text-ink-secondary"
+          >
+            关闭
+          </button>
+        ) : null}
       </div>
 
       <div className="mt-4 space-y-3">
@@ -156,6 +158,6 @@ export function AiSettingsPanel({
           {saveError && <span className="text-[11px] text-cinnabar">{saveError}</span>}
         </div>
       </div>
-    </div>
+    </section>
   );
 }

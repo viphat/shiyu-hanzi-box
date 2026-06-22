@@ -33,7 +33,8 @@ Implemented:
   examples, external dictionary links, and review reveal mode.
 - Opt-in AI Insight layer with BYO API key, provider picker, generated bilingual
   notes persisted on words, and Markdown/backup/review integration.
-- Settings page with English / zh-CN UI locale selection.
+- Settings page with English / zh-CN UI locale selection, full AI provider
+  configuration, and optional dictionary controls.
 - Optional runtime Kaikki JSONL import/download into local IndexedDB storage for
   extra dictionary fallback entries without growing the packed extension.
 - Jade/ink Tailwind theme tokens and CJK font stack.
@@ -65,7 +66,7 @@ does not run until you click the button.
 
 How it works:
 
-1. Open **AI 设置** from the dashboard toolbar.
+1. Open **Settings** from the dashboard toolbar, then use the **AI 设置** section.
 2. Choose a provider: DeepSeek, OpenAI, or a custom OpenAI-compatible endpoint.
 3. Paste your API key and select a model.
 4. Click **测试连接** to verify the provider settings.

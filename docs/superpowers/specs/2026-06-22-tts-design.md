@@ -17,10 +17,12 @@ active.
 - Let a reader hear any saved Word pronounced with one click.
 - Use the browser-native `SpeechSynthesis` API — free, offline-capable, zero
   dependencies, no permissions.
-- Provide clear button states: idle → speaking → back to idle.
-- Support clicking a speaking button to stop playback.
+- Provide clear button states: idle → speaking for the active word → back to
+  idle.
+- Support clicking the actively speaking button to stop playback; clicking a
+  different word while speech is active replaces the current utterance.
 - Prefer `zh-CN` voices; fall back to any `zh-*` voice if `zh-CN` is absent.
-- Keep the TTS logic in a pure, unit-testable module.
+- Keep the TTS logic in a small, unit-testable module.
 - Keep the feature confined to Word cards (not Quote cards).
 
 ## Non-Goals
@@ -113,31 +115,46 @@ Use `window.speechSynthesis`, the browser-native Web Speech API.
 A module that wraps `SpeechSynthesis` with voice selection and playback control:
 
 ```ts
-export type TtsState = 'unavailable' | 'idle' | 'speaking';
+export type TtsState =
+  | { status: 'unavailable' }
+  | { status: 'idle' }
+  | { status: 'speaking'; text: string };
 
+export type TtsListener = (state: TtsState) => void;
+
+export function initTts(): TtsState;
 export function getTtsState(): TtsState;
 export function isChineseVoiceAvailable(): boolean;
+export function subscribeTts(listener: TtsListener): () => void;
 export function speak(text: string): void;
 export function stop(): void;
 ```
 
-- **Voice selection**: On module load, calls `speechSynthesis.getVoices()` and
-  listens for `voiceschanged`. Prefers the first `zh-CN` voice; falls back to
-  the first `zh-*` voice. Caches the selected `SpeechSynthesisVoice` in module
-  scope.
+- **Voice selection**: `initTts()` is idempotent. It calls
+  `speechSynthesis.getVoices()`, registers one module-owned `voiceschanged`
+  listener, and refreshes the cached voice when Chrome resolves the voice list.
+  It prefers the first `zh-CN` voice and falls back to the first `zh-*` voice.
 - **`isChineseVoiceAvailable()`**: Returns `true` if a cached Chinese voice
   exists. Used by `SpeakButton` to decide whether to render.
-- **`speak(text)`**: Creates a `SpeechSynthesisUtterance` with the cached Chinese
-  voice, calls `speechSynthesis.speak()`. Sets `utterance.onend` and
-  `utterance.onerror` to reset state to idle.
-- **`stop()`**: Calls `speechSynthesis.cancel()`, resets state to idle.
-- **State tracking**: Module-level `TtsState` variable. Updated synchronously on
-  `speak()` (→ `speaking`), `onend`/`onerror`/`cancel()` (→ `idle`).
-  `getTtsState()` returns the current state.
+- **`subscribeTts(listener)`**: Registers React listeners for module state
+  changes and returns an unsubscribe function. This avoids a per-button polling
+  interval while still reacting to speech engine callbacks.
+- **`speak(text)`**: If no Chinese voice exists, returns without doing anything.
+  Otherwise calls `speechSynthesis.cancel()` first so a new word replaces any
+  current or queued utterance. It creates a `SpeechSynthesisUtterance` with the
+  cached Chinese voice, sets state to `{ status: 'speaking', text }`, calls
+  `speechSynthesis.speak()`, then resets to `{ status: 'idle' }` on `onend` or
+  `onerror`.
+- **`stop()`**: Calls `speechSynthesis.cancel()`, resets state to
+  `{ status: 'idle' }`, and notifies subscribers.
+- **State tracking**: Module-level `TtsState` stores both status and active text.
+  `SpeakButton` only renders the speaking state when
+  `state.status === 'speaking' && state.text === props.text`.
 - **Warm-up**: After the voice list resolves, creates a silent one-character
-  utterance (`' '`, volume 0, rate 10), speaks and immediately cancels it. This
-  primes the engine once per dashboard session.
-- **No Chrome API dependency**: Pure DOM API. Unit-testable by mocking
+  utterance (`'一'`, volume 0, rate 10), speaks and immediately cancels it. This
+  primes the engine once per dashboard session; the implementation must guard
+  this with a module-level `warmedUp` flag.
+- **No Chrome API dependency**: DOM API only. Unit-testable by mocking
   `speechSynthesis` on `window`.
 
 ### No type changes to `lib/types.ts`
@@ -151,12 +168,14 @@ schema changes.
 
 ### Data flow
 
-1. `SpeakButton` renders if `isChineseVoiceAvailable()` returns `true`.
-2. User clicks `SpeakButton`.
-3. `SpeakButton` calls `speak(word.text)`.
-4. Browser reads `word.text` aloud using the cached Chinese voice.
-5. On utterance end or error, state resets to `idle`.
-6. If user clicks `SpeakButton` while speaking, it calls `stop()`.
+1. `SpeakButton` mounts, calls `initTts()`, and subscribes with `subscribeTts()`.
+2. `SpeakButton` renders if `isChineseVoiceAvailable()` returns `true`.
+3. User clicks `SpeakButton`.
+4. `SpeakButton` calls `speak(word.text)`.
+5. `speak()` cancels any current or queued utterance and starts `word.text`.
+6. Browser reads `word.text` aloud using the cached Chinese voice.
+7. On utterance end or error, state resets to `idle`.
+8. If user clicks the actively speaking word's `SpeakButton`, it calls `stop()`.
 
 No changes to `lib/capture.ts`, `lib/normalize.ts`, `lib/storage.ts`,
 `lib/markdown.ts`, `lib/export.ts`, or any `lib/ai/*` module.
@@ -171,17 +190,18 @@ A small icon button that toggles between idle and speaking states:
 - **Idle state**: Renders a `Volume2` icon (lucide-react) in muted style, with
   `title={t(locale, 'tts.speak')}` ("Pronounce" / "发音"). Clicking calls
   `speak(text)`.
-- **Speaking state**: Renders the same icon with a subtle pulse animation
-  (`animate-pulse`), styled with `text-cinnabar`. Clicking calls `stop()`.
+- **Speaking state**: For the active word only, renders the same icon with a
+  subtle pulse animation (`animate-pulse`), styled with `text-cinnabar`.
+  Clicking calls `stop()`.
+- **Another word is speaking**: The button stays in idle style; clicking it
+  calls `speak(text)`, which replaces the current utterance.
 - **Unavailable**: Returns `null`. Not rendered at all when no Chinese voice is
   detected.
 - **`event.stopPropagation()`**: Prevents the click from toggling `WordCard`
   expand/collapse when the button is inside the header row.
 
-The component polls `getTtsState()` via a `useEffect` + `setInterval` (every
-200ms) to react to state changes from the speech engine, since
-`SpeechSynthesis` events fire outside React's reconciliation. The interval is
-cleared on unmount.
+The component calls `initTts()` once on mount and subscribes to `subscribeTts()`
+inside `useEffect`. The returned unsubscribe function is called on unmount.
 
 Style reference — matches the existing small button pattern in the card header:
 
@@ -241,15 +261,20 @@ Unit-test the `lib/tts.ts` module by mocking `window.speechSynthesis`:
   present.
 - `speak('你好')` calls `speechSynthesis.speak()` with an utterance whose
   `text` is `'你好'` and `voice.lang` starts with `'zh'`.
+- `speak('你好')` calls `speechSynthesis.cancel()` before
+  `speechSynthesis.speak()` so new words replace current or queued utterances.
 - `stop()` calls `speechSynthesis.cancel()`.
-- State transitions: `idle` → `speak()` → `speaking` → `onend` → `idle`.
+- State transitions: `idle` → `speak()` →
+  `{ status: 'speaking', text: '你好' }` → `onend` → `idle`.
 - State transitions: `speaking` → `stop()` → `idle`.
+- `subscribeTts()` listeners are notified on voice availability and speech state
+  changes, and unsubscribed listeners are not called.
 
 ### `tests/i18n.test.ts` (extend)
 
-Assert the new `tts.speak` key exists in both `en` and `zh-CN`. The existing
-parity test pattern enforces key-set equality, so adding the key to both locales
-is sufficient.
+Assert the new `tts.speak` key exists in both `en` and `zh-CN`. The current
+tests check selected labels rather than full key-set parity, so add explicit
+assertions for this key.
 
 ### UI components
 

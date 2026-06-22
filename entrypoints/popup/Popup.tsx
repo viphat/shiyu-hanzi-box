@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ClipboardPaste, Loader2, Quote, Type } from 'lucide-react';
+import { ClipboardPaste, LayoutDashboard, Loader2, Quote, Type } from 'lucide-react';
+import { browser } from 'wxt/browser';
 import iconUrl from '../../assets/icon.png';
 import { t } from '@/lib/i18n';
 import { settingsStorage } from '@/lib/settings';
@@ -82,6 +83,11 @@ export function Popup() {
     }
   }
 
+  async function openDashboard() {
+    await browser.tabs.create({ url: browser.runtime.getURL('/dashboard.html') });
+    window.close();
+  }
+
   function applyResult(kind: 'word' | 'quote', result: CaptureResult) {
     if (result.ok) {
       setManualKind(null);
@@ -124,6 +130,14 @@ export function Popup() {
         >
           {busy === 'quote' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Quote className="h-4 w-4" />}
           {t(locale, 'popup.saveQuote')}
+        </button>
+        <button
+          onClick={openDashboard}
+          disabled={!!busy}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-sm border border-border bg-paper-light px-3 py-3 text-xs font-medium text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input disabled:opacity-50"
+        >
+          <LayoutDashboard className="h-4 w-4" />
+          {t(locale, 'popup.openDashboard')}
         </button>
       </div>
       {manualKind && (

@@ -17,6 +17,7 @@ describe('AiSettingsPanel', () => {
     );
 
     expect(html).toContain('AI 设置');
+    expect(html).toContain('lucide-sparkles');
     expect(html).toContain('Provider');
     expect(html).toContain('API Key');
     expect(html).toContain('type="password"');

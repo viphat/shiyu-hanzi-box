@@ -1,4 +1,4 @@
-import { Eye, EyeOff, Save, Wifi, WifiOff } from 'lucide-react';
+import { Eye, EyeOff, Save, Sparkles, Wifi, WifiOff } from 'lucide-react';
 import { useState } from 'react';
 import { applyPreset, PROVIDER_PRESETS } from '@/lib/ai/settings';
 import type { AiSettings } from '@/lib/types';
@@ -44,7 +44,10 @@ export function AiSettingsPanel({
   return (
     <section className="rounded-sm border border-border bg-paper-light p-4 shadow-sm">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-ink tracking-[2px]">AI 设置</p>
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-cinnabar" aria-hidden="true" />
+          <p className="text-sm font-medium text-ink tracking-[2px]">AI 设置</p>
+        </div>
         {onClose ? (
           <button
             type="button"

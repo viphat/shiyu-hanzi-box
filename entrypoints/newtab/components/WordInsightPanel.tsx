@@ -1,6 +1,9 @@
 import { t } from '@/lib/i18n';
 import type { UiLocale, WordEntry } from '@/lib/types';
+import { useAiInsight } from '../hooks/useAiInsight';
 import { useWordInsight } from '../hooks/useWordInsight';
+import { AiInsightSection } from './AiInsightSection';
+import { AskAiButton } from './AskAiButton';
 import { DefinitionList } from './DefinitionList';
 import { SourceExamples } from './SourceExamples';
 import { ToneChips } from './ToneChips';
@@ -12,6 +15,10 @@ import { ToneChips } from './ToneChips';
  */
 export function WordInsightPanel({ word, locale }: { word: WordEntry; locale: UiLocale }) {
   const { insight, loading } = useWordInsight(word);
+  const { state: aiState, error: aiError, requestInsight } = useAiInsight(
+    word,
+    insight?.exactEntries ?? [],
+  );
 
   if (loading) {
     return <p className="text-xs text-muted">{t(locale, 'insight.loading')}</p>;
@@ -47,6 +54,22 @@ export function WordInsightPanel({ word, locale }: { word: WordEntry; locale: Ui
       >
         {t(locale, 'dictionary.ccCedict')}
       </a>
+      <div className="border-t border-border pt-3">
+        <AskAiButton
+          state={aiState}
+          error={aiError}
+          onAsk={requestInsight}
+          onRetry={requestInsight}
+        />
+        {word.aiInsight && (
+          <div className="mt-2">
+            <AiInsightSection
+              insight={word.aiInsight}
+              onRegenerate={requestInsight}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

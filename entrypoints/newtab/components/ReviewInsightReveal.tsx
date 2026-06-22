@@ -46,6 +46,17 @@ function RevealedReviewInsight({ word, locale }: { word: WordEntry; locale: UiLo
         </p>
       )}
       <SourceExamples examples={topExamples} externalLinks={[]} locale={locale} />
+      {word.aiInsight && (
+        <div className="space-y-1.5 rounded-sm border border-cinnabar-fade bg-paper-light p-3">
+          <p className="text-[11px] font-medium uppercase tracking-[2px] text-cinnabar">AI 释义</p>
+          <p className="text-sm text-ink">{word.aiInsight.summary}</p>
+          {word.aiInsight.definitions.map((definition) => (
+            <p key={definition} className="text-xs text-ink-secondary">
+              {definition}
+            </p>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

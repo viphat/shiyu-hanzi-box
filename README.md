@@ -31,6 +31,8 @@ Implemented:
   export actions, and backup/restore controls.
 - Offline Word Insight Panel with CC-CEDICT definitions, tone chips, source
   examples, external dictionary links, and review reveal mode.
+- Opt-in AI Insight layer with BYO API key, provider picker, generated bilingual
+  notes persisted on words, and Markdown/backup/review integration.
 - Settings page with English / zh-CN UI locale selection.
 - Optional runtime Kaikki JSONL import/download into local IndexedDB storage for
   extra dictionary fallback entries without growing the packed extension.
@@ -54,6 +56,30 @@ Expanding a saved word in the dashboard shows:
 Review cards gain a **显示释义** reveal button so you can test yourself before
 seeing pinyin and definitions.
 
+### AI Insight (opt-in)
+
+The word card's expanded panel offers an "Ask AI" button that generates
+structured bilingual definitions, sample sentences, collocations, and usage
+notes. This is an **opt-in feature**: it requires a user-supplied API key and
+does not run until you click the button.
+
+How it works:
+
+1. Open **AI 设置** from the dashboard toolbar.
+2. Choose a provider: DeepSeek, OpenAI, or a custom OpenAI-compatible endpoint.
+3. Paste your API key and select a model.
+4. Click **测试连接** to verify the provider settings.
+5. Expand any word card and click **Ask AI**.
+
+Privacy:
+
+- The API key is stored in `chrome.storage.local` on your device only.
+- AI requests send only the saved word, optional pinyin, dictionary glosses, and
+  one recent occurrence to the provider you chose.
+- Generated insights are persisted on the word and flow into backups, exports,
+  and review cards, so you only pay for each insight once.
+- When AI is disabled, the extension makes no AI provider requests.
+
 ### Dictionary Attribution
 
 Definitions come from [CC-CEDICT](https://www.mdbg.net/chinese/dictionary?page=cc-cedict),
@@ -61,12 +87,13 @@ licensed CC-BY-SA. See `docs/dictionaries/CC-CEDICT.md` for details and update
 instructions. The dictionary ships as a compact offline asset; the extension
 never contacts MDBG at runtime.
 
-### Privacy
+### Local Dictionary Privacy
 
-The Word Insight Panel is fully offline. The only outbound requests are the
-two external dictionary links, and only when you click them.
+The local Word Insight sections are fully offline. The only outbound dictionary
+requests are the two external dictionary links, and only when you click them.
+AI requests are separate, opt-in, and use only the provider configured by you.
 
-## Settings And Optional Kaikki Dictionary
+## Settings, AI, And Optional Kaikki Dictionary
 
 Open **Settings** from the dashboard toolbar to choose the UI locale:
 
@@ -130,15 +157,22 @@ entrypoints/
   settings/
     index.html
     main.tsx
-    SettingsApp.tsx      # locale + optional Kaikki runtime dictionary settings
+    SettingsApp.tsx      # locale + AI key + optional Kaikki dictionary settings
   newtab/
     index.html
     main.tsx
     App.tsx              # dashboard shell, filters, list wiring
+    hooks/useAiInsight.ts # AI insight request + persistence hook
     hooks/useInbox.ts    # live WXT inbox storage hook
     hooks/useSettings.ts # live WXT settings storage hook
     components/          # toolbar, word/quote cards, lists, pinyin button
 lib/
+  ai/
+    client.ts            # OpenAI-compatible fetch wrapper
+    parse.ts             # AI JSON response validation
+    permissions.ts       # lazy provider host permission requests
+    prompt.ts            # prompt/message builder
+    settings.ts          # local AI settings storage and presets
   capture.ts             # saveWord/saveQuote and word dedupe behavior
   export.ts              # export map + zip generation
   backup.ts              # versioned JSON backup + restore validation
@@ -231,8 +265,10 @@ The current test suite covers:
 - background capture success, no-selection, restricted-page, no-active-tab, and
   quote paths using fake Chrome APIs;
 - local pinyin generation;
-- daily Markdown frontmatter, sections, words, quotes, quote tags, pinyin, and
-  source links;
+- daily Markdown frontmatter, sections, words, quotes, quote tags, pinyin,
+  source links, and AI insight sections;
 - daily export grouping, archived-entry skipping, and zip byte generation.
 - versioned backup JSON generation, legacy raw inbox restore, and invalid import
   rejection.
+- AI settings presets, permission origin requests, prompt building, response
+  parsing, client error handling, component rendering, and backup round-trip.

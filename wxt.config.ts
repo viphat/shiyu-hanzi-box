@@ -15,7 +15,13 @@ export default defineConfig({
       'unlimitedStorage',
       'clipboardRead',
     ],
-    optional_host_permissions: ['https://kaikki.org/*'],
+    optional_host_permissions: [
+      'https://kaikki.org/*',
+      'https://api.deepseek.com/*',
+      'https://api.openai.com/*',
+      'https://*/*',
+      'http://*/*',
+    ],
     commands: {
       'save-word': {
         suggested_key: { default: 'Ctrl+Shift+S', mac: 'Command+Shift+S' },

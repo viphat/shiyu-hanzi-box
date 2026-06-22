@@ -35,6 +35,8 @@ export interface WordEntry extends EntryBase {
   /** Dedupe key: normalize(text). Stored to avoid recomputation. */
   normalized: string;
   occurrences: Occurrence[];
+  /** Opt-in AI-generated insight, persisted after explicit user request. */
+  aiInsight?: AiInsight;
 }
 
 export interface QuoteEntry extends EntryBase {
@@ -75,6 +77,36 @@ export interface KaikkiSettings {
 export interface AppSettings {
   uiLocale: UiLocale;
   kaikki: KaikkiSettings;
+}
+
+// ---------------------------------------------------------------------------
+// AI settings
+// ---------------------------------------------------------------------------
+
+export type AiProvider = 'deepseek' | 'openai' | 'custom';
+
+/** Persisted AI settings, stored locally only. */
+export interface AiSettings {
+  enabled: boolean;
+  provider: AiProvider;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+}
+
+/** Persisted AI insight on a word entry. */
+export interface AiInsight {
+  provider: AiProvider;
+  model: string;
+  baseUrl: string;
+  generatedAt: number;
+  summary: string;
+  register: string;
+  definitions: string[];
+  sampleSentences: string[];
+  translations: string[];
+  collocations: string[];
+  notes: string;
 }
 
 // ---------------------------------------------------------------------------

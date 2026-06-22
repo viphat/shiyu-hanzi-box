@@ -29,6 +29,26 @@ export function renderDay(
           lines.push(`  - Dictionary: _${esc(entry.pinyin)}_ ${entry.definitions.map((d) => esc(d)).join('; ')}`);
         }
       }
+      if (word.aiInsight) {
+        const ai = word.aiInsight;
+        lines.push('');
+        lines.push('## AI Insight');
+        lines.push(`- ${esc(word.text)}`);
+        if (ai.summary) lines.push(`  - _${esc(ai.summary)}_ (${esc(ai.register)})`);
+        for (const definition of ai.definitions) {
+          lines.push(`  - ${esc(definition)}`);
+        }
+        for (let i = 0; i < ai.sampleSentences.length; i += 1) {
+          lines.push(`  - ${esc(ai.sampleSentences[i])}`);
+          if (ai.translations[i]) {
+            lines.push(`    ${esc(ai.translations[i])}`);
+          }
+        }
+        if (ai.collocations.length > 0) {
+          lines.push(`  - 搭配: ${ai.collocations.map((collocation) => esc(collocation)).join(', ')}`);
+        }
+        if (ai.notes) lines.push(`  - ${esc(ai.notes)}`);
+      }
       lines.push('');
     }
   }

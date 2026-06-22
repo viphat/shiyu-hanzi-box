@@ -1,7 +1,10 @@
-import { BookOpen, CheckCircle2, Inbox, ScrollText } from 'lucide-react';
+import { BookOpen, CheckCircle2, Inbox, ScrollText, Sparkles } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import iconUrl from '../../assets/icon.png';
+import { fetchAiInsight } from '@/lib/ai/client';
+import { requestAiSettingsPermission } from '@/lib/ai/permissions';
+import { getAiSettings, setAiSettings } from '@/lib/ai/settings';
 import {
   buildReviewQueue,
   repeatReview,
@@ -9,7 +12,8 @@ import {
   viewReview,
 } from '@/lib/review';
 import { t } from '@/lib/i18n';
-import type { Entry, Inbox as InboxState, QuoteEntry, Status, UiLocale, WordEntry } from '@/lib/types';
+import type { AiSettings, Entry, Inbox as InboxState, QuoteEntry, Status, UiLocale, WordEntry } from '@/lib/types';
+import { AiSettingsPanel } from './components/AiSettingsPanel';
 import { QuoteList } from './components/QuoteList';
 import { ReviewQueue } from './components/ReviewQueue';
 import { Toolbar } from './components/Toolbar';
@@ -27,6 +31,9 @@ export function App() {
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<Tab>('review');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('inbox');
+  const [aiSettings, setAiSettingsState] = useState<AiSettings | null>(null);
+  const [aiTesting, setAiTesting] = useState(false);
+  const [aiTestResult, setAiTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const normalizedQuery = query.trim().toLowerCase();
   const today = new Intl.DateTimeFormat(locale, {
     month: 'long',
@@ -75,6 +82,59 @@ export function App() {
         {t(locale, 'app.loading')}
       </div>
     );
+  }
+
+  async function openAiSettings() {
+    const next = await getAiSettings();
+    setAiSettingsState(next);
+    setAiTestResult(null);
+  }
+
+  async function saveAiSettings(next: AiSettings): Promise<boolean> {
+    const granted = await requestAiSettingsPermission(next);
+    if (!granted) {
+      setAiTestResult({ ok: false, message: 'Provider permission was not granted.' });
+      return false;
+    }
+    await setAiSettings(next);
+    setAiSettingsState(next);
+    return true;
+  }
+
+  async function testAiConnection(next: AiSettings): Promise<{ ok: boolean; message: string }> {
+    setAiTesting(true);
+    setAiTestResult(null);
+    try {
+      const granted = await requestAiSettingsPermission({ ...next, enabled: true });
+      if (!granted) {
+        const denied = { ok: false, message: 'Provider permission was not granted.' };
+        setAiTestResult(denied);
+        return denied;
+      }
+
+      const result = await fetchAiInsight({
+        baseUrl: next.baseUrl,
+        apiKey: next.apiKey,
+        model: next.model,
+        messages: [
+          {
+            role: 'system',
+            content: 'Return valid JSON only with keys summary, register, definitions, sampleSentences, translations, collocations, notes.',
+          },
+          { role: 'user', content: 'Connection test for 你好.' },
+        ],
+        provider: next.provider,
+      });
+      const display = { ok: result.ok, message: result.ok ? '连接成功' : result.reason };
+      setAiTestResult(display);
+      return display;
+    } catch {
+      const failed = { ok: false, message: '连接失败' };
+      setAiTestResult(failed);
+      return failed;
+    } finally {
+      setAiTesting(false);
+    }
   }
 
   function updateWord(id: string, patch: Partial<WordEntry>) {
@@ -192,7 +252,27 @@ export function App() {
           onQuery={setQuery}
           onRestore={replace}
           locale={locale}
+          extraActions={
+            <button
+              onClick={openAiSettings}
+              title="AI 设置"
+              className="inline-flex items-center gap-1 rounded-sm border border-border bg-transparent px-3 py-2.5 text-sm text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input"
+            >
+              <Sparkles className="h-4 w-4" /> AI
+            </button>
+          }
         />
+
+        {aiSettings && (
+          <AiSettingsPanel
+            settings={aiSettings}
+            onClose={() => setAiSettingsState(null)}
+            onSave={saveAiSettings}
+            onTestConnection={testAiConnection}
+            testing={aiTesting}
+            testResult={aiTestResult}
+          />
+        )}
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-strong pb-3">
           <div className="flex gap-1">

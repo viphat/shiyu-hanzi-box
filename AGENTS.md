@@ -11,6 +11,7 @@ The implementation plan is in:
 
 - `docs/superpowers/plans/2026-06-20-shiyu-hanzi-box.md`
 - `docs/superpowers/specs/2026-06-20-shiyu-hanzi-box-design.md`
+- `docs/superpowers/plans/2026-06-21-word-insight-panel-ai.md`
 
 Tasks 0 through 15 have landed.
 
@@ -64,6 +65,8 @@ The central data path is:
    add an offline Word Insight Panel: definitions, tone chips, highlighted
    source examples, and external dictionary links — all computed at view time,
    not persisted on `WordEntry`.
+9. `lib/ai/*` adds an opt-in BYO-key AI layer. AI insight is generated only
+   after an explicit user click, then persisted on `WordEntry.aiInsight`.
 
 Core modules:
 
@@ -85,15 +88,33 @@ Core modules:
 - `lib/word-insight.ts`: pure composition of dictionary, tone chips, source
   examples, and external links into a `WordInsight`.
 - `lib/external-dictionaries.ts`: click-only encoded MDBG and 百度汉语 URLs.
+- `lib/ai/settings.ts`: WXT storage for `local:aiSettings` and provider
+  preset table (DeepSeek, OpenAI, custom endpoint).
+- `lib/ai/prompt.ts`: pure function that builds the OpenAI-style messages
+  array for the AI request.
+- `lib/ai/parse.ts`: pure validation of the model JSON response into
+  `AiInsight`.
+- `lib/ai/client.ts`: single `fetch` to `${baseUrl}/chat/completions` with
+  typed error handling.
+- `lib/ai/permissions.ts`: lazy `chrome.permissions.request` for the
+  configured provider origin.
 - `lib/markdown.ts`: pure daily Markdown rendering.
 - `lib/export.ts`: daily export map and zip byte generation.
 - `entrypoints/popup/Popup.tsx`: toolbar capture buttons.
 - `entrypoints/newtab/components/WordInsightPanel.tsx`: insight UI inside
   `WordCard`.
+- `entrypoints/newtab/components/AiSettingsPanel.tsx`: provider picker,
+  masked key, model, test connection.
+- `entrypoints/newtab/components/AskAiButton.tsx`: trigger with idle /
+  disabled / loading / error / retry states.
+- `entrypoints/newtab/components/AiInsightSection.tsx`: renders persisted AI
+  insight below local sections.
 - `entrypoints/newtab/components/ReviewInsightReveal.tsx`: reveal interaction
   in `ReviewQueue`.
 - `entrypoints/newtab/hooks/useWordInsight.ts`: loads the dictionary once per
   dashboard session and computes insight per word.
+- `entrypoints/newtab/hooks/useAiInsight.ts`: orchestrates settings → client
+  → persist on `WordEntry`.
 - `entrypoints/newtab/`: dashboard shell, toolbar, cards, lists, and storage
   hook.
 

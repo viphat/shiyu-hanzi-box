@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildIndex } from '../lib/dictionary';
 import { renderDay } from '../lib/markdown';
-import type { DictionaryEntry, QuoteEntry, WordEntry } from '../lib/types';
+import type { AiInsight, DictionaryEntry, QuoteEntry, WordEntry } from '../lib/types';
 
 const day = '2026-06-20';
 
@@ -102,5 +102,36 @@ describe('renderDay with dictionary', () => {
     const decorated: WordEntry = { ...word, text: '你好！', normalized: '你好' };
     const md = renderDay(day, [decorated], [], index);
     expect(md).toContain('Dictionary: _ni3 hao3_ hello; good day');
+  });
+});
+
+const aiInsight: AiInsight = {
+  provider: 'deepseek',
+  model: 'deepseek-chat',
+  baseUrl: 'https://api.deepseek.com/v1',
+  generatedAt: 1,
+  summary: 'hello greeting',
+  register: 'neutral',
+  definitions: ['打招呼 - hello'],
+  sampleSentences: ['你好世界。'],
+  translations: ['Hello world.'],
+  collocations: ['你好吗'],
+  notes: 'Common greeting.',
+};
+
+describe('renderDay with AI insight', () => {
+  it('includes an AI Insight subsection when the word has aiInsight', () => {
+    const md = renderDay(day, [{ ...word, aiInsight }], []);
+
+    expect(md).toContain('## AI Insight');
+    expect(md).toContain('hello greeting');
+    expect(md).toContain('你好世界。');
+    expect(md).toContain('Hello world.');
+  });
+
+  it('omits the AI Insight subsection when aiInsight is absent', () => {
+    const md = renderDay(day, [word], []);
+
+    expect(md).not.toContain('AI Insight');
   });
 });

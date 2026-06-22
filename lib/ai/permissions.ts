@@ -5,7 +5,7 @@ import { getProviderOrigins } from './settings';
 export function originFromBaseUrl(baseUrl: string): string | null {
   try {
     const url = new URL(baseUrl);
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    if (url.protocol !== 'https:') return null;
     return `${url.origin}/*`;
   } catch {
     return null;

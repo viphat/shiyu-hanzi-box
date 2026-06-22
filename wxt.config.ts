@@ -19,7 +19,6 @@ export default defineConfig({
       'https://api.deepseek.com/*',
       'https://api.openai.com/*',
       'https://*/*',
-      'http://*/*',
     ],
     commands: {
       'save-word': {

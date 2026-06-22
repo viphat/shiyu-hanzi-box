@@ -39,6 +39,10 @@ describe('originFromBaseUrl', () => {
   it('returns null for invalid URLs', () => {
     expect(originFromBaseUrl('not a url')).toBeNull();
   });
+
+  it('rejects insecure HTTP endpoints', () => {
+    expect(originFromBaseUrl('http://localhost:11434/v1')).toBeNull();
+  });
 });
 
 describe('requestProviderPermission', () => {
@@ -55,9 +59,9 @@ describe('requestProviderPermission', () => {
   });
 
   it('requests a custom origin when supplied', async () => {
-    await requestProviderPermission('custom', 'http://localhost:11434/*');
+    await requestProviderPermission('custom', 'https://llm.example.test/*');
     expect(request).toHaveBeenCalledWith({
-      origins: ['http://localhost:11434/*'],
+      origins: ['https://llm.example.test/*'],
     });
   });
 });
@@ -79,12 +83,24 @@ describe('requestAiSettingsPermission', () => {
     await requestAiSettingsPermission(
       settings({
         provider: 'custom',
-        baseUrl: 'http://localhost:11434/v1',
+        baseUrl: 'https://llm.example.test/v1',
       }),
     );
 
     expect(request).toHaveBeenCalledWith({
-      origins: ['http://localhost:11434/*'],
+      origins: ['https://llm.example.test/*'],
     });
+  });
+
+  it('does not request permission for insecure custom endpoints', async () => {
+    const ok = await requestAiSettingsPermission(
+      settings({
+        provider: 'custom',
+        baseUrl: 'http://localhost:11434/v1',
+      }),
+    );
+
+    expect(ok).toBe(false);
+    expect(request).not.toHaveBeenCalled();
   });
 });

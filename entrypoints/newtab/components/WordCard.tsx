@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
+  Sparkles,
 } from 'lucide-react';
 import {
   displayableOccurrences,
@@ -67,6 +68,16 @@ export function WordCard({
           </div>
         </div>
         <div className="flex shrink-0 gap-1">
+          {!expanded && (
+            <button
+              title={t(locale, 'word.openAiInsight')}
+              onClick={() => setExpanded(true)}
+              className="inline-flex h-7 items-center justify-center gap-1 rounded-sm border border-border bg-paper-input px-2 text-xs font-semibold text-muted transition hover:border-cinnabar-border hover:text-cinnabar"
+            >
+              <Sparkles className="h-3 w-3" />
+              AI
+            </button>
+          )}
           {word.status !== 'reviewed' && (
             <button
               title={t(locale, 'word.markReviewed')}

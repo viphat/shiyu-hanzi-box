@@ -5,10 +5,9 @@ import iconUrl from '../../assets/icon.png';
 import { fetchAiInsight } from '@/lib/ai/client';
 import { requestAiSettingsPermission } from '@/lib/ai/permissions';
 import { DEFAULT_AI_SETTINGS, getAiSettings, setAiSettings } from '@/lib/ai/settings';
-import { buildIndex } from '@/lib/dictionary';
 import { t } from '@/lib/i18n';
-import { hashKaikkiEntries, isAllowedKaikkiUrl, parseKaikkiJsonl } from '@/lib/kaikki';
-import { clearKaikkiCache, setKaikkiCache } from '@/lib/kaikki-cache';
+import { manualKaikkiDownloadUrl } from '@/lib/kaikki';
+import { clearKaikkiCache } from '@/lib/kaikki-cache';
 import {
   DEFAULT_KAIKKI_SOURCE_URL,
   enableKaikki,
@@ -19,6 +18,11 @@ import {
 import type { AiSettings, UiLocale } from '@/lib/types';
 import { useSettings } from '../newtab/hooks/useSettings';
 import { AiSettingsPanel } from './AiSettingsPanel';
+import type {
+  KaikkiImportProgress,
+  KaikkiImportWorkerRequest,
+  KaikkiImportWorkerResponse,
+} from './kaikki-import-types';
 
 type Message = { tone: 'success' | 'error'; text: string } | null;
 
@@ -26,11 +30,14 @@ export function SettingsApp() {
   const { settings, loading, mutate } = useSettings();
   const locale = settings.uiLocale;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const workerRef = useRef<Worker | null>(null);
   const [sourceUrl, setSourceUrl] = useState(settings.kaikki.sourceUrl);
   const [aiSettings, setAiSettingsState] = useState(DEFAULT_AI_SETTINGS);
   const [aiTesting, setAiTesting] = useState(false);
   const [aiTestResult, setAiTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [importProgress, setImportProgress] = useState<KaikkiImportProgress | null>(null);
+  const [importPhase, setImportPhase] = useState<'idle' | 'parsing' | 'writing'>('idle');
   const [message, setMessage] = useState<Message>(null);
 
   useEffect(() => {
@@ -48,6 +55,12 @@ export function SettingsApp() {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      workerRef.current?.terminate();
+    };
+  }, []);
+
   if (loading) {
     return <div className="min-h-screen p-8 text-sm text-ink-secondary">{t('zh-CN', 'app.loading')}</div>;
   }
@@ -62,77 +75,114 @@ export function SettingsApp() {
     setMessage({ tone: 'success', text: t(locale, 'settings.saved') });
   }
 
-  async function importFile(event: ChangeEvent<HTMLInputElement>) {
+  function importFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = '';
     if (!file) return;
-    await importText(await file.text(), {
+    startKaikkiImport(file, {
       sourceUrl: sourceUrl || settings.kaikki.sourceUrl,
       sourceName: file.name,
     });
   }
 
-  async function downloadKaikki() {
-    if (!isAllowedKaikkiUrl(sourceUrl)) {
+  function downloadKaikki() {
+    const target = manualKaikkiDownloadUrl(sourceUrl);
+    if (!target) {
       setMessage({ tone: 'error', text: t(locale, 'settings.invalidKaikkiUrl') });
       return;
     }
 
-    setBusy(true);
-    setMessage(null);
-    try {
-      const granted = await browser.permissions.request({
-        origins: ['https://kaikki.org/*'],
-      });
-      if (!granted) {
-        setMessage({ tone: 'error', text: t(locale, 'settings.permissionDenied') });
-        return;
-      }
-
-      const response = await fetch(sourceUrl);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      await importText(await response.text(), {
-        sourceUrl,
-        sourceName: 'Kaikki Chinese',
-      });
-    } catch {
-      setMessage({ tone: 'error', text: t(locale, 'settings.failed') });
-    } finally {
-      setBusy(false);
-    }
+    browser.tabs.create({ url: target });
+    setMessage({ tone: 'success', text: t(locale, 'settings.downloadOpened') });
   }
 
-  async function importText(
-    text: string,
+  function startKaikkiImport(
+    file: File,
     source: { sourceUrl: string; sourceName: string },
   ) {
+    workerRef.current?.terminate();
+    const worker = new Worker(new URL('./kaikki-import.worker.ts', import.meta.url), {
+      type: 'module',
+    });
+    workerRef.current = worker;
     setBusy(true);
+    setImportPhase('parsing');
+    setImportProgress({
+      loadedBytes: 0,
+      totalBytes: file.size,
+      percent: 0,
+      entryCount: 0,
+      skipped: 0,
+    });
     setMessage(null);
-    try {
-      const parsed = parseKaikkiJsonl(text);
-      if (parsed.entries.length === 0) {
-        throw new Error('No usable Chinese entries found');
-      }
-      const hash = hashKaikkiEntries(parsed.entries);
-      await setKaikkiCache(hash, buildIndex(parsed.entries));
+
+    worker.onmessage = (event: MessageEvent<KaikkiImportWorkerResponse>) => {
+      void handleKaikkiWorkerMessage(event.data, source);
+    };
+    worker.onerror = () => {
+      finishKaikkiImport();
+      setMessage({ tone: 'error', text: t(locale, 'settings.failed') });
+    };
+
+    const request: KaikkiImportWorkerRequest = { type: 'import', file };
+    worker.postMessage(request);
+  }
+
+  async function handleKaikkiWorkerMessage(
+    workerMessage: KaikkiImportWorkerResponse,
+    source: { sourceUrl: string; sourceName: string },
+  ) {
+    if (workerMessage.type === 'progress') {
+      setImportPhase('parsing');
+      setImportProgress(workerMessage);
+      return;
+    }
+
+    if (workerMessage.type === 'writing') {
+      setImportPhase('writing');
+      setImportProgress(workerMessage);
+      return;
+    }
+
+    if (workerMessage.type === 'complete') {
       await mutate((current) =>
         recordKaikkiImport(current, {
           sourceUrl: source.sourceUrl,
           sourceName: source.sourceName,
-          hash,
-          entryCount: parsed.entries.length,
+          hash: workerMessage.hash,
+          entryCount: workerMessage.entryCount,
           importedAt: Date.now(),
         }),
       );
+      finishKaikkiImport();
       setMessage({
         tone: 'success',
-        text: `${t(locale, 'settings.ready')}: ${parsed.entries.length}`,
+        text: `${t(locale, 'settings.ready')}: ${workerMessage.entryCount}`,
       });
-    } catch {
-      setMessage({ tone: 'error', text: t(locale, 'settings.failed') });
-    } finally {
-      setBusy(false);
+      return;
     }
+
+    finishKaikkiImport();
+    if (workerMessage.type === 'cancelled') {
+      setMessage({ tone: 'success', text: t(locale, 'settings.importCancelled') });
+    } else {
+      setMessage({ tone: 'error', text: t(locale, 'settings.failed') });
+    }
+  }
+
+  function cancelKaikkiImport() {
+    const request: KaikkiImportWorkerRequest = { type: 'cancel' };
+    workerRef.current?.postMessage(request);
+    finishKaikkiImport();
+    setMessage({ tone: 'success', text: t(locale, 'settings.importCancelled') });
+  }
+
+  function finishKaikkiImport() {
+    workerRef.current?.terminate();
+    workerRef.current = null;
+    setBusy(false);
+    setImportPhase('idle');
+    setImportProgress(null);
   }
 
   async function removeKaikki() {
@@ -255,6 +305,9 @@ export function SettingsApp() {
             <h2 className="text-sm font-semibold tracking-[2px]">{t(locale, 'dictionary.kaikki')}</h2>
           </div>
           <p className="mb-3 text-xs leading-6 text-muted">{t(locale, 'settings.kaikkiBody')}</p>
+          <p className="mb-3 rounded-sm border border-cinnabar-border bg-cinnabar-light px-3 py-2 text-xs leading-5 text-cinnabar">
+            {t(locale, 'settings.kaikkiImportNotice')}
+          </p>
           <label className="mb-3 flex items-center gap-2 text-sm text-ink-secondary">
             <input
               type="checkbox"
@@ -294,7 +347,7 @@ export function SettingsApp() {
               className="inline-flex items-center gap-1 rounded-sm bg-cinnabar px-3 py-2.5 text-sm text-white shadow-sm tracking-[1px] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Download className="h-4 w-4" />
-              {busy ? t(locale, 'settings.processing') : t(locale, 'settings.download')}
+              {t(locale, 'settings.download')}
             </button>
             <button
               onClick={removeKaikki}
@@ -305,6 +358,38 @@ export function SettingsApp() {
               {t(locale, 'settings.removeKaikki')}
             </button>
           </div>
+          {importProgress ? (
+            <div className="mt-3 rounded-sm border border-border bg-paper-input p-3 text-xs text-muted">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <span className="font-medium text-ink-secondary">
+                  {importPhase === 'writing'
+                    ? t(locale, 'settings.writingDictionary')
+                    : t(locale, 'settings.importing')}
+                </span>
+                <span>
+                  {formatBytes(importProgress.loadedBytes)} / {formatBytes(importProgress.totalBytes)} · {importProgress.percent}%
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-sm bg-border">
+                <div
+                  className="h-full bg-cinnabar transition-all"
+                  style={{ width: `${importProgress.percent}%` }}
+                />
+              </div>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  {t(locale, 'settings.importedEntries')}: {importProgress.entryCount} · {t(locale, 'settings.filteredRecords')}: {importProgress.skipped}
+                </span>
+                <button
+                  type="button"
+                  onClick={cancelKaikkiImport}
+                  className="rounded-sm border border-border bg-transparent px-2 py-1 text-xs text-ink-secondary transition hover:border-cinnabar-border hover:bg-cinnabar-light hover:text-cinnabar"
+                >
+                  {t(locale, 'settings.cancelImport')}
+                </button>
+              </div>
+            </div>
+          ) : null}
           <dl className="mt-3 grid gap-2 text-xs text-muted sm:grid-cols-3">
             <div className="rounded-sm border border-border bg-paper-input px-2 py-1.5">
               <dt>{t(locale, 'settings.importedEntries')}</dt>
@@ -344,4 +429,16 @@ export function SettingsApp() {
       </main>
     </div>
   );
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value >= 10 || unit === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unit]}`;
 }

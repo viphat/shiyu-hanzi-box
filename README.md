@@ -107,19 +107,28 @@ CC-CEDICT remains the default bundled offline dictionary. For words that
 CC-CEDICT misses, the settings page can optionally extend lookup with a Kaikki
 JSONL dictionary source:
 
-- **Import JSONL file** reads a local Kaikki JSONL file and stores processed
-  entries in IndexedDB.
-- **Download from Kaikki** asks for the optional `https://kaikki.org/*` host
-  permission, downloads the configured Kaikki URL, processes it locally, and
-  stores the compact index in IndexedDB.
+- **Import JSONL file** streams a local Kaikki JSONL file through a worker,
+  shows progress, and stores processed entries in IndexedDB.
+- **Open Kaikki download** opens the configured Kaikki URL in a normal tab so
+  you can download the JSONL manually, then import it after the download
+  finishes.
 - **Enable Kaikki fallback** controls whether the stored Kaikki index is used.
 - **Remove Kaikki data** deletes the runtime Kaikki index and leaves the
   bundled CC-CEDICT dictionary untouched.
 
 Kaikki data is not bundled into `public/` and is not added to the packed
 extension. Large Kaikki dumps can take significant time and local browser
-storage to process. Kaikki entries are used only as fallback definitions:
-CC-CEDICT results stay first when both sources contain a word.
+storage to process during import, so keep the settings page open while progress
+is running. Kaikki entries are used only as fallback definitions: CC-CEDICT
+results stay first when both sources contain a word.
+
+During import, the progress panel reports imported entries and filtered records.
+Filtered records are expected for Kaikki dumps: the importer only keeps unique
+Chinese headwords that contain at least one Han character and at least one
+usable `glosses` or `raw_glosses` definition. Kaikki also includes Chinese
+records such as Latin-script loanwords, redirects, and no-gloss character
+metadata; those are ignored because they cannot improve the Hanzi fallback
+dictionary.
 
 Kaikki data comes from [Kaikki/Wiktextract](https://kaikki.org/) and its
 published dictionary dumps. Review the Kaikki source page and Wiktionary license

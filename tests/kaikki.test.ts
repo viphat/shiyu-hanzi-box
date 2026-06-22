@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createKaikkiJsonlStreamParser,
   hashKaikkiEntries,
   isAllowedKaikkiUrl,
+  manualKaikkiDownloadUrl,
   parseKaikkiJsonl,
 } from '../lib/kaikki';
 
@@ -66,6 +68,44 @@ describe('parseKaikkiJsonl', () => {
   });
 });
 
+describe('createKaikkiJsonlStreamParser', () => {
+  it('parses JSONL split across chunks without loading the whole file text', () => {
+    const first = JSON.stringify({
+      word: '滞胀',
+      lang_code: 'zh',
+      senses: [{ glosses: ['stagflation'] }],
+    });
+    const second = JSON.stringify({
+      word: '文言',
+      lang_code: 'zh',
+      senses: [{ glosses: ['Classical Chinese'] }],
+    });
+    const parser = createKaikkiJsonlStreamParser();
+
+    parser.addChunk(`${first}\n${second.slice(0, 12)}`);
+    parser.addChunk(`${second.slice(12)}\n{bad json`);
+    const result = parser.finish();
+
+    expect(result.entries.map((entry) => entry.simplified)).toEqual(['滞胀', '文言']);
+    expect(result.entries.map((entry) => entry.definitions[0])).toEqual([
+      'stagflation',
+      'Classical Chinese',
+    ]);
+    expect(result.skipped).toBe(1);
+  });
+
+  it('reports the current entry and skipped counts before finish', () => {
+    const parser = createKaikkiJsonlStreamParser();
+    parser.addChunk(`${JSON.stringify({
+      word: '龍',
+      lang_code: 'zh',
+      senses: [{ glosses: ['dragon'] }],
+    })}\nnot json\n`);
+
+    expect(parser.snapshot()).toEqual({ entryCount: 1, skipped: 1 });
+  });
+});
+
 describe('isAllowedKaikkiUrl', () => {
   it('accepts kaikki.org HTTPS URLs', () => {
     expect(
@@ -77,6 +117,18 @@ describe('isAllowedKaikkiUrl', () => {
     expect(isAllowedKaikkiUrl('https://example.com/dump.jsonl')).toBe(false);
     expect(isAllowedKaikkiUrl('http://kaikki.org/dump.jsonl')).toBe(false);
     expect(isAllowedKaikkiUrl('not a url')).toBe(false);
+  });
+});
+
+describe('manualKaikkiDownloadUrl', () => {
+  it('returns the configured Kaikki URL for manual download', () => {
+    const url = 'https://kaikki.org/dictionary/Chinese/kaikki.org-dictionary-Chinese.jsonl';
+
+    expect(manualKaikkiDownloadUrl(url)).toBe(url);
+  });
+
+  it('returns null for unsupported download hosts', () => {
+    expect(manualKaikkiDownloadUrl('https://example.com/dump.jsonl')).toBeNull();
   });
 });
 

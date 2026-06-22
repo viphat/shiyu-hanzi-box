@@ -115,6 +115,13 @@ Core modules:
   dashboard session and computes insight per word.
 - `entrypoints/newtab/hooks/useAiInsight.ts`: orchestrates settings → client
   → persist on `WordEntry`.
+- `entrypoints/settings/kaikki-import.worker.ts`: streams a user-selected
+  Kaikki JSONL file off the settings UI thread, reports progress, builds the
+  fallback index, and stores it in IndexedDB.
+- `lib/kaikki.ts`: Kaikki JSONL parser, streaming parser, URL validation, and
+  entry hashing. The parser intentionally filters out records without Han
+  characters or without usable `glosses` / `raw_glosses`; progress UI should
+  describe these as filtered records rather than failed imports.
 - `entrypoints/newtab/`: dashboard shell, toolbar, cards, lists, and storage
   hook.
 

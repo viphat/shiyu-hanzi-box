@@ -25,34 +25,52 @@ export interface KaikkiParseResult {
   skipped: number;
 }
 
+export interface KaikkiStreamSnapshot {
+  entryCount: number;
+  skipped: number;
+}
+
+export interface KaikkiJsonlStreamParser {
+  addChunk(chunk: string): void;
+  snapshot(): KaikkiStreamSnapshot;
+  finish(): KaikkiParseResult;
+}
+
 const CJK = /[\u3400-\u9fff\uf900-\ufaff]/;
 
 export function parseKaikkiJsonl(jsonl: string): KaikkiParseResult {
+  const parser = createKaikkiJsonlStreamParser();
+  parser.addChunk(jsonl);
+  return parser.finish();
+}
+
+export function createKaikkiJsonlStreamParser(): KaikkiJsonlStreamParser {
   const bySurface = new Map<string, { pinyin: string; definitions: string[] }>();
   let skipped = 0;
+  let pending = '';
 
-  for (const rawLine of jsonl.split('\n')) {
+  function consumeLine(rawLine: string) {
     const line = rawLine.trim();
-    if (!line) continue;
+    if (!line) return;
 
     let record: KaikkiRecord;
     try {
       record = JSON.parse(line) as KaikkiRecord;
     } catch {
       skipped += 1;
-      continue;
+      return;
     }
 
     const surface = typeof record.word === 'string' ? record.word.trim() : '';
     if (!isChineseRecord(record) || !CJK.test(surface)) {
       skipped += 1;
-      continue;
+      return;
     }
 
     const definitions = extractDefinitions(record);
     if (definitions.length === 0) {
       skipped += 1;
-      continue;
+      return;
     }
 
     const existing = bySurface.get(surface);
@@ -67,15 +85,34 @@ export function parseKaikkiJsonl(jsonl: string): KaikkiParseResult {
     }
   }
 
+  function result(): KaikkiParseResult {
+    return {
+      entries: Array.from(bySurface.entries()).map(([surface, entry], index) => ({
+        index,
+        traditional: surface,
+        simplified: surface,
+        pinyin: entry.pinyin,
+        definitions: entry.definitions,
+      })),
+      skipped,
+    };
+  }
+
   return {
-    entries: Array.from(bySurface.entries()).map(([surface, entry], index) => ({
-      index,
-      traditional: surface,
-      simplified: surface,
-      pinyin: entry.pinyin,
-      definitions: entry.definitions,
-    })),
-    skipped,
+    addChunk(chunk) {
+      pending += chunk;
+      const lines = pending.split('\n');
+      pending = lines.pop() ?? '';
+      for (const line of lines) consumeLine(line);
+    },
+    snapshot() {
+      return { entryCount: bySurface.size, skipped };
+    },
+    finish() {
+      if (pending) consumeLine(pending);
+      pending = '';
+      return result();
+    },
   };
 }
 
@@ -118,6 +155,10 @@ export function isAllowedKaikkiUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+export function manualKaikkiDownloadUrl(value: string): string | null {
+  return isAllowedKaikkiUrl(value) ? value : null;
 }
 
 export function hashKaikkiEntries(entries: DictionaryEntry[]): string {

@@ -16,7 +16,6 @@ export default defineConfig({
       'clipboardRead',
     ],
     optional_host_permissions: [
-      'https://kaikki.org/*',
       'https://api.deepseek.com/*',
       'https://api.openai.com/*',
       'https://*/*',

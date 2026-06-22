@@ -1,0 +1,70 @@
+# Chrome Web Store Reviewer Notes
+
+Last updated: 2026-06-22
+
+Use this file when filling the reviewer notes field during Chrome Web Store
+submission.
+
+## Suggested Reviewer Notes
+
+```text
+拾语汉字box is a local-first Chinese reading extension. It captures selected text only after explicit user action through the context menu, keyboard shortcut, or toolbar popup. Saved entries are stored in local extension storage and can be exported as Markdown, zip, or JSON backup files.
+
+AI insight is disabled by default. To test AI, open Settings, enable AI, choose a provider, enter a valid user-owned API key, and click Test Connection. The extension requests the provider host permission lazily at that point. Without a user-provided API key, all local dictionary features still work offline.
+
+The bundled CC-CEDICT dictionary is packaged with the extension and used offline. The optional Kaikki workflow opens the Kaikki download page in a regular tab and processes a user-selected JSONL file locally.
+```
+
+## Manual Test Script
+
+Use this flow for reviewer instructions or your own pre-submit smoke test.
+
+1. Load or install the extension.
+2. Open any normal webpage with Chinese text.
+3. Select a Chinese word or phrase.
+4. Right-click the selection and choose the extension action to save it as a
+   word.
+5. Select a longer Chinese sentence or passage.
+6. Right-click the selection and save it as a quote.
+7. Open a new tab. The extension dashboard should appear because the extension
+   uses a new-tab override.
+8. Confirm the saved word and quote appear in the dashboard.
+9. Expand the saved word. Local dictionary definitions, tone chips, source
+   examples, and external dictionary links should appear without AI.
+10. Click the daily Markdown export action and confirm Chrome downloads a
+    `.md` file.
+11. Click the zip export action and confirm Chrome downloads a `.zip` file.
+12. Click the backup action and confirm Chrome downloads a `.json` backup file.
+13. Open Settings from the dashboard.
+14. Change the UI language between `zh-CN` and English, then return to the
+    dashboard to confirm labels update.
+15. Optional AI test: enable AI, choose DeepSeek or OpenAI, enter a valid API
+    key, click Test Connection, return to a saved word, and click Ask AI.
+
+## Popup Fallback Test
+
+Some pages restrict injected scripts or selection access. The popup provides a
+manual fallback.
+
+1. Click the extension toolbar icon.
+2. Try saving the current selection as a word or quote.
+3. If capture is unavailable, paste or type Chinese text into the fallback box.
+4. Click the save button.
+5. Confirm the entry appears in the new-tab dashboard.
+
+## Privacy Boundary To Highlight
+
+- Local dictionary insight is offline.
+- External dictionary links open only when clicked.
+- AI is opt-in, BYO-key, and initiated only by explicit user action.
+- API keys and generated AI insight are stored locally in extension storage.
+- Markdown, zip, and backup files are created only after explicit download
+  actions.
+
+## Known Limitations
+
+- Chrome internal pages and some restricted pages cannot be scripted; use the
+  popup manual fallback there.
+- Custom AI endpoints must use HTTPS.
+- Kaikki dictionary import can take time for large JSONL files and should be
+  run while the Settings page remains open.

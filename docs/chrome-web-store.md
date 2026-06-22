@@ -76,3 +76,10 @@ Store listing assets prepared in this repo:
 
 - `docs/store-assets/chrome-web-store-screenshot-dashboard.png` at 1280x800.
 - `docs/store-assets/chrome-web-store-small-promo.png` at 440x280.
+
+## Detailed Follow-Up
+
+- Use `docs/chrome-web-store-dashboard-checklist.md` when filling Step 4 in the
+  Chrome Developer Dashboard.
+- Use `docs/chrome-web-store-reviewer-notes.md` when filling Step 5 reviewer
+  notes and manual test instructions.

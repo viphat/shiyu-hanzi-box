@@ -3,6 +3,7 @@ import { t } from '@/lib/i18n';
 import type { UiLocale, WordEntry } from '@/lib/types';
 import { useWordInsight } from '../hooks/useWordInsight';
 import { DefinitionList } from './DefinitionList';
+import { SpeakButton } from './SpeakButton';
 import { SourceExamples } from './SourceExamples';
 import { ToneChips } from './ToneChips';
 
@@ -35,6 +36,7 @@ function RevealedReviewInsight({ word, locale }: { word: WordEntry; locale: UiLo
   return (
     <div className="mt-3 space-y-2">
       <ToneChips chips={insight.toneChips} />
+      <SpeakButton text={word.text} locale={locale} />
       <DefinitionList
         title={t(locale, 'insight.definitions')}
         entries={insight.exactEntries.length > 0 ? insight.exactEntries : insight.componentEntries}

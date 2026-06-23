@@ -12,6 +12,7 @@ import {
 import { t } from '@/lib/i18n';
 import type { UiLocale, WordEntry } from '@/lib/types';
 import { PinyinButton } from './PinyinButton';
+import { SpeakButton } from './SpeakButton';
 import { TraditionalButton } from './TraditionalButton';
 import { WordInsightPanel } from './WordInsightPanel';
 
@@ -55,6 +56,7 @@ export function WordCard({
               onGenerated={(pinyin) => onUpdate({ pinyin })}
               locale={locale}
             />
+            <SpeakButton text={word.text} locale={locale} />
             <TraditionalButton
               text={word.text}
               existing={word.traditionalText}

@@ -20,10 +20,14 @@ describe('i18n messages', () => {
     expect(t('en', 'missing.key' as never)).toBe('missing.key');
   });
 
-  it('returns Traditional conversion labels in both locales', () => {
+  it('returns study tool labels in both locales', () => {
+    expect(t('en', 'pinyin.generate')).toBe('Pinyin');
+    expect(t('en', 'tts.speak')).toBe('Pronounce');
     expect(t('en', 'traditional.generate')).toBe('Traditional');
     expect(t('en', 'traditional.show')).toBe('Show Traditional');
     expect(t('en', 'traditional.hide')).toBe('Hide Traditional');
+    expect(t('zh-CN', 'pinyin.generate')).toBe('注音');
+    expect(t('zh-CN', 'tts.speak')).toBe('发音');
     expect(t('zh-CN', 'traditional.generate')).toBe('繁體');
     expect(t('zh-CN', 'traditional.show')).toBe('显示繁體');
     expect(t('zh-CN', 'traditional.hide')).toBe('隐藏繁體');

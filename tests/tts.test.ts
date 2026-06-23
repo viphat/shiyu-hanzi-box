@@ -179,6 +179,21 @@ describe('tts', () => {
     expect(getTtsState()).toEqual({ status: 'idle' });
   });
 
+  it('ignores stale end callbacks from replaced speech', async () => {
+    const { getTtsState, speak } = await initWithVoices([createMockVoice('zh-CN', 'Google Mandarin')]);
+
+    speak('你好');
+    const firstUtterance = speakCalls[0];
+
+    speak('世界');
+
+    expect(getTtsState()).toEqual({ status: 'speaking', text: '世界' });
+    firstUtterance.onend?.({} as SpeechSynthesisEvent);
+    expect(getTtsState()).toEqual({ status: 'speaking', text: '世界' });
+    speakCalls[1].onend?.({} as SpeechSynthesisEvent);
+    expect(getTtsState()).toEqual({ status: 'idle' });
+  });
+
   it('tracks speaking to idle after stop', async () => {
     const { getTtsState, speak, stop } = await initWithVoices([createMockVoice('zh-CN', 'Google Mandarin')]);
 

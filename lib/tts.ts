@@ -7,6 +7,7 @@ export type TtsListener = (state: TtsState) => void;
 
 let state: TtsState = { status: 'unavailable' };
 let chineseVoice: SpeechSynthesisVoice | null = null;
+let activeUtterance: SpeechSynthesisUtterance | null = null;
 let listenerRegistered = false;
 let warmedUp = false;
 
@@ -52,12 +53,14 @@ function refreshVoices(): TtsState {
   const synth = getSynth();
   if (!synth) {
     chineseVoice = null;
+    activeUtterance = null;
     setState({ status: 'unavailable' });
     return state;
   }
 
   chineseVoice = pickChineseVoice(synth.getVoices());
   if (!chineseVoice) {
+    activeUtterance = null;
     setState({ status: 'unavailable' });
     return state;
   }
@@ -74,6 +77,7 @@ function refreshVoices(): TtsState {
 export function initTts(): TtsState {
   const synth = getSynth();
   if (!synth) {
+    activeUtterance = null;
     setState({ status: 'unavailable' });
     return state;
   }
@@ -105,23 +109,30 @@ export function speak(text: string): void {
   const synth = getSynth();
   if (!synth || !chineseVoice || typeof SpeechSynthesisUtterance === 'undefined') {
     if (!synth || !chineseVoice) {
+      activeUtterance = null;
       setState({ status: 'unavailable' });
     }
     return;
   }
 
+  activeUtterance = null;
   synth.cancel();
 
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.voice = chineseVoice;
   utterance.lang = chineseVoice.lang;
   utterance.onend = () => {
+    if (activeUtterance !== utterance) return;
+    activeUtterance = null;
     setState({ status: 'idle' });
   };
   utterance.onerror = () => {
+    if (activeUtterance !== utterance) return;
+    activeUtterance = null;
     setState({ status: 'idle' });
   };
 
+  activeUtterance = utterance;
   setState({ status: 'speaking', text });
   synth.speak(utterance);
 }
@@ -129,10 +140,12 @@ export function speak(text: string): void {
 export function stop(): void {
   const synth = getSynth();
   if (!synth) {
+    activeUtterance = null;
     setState({ status: 'unavailable' });
     return;
   }
 
+  activeUtterance = null;
   synth.cancel();
   setState(chineseVoice ? { status: 'idle' } : { status: 'unavailable' });
 }

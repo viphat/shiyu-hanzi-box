@@ -5,6 +5,7 @@ import { useWordInsight } from '../hooks/useWordInsight';
 import { AiInsightSection } from './AiInsightSection';
 import { AskAiButton } from './AskAiButton';
 import { DefinitionList } from './DefinitionList';
+import { SpeakButton } from './SpeakButton';
 import { SourceExamples } from './SourceExamples';
 import { ToneChips } from './ToneChips';
 
@@ -28,6 +29,7 @@ export function WordInsightPanel({ word, locale }: { word: WordEntry; locale: Ui
   return (
     <div className="space-y-3">
       <ToneChips chips={insight.toneChips} />
+      <SpeakButton text={word.text} locale={locale} />
 
       {insight.status === 'ready' && (
         <DefinitionList title={t(locale, 'insight.definitions')} entries={insight.exactEntries} locale={locale} />

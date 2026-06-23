@@ -33,9 +33,25 @@ type MockSpeechSynthesis = {
   removeEventListener: ReturnType<typeof vi.fn>;
 };
 
+type MockChromeTtsVoice = {
+  lang?: string;
+  voiceName?: string;
+};
+
+type MockChromeTts = {
+  getVoices: ReturnType<typeof vi.fn>;
+  speak: ReturnType<typeof vi.fn>;
+  stop: ReturnType<typeof vi.fn>;
+};
+
 let mockVoices: SpeechSynthesisVoice[] = [];
 let speakCalls: MockSpeechSynthesisUtterance[] = [];
 let voiceListeners: Array<() => void> = [];
+let chromeSpeakOptions: Array<{
+  lang?: string;
+  voiceName?: string;
+  onEvent?: (event: { type: string; errorMessage?: string }) => void;
+}> = [];
 
 function createMockSpeechSynthesis(): MockSpeechSynthesis {
   speakCalls = [];
@@ -64,6 +80,21 @@ function emitVoicesChanged() {
   for (const listener of voiceListeners) {
     listener();
   }
+}
+
+function createMockChromeTts(voices: MockChromeTtsVoice[]): MockChromeTts {
+  chromeSpeakOptions = [];
+
+  return {
+    getVoices: vi.fn((callback?: (voices: MockChromeTtsVoice[]) => void) => {
+      callback?.(voices);
+      return undefined;
+    }),
+    speak: vi.fn((_text: string, options?: { onEvent?: (event: { type: string }) => void }) => {
+      chromeSpeakOptions.push(options ?? {});
+    }),
+    stop: vi.fn(),
+  };
 }
 
 describe('tts', () => {
@@ -105,7 +136,7 @@ describe('tts', () => {
     expect(getTtsState()).toEqual({ status: 'unavailable' });
   });
 
-  it('detects a zh-CN voice and warms up once', async () => {
+  it('detects a zh-CN voice without speaking before a user click', async () => {
     mockVoices = [createMockVoice('zh-CN', 'Google Mandarin')];
     const { initTts, isChineseVoiceAvailable } = await importTts();
 
@@ -114,9 +145,8 @@ describe('tts', () => {
 
     expect(isChineseVoiceAvailable()).toBe(true);
     expect(speechSynthesis.addEventListener).toHaveBeenCalledTimes(1);
-    expect(speechSynthesis.speak).toHaveBeenCalledTimes(1);
-    expect(speakCalls[0].text).toBe('一');
-    expect(speechSynthesis.cancel).toHaveBeenCalledTimes(1);
+    expect(speechSynthesis.speak).not.toHaveBeenCalled();
+    expect(speechSynthesis.cancel).not.toHaveBeenCalled();
   });
 
   it('detects voices when Chrome resolves them later', async () => {
@@ -126,6 +156,18 @@ describe('tts', () => {
     mockVoices = [createMockVoice('zh-CN', 'Google Mandarin')];
     emitVoicesChanged();
 
+    expect(isChineseVoiceAvailable()).toBe(true);
+    expect(getTtsState()).toEqual({ status: 'idle' });
+  });
+
+  it('detects a zh-CN chrome tts voice', async () => {
+    const chromeTts = createMockChromeTts([{ lang: 'zh-CN', voiceName: 'Ting-Ting' }]);
+    vi.stubGlobal('chrome', { tts: chromeTts });
+    const { getTtsState, initTts, isChineseVoiceAvailable } = await importTts();
+
+    initTts();
+
+    expect(chromeTts.getVoices).toHaveBeenCalled();
     expect(isChineseVoiceAvailable()).toBe(true);
     expect(getTtsState()).toEqual({ status: 'idle' });
   });
@@ -156,6 +198,42 @@ describe('tts', () => {
     expect(speechSynthesis.speak).toHaveBeenCalledTimes(1);
     expect(speakCalls[0].text).toBe('你好');
     expect(speakCalls[0].voice?.lang).toBe('zh-CN');
+  });
+
+  it('prefers chrome tts speech when available', async () => {
+    const chromeTts = createMockChromeTts([{ lang: 'zh-CN', voiceName: 'Ting-Ting' }]);
+    vi.stubGlobal('chrome', { tts: chromeTts });
+    const { getTtsState, initTts, speak } = await importTts();
+
+    mockVoices = [createMockVoice('zh-CN', 'Google Mandarin')];
+    initTts();
+    speechSynthesis.speak.mockClear();
+    speechSynthesis.cancel.mockClear();
+    speakCalls = [];
+
+    speak('你好');
+
+    expect(chromeTts.speak).toHaveBeenCalledWith(
+      '你好',
+      expect.objectContaining({ lang: 'zh-CN', voiceName: 'Ting-Ting' }),
+    );
+    expect(speechSynthesis.speak).not.toHaveBeenCalled();
+    expect(getTtsState()).toEqual({ status: 'speaking', text: '你好' });
+    chromeSpeakOptions[0].onEvent?.({ type: 'end' });
+    expect(getTtsState()).toEqual({ status: 'idle' });
+  });
+
+  it('stops chrome tts speech', async () => {
+    const chromeTts = createMockChromeTts([{ lang: 'zh-CN', voiceName: 'Ting-Ting' }]);
+    vi.stubGlobal('chrome', { tts: chromeTts });
+    const { getTtsState, initTts, speak, stop } = await importTts();
+
+    initTts();
+    speak('你好');
+    stop();
+
+    expect(chromeTts.stop).toHaveBeenCalledTimes(1);
+    expect(getTtsState()).toEqual({ status: 'idle' });
   });
 
   it('does not cancel before first idle speech', async () => {

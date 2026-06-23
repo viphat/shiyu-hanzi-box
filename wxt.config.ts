@@ -14,6 +14,7 @@ export default defineConfig({
       'downloads',
       'unlimitedStorage',
       'clipboardRead',
+      'tts',
     ],
     optional_host_permissions: [
       'https://api.deepseek.com/*',

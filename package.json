@@ -38,5 +38,11 @@
     "typescript": "^5.9.3",
     "vitest": "^4.1.9",
     "wxt": "^0.20.26"
+  },
+  "overrides": {
+    "esbuild": "0.28.1",
+    "shell-quote": "1.8.4",
+    "tmp": "0.2.7",
+    "uuid": "11.1.1"
   }
 }

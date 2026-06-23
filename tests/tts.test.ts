@@ -158,10 +158,23 @@ describe('tts', () => {
     expect(speakCalls[0].voice?.lang).toBe('zh-CN');
   });
 
-  it('cancels current or queued speech before speaking new text', async () => {
+  it('does not cancel before first idle speech', async () => {
     const { speak } = await initWithVoices([createMockVoice('zh-CN', 'Google Mandarin')]);
 
     speak('你好');
+
+    expect(speechSynthesis.cancel).not.toHaveBeenCalled();
+    expect(speechSynthesis.speak).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels active speech before replacing it with new text', async () => {
+    const { speak } = await initWithVoices([createMockVoice('zh-CN', 'Google Mandarin')]);
+
+    speak('你好');
+    speechSynthesis.cancel.mockClear();
+    speechSynthesis.speak.mockClear();
+
+    speak('世界');
 
     expect(speechSynthesis.cancel).toHaveBeenCalledTimes(1);
     expect(speechSynthesis.cancel.mock.invocationCallOrder[0]).toBeLessThan(
@@ -201,7 +214,7 @@ describe('tts', () => {
     expect(getTtsState()).toEqual({ status: 'speaking', text: '你好' });
     stop();
     expect(getTtsState()).toEqual({ status: 'idle' });
-    expect(speechSynthesis.cancel).toHaveBeenCalledTimes(2);
+    expect(speechSynthesis.cancel).toHaveBeenCalledTimes(1);
   });
 
   it('notifies subscribers and stops notifying after unsubscribe', async () => {

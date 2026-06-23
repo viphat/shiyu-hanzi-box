@@ -115,8 +115,10 @@ export function speak(text: string): void {
     return;
   }
 
-  activeUtterance = null;
-  synth.cancel();
+  if (activeUtterance) {
+    activeUtterance = null;
+    synth.cancel();
+  }
 
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.voice = chineseVoice;

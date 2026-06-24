@@ -54,4 +54,23 @@ describe('i18n messages', () => {
     expect(t('zh-CN', 'srs.dueNow')).toBe('现在到期');
     expect(t('zh-CN', 'srs.retention')).toBe('记忆率');
   });
+
+  it('returns SRS settings labels in both locales', () => {
+    expect(t('en', 'settings.srs')).toBe('Spaced repetition');
+    expect(t('en', 'settings.srsDesiredRetention')).toBe(
+      'Target retention',
+    );
+    expect(t('en', 'settings.srsMaxInterval')).toBe(
+      'Maximum interval (days)',
+    );
+    expect(t('en', 'settings.srsNewPerDay')).toBe('New cards per day');
+    expect(t('zh-CN', 'settings.srs')).toBe('间隔复习');
+    expect(t('zh-CN', 'settings.srsDesiredRetention')).toBe(
+      '目标记忆率',
+    );
+    expect(t('zh-CN', 'settings.srsMaxInterval')).toBe(
+      '最大间隔（天）',
+    );
+    expect(t('zh-CN', 'settings.srsNewPerDay')).toBe('每日新卡片数');
+  });
 });

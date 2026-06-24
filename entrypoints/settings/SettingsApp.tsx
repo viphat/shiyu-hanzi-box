@@ -1,4 +1,12 @@
-import { ArrowLeft, Database, Download, Globe2, Trash2, Upload } from 'lucide-react';
+import {
+  ArrowLeft,
+  Database,
+  Download,
+  Gauge,
+  Globe2,
+  Trash2,
+  Upload,
+} from 'lucide-react';
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { browser } from 'wxt/browser';
 import iconUrl from '../../assets/icon.png';
@@ -10,9 +18,11 @@ import { manualKaikkiDownloadUrl } from '@/lib/kaikki';
 import { clearKaikkiCache } from '@/lib/kaikki-cache';
 import {
   DEFAULT_KAIKKI_SOURCE_URL,
+  DEFAULT_SRS_SETTINGS,
   enableKaikki,
   recordKaikkiImport,
   resetKaikki,
+  setSrsSettings,
   setUiLocale,
 } from '@/lib/settings';
 import type { AiSettings, UiLocale } from '@/lib/types';
@@ -401,6 +411,83 @@ export function SettingsApp() {
               </dd>
             </div>
           </dl>
+        </section>
+
+        <section className="rounded-sm border border-border bg-paper-light p-4 shadow-sm">
+          <div className="mb-3 flex items-center gap-2">
+            <Gauge className="h-4 w-4 text-cinnabar" />
+            <h2 className="text-sm font-semibold tracking-[2px]">
+              {t(locale, 'settings.srs')}
+            </h2>
+          </div>
+          <p className="mb-3 text-xs leading-6 text-muted">
+            {t(locale, 'settings.srsDesiredRetentionHint')}
+          </p>
+
+          <label className="block text-xs font-medium tracking-[1px] text-muted">
+            {t(locale, 'settings.srsDesiredRetention')}
+            <select
+              value={String(settings.srs.desiredRetention)}
+              onChange={(event) =>
+                mutate((current) =>
+                  setSrsSettings(current, {
+                    ...current.srs,
+                    desiredRetention: Number(event.target.value),
+                  }),
+                )
+              }
+              className="mt-1 w-full rounded-sm border border-border bg-paper-input px-3 py-2 text-sm text-ink outline-none transition focus:border-cinnabar-fade"
+            >
+              {[0.8, 0.85, 0.9, 0.92, 0.95, 0.97].map((value) => (
+                <option key={value} value={value}>
+                  {Math.round(value * 100)}%
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="mt-3 block text-xs font-medium tracking-[1px] text-muted">
+            {t(locale, 'settings.srsMaxInterval')}
+            <input
+              type="number"
+              min={1}
+              value={settings.srs.maximumIntervalDays}
+              onChange={(event) =>
+                mutate((current) =>
+                  setSrsSettings(current, {
+                    ...current.srs,
+                    maximumIntervalDays: Math.max(
+                      1,
+                      Number(event.target.value) ||
+                        DEFAULT_SRS_SETTINGS.maximumIntervalDays,
+                    ),
+                  }),
+                )
+              }
+              className="mt-1 w-full rounded-sm border border-border bg-paper-input px-3 py-2 text-sm text-ink outline-none transition focus:border-cinnabar-fade"
+            />
+          </label>
+
+          <label className="mt-3 block text-xs font-medium tracking-[1px] text-muted">
+            {t(locale, 'settings.srsNewPerDay')}
+            <input
+              type="number"
+              min={0}
+              value={settings.srs.newCardsPerDay}
+              onChange={(event) =>
+                mutate((current) =>
+                  setSrsSettings(current, {
+                    ...current.srs,
+                    newCardsPerDay: Math.max(
+                      0,
+                      Number(event.target.value) || 0,
+                    ),
+                  }),
+                )
+              }
+              className="mt-1 w-full rounded-sm border border-border bg-paper-input px-3 py-2 text-sm text-ink outline-none transition focus:border-cinnabar-fade"
+            />
+          </label>
         </section>
 
         <AiSettingsPanel

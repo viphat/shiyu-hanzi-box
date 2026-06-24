@@ -180,13 +180,25 @@ function isNonNegativeInteger(value: unknown): value is number {
   );
 }
 
+function isNonNegativeNumber(value: unknown): value is number {
+  return isFiniteNumber(value) && value >= 0;
+}
+
+function isDifficulty(value: unknown): value is number {
+  return isFiniteNumber(value) && value >= 1 && value <= 10;
+}
+
+function isProbability(value: unknown): value is number {
+  return isFiniteNumber(value) && value >= 0 && value <= 1;
+}
+
 function isReviewState(value: unknown): value is ReviewState {
   return (
     isRecord(value) &&
     isFiniteNumber(value.dueAt) &&
-    isFiniteNumber(value.intervalDays) &&
-    isFiniteNumber(value.repetitions) &&
-    isFiniteNumber(value.lapses) &&
+    isNonNegativeNumber(value.intervalDays) &&
+    isNonNegativeInteger(value.repetitions) &&
+    isNonNegativeInteger(value.lapses) &&
     (value.scheduler === undefined ||
       isReviewScheduler(value.scheduler)) &&
     (value.lastReviewedAt === undefined || isFiniteNumber(value.lastReviewedAt)) &&
@@ -194,17 +206,17 @@ function isReviewState(value: unknown): value is ReviewState {
     (value.cardState === undefined ||
       isReviewCardState(value.cardState)) &&
     (value.stability === undefined ||
-      isFiniteNumber(value.stability)) &&
+      isNonNegativeNumber(value.stability)) &&
     (value.difficulty === undefined ||
-      isFiniteNumber(value.difficulty)) &&
+      isDifficulty(value.difficulty)) &&
     (value.elapsedDays === undefined ||
-      isFiniteNumber(value.elapsedDays)) &&
+      isNonNegativeNumber(value.elapsedDays)) &&
     (value.scheduledDays === undefined ||
-      isFiniteNumber(value.scheduledDays)) &&
+      isNonNegativeNumber(value.scheduledDays)) &&
     (value.learningSteps === undefined ||
       isNonNegativeInteger(value.learningSteps)) &&
     (value.retrievability === undefined ||
-      isFiniteNumber(value.retrievability)) &&
+      isProbability(value.retrievability)) &&
     (value.reviewLog === undefined ||
       (Array.isArray(value.reviewLog) &&
         value.reviewLog.every(isReviewLogEntry)))
@@ -216,18 +228,18 @@ function isReviewLogEntry(value: unknown): boolean {
     isRecord(value) &&
     isFiniteNumber(value.reviewedAt) &&
     isReviewRating(value.rating) &&
-    isFiniteNumber(value.elapsedDays) &&
-    isFiniteNumber(value.scheduledDays) &&
+    isNonNegativeNumber(value.elapsedDays) &&
+    isNonNegativeNumber(value.scheduledDays) &&
     isReviewCardState(value.stateBefore) &&
     isReviewCardState(value.stateAfter) &&
     (value.stabilityBefore === undefined ||
-      isFiniteNumber(value.stabilityBefore)) &&
+      isNonNegativeNumber(value.stabilityBefore)) &&
     (value.stabilityAfter === undefined ||
-      isFiniteNumber(value.stabilityAfter)) &&
+      isNonNegativeNumber(value.stabilityAfter)) &&
     (value.difficultyBefore === undefined ||
-      isFiniteNumber(value.difficultyBefore)) &&
+      isDifficulty(value.difficultyBefore)) &&
     (value.difficultyAfter === undefined ||
-      isFiniteNumber(value.difficultyAfter))
+      isDifficulty(value.difficultyAfter))
   );
 }
 

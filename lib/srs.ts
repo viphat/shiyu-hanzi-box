@@ -331,7 +331,6 @@ export function buildSrsQueue(
   );
 
   const newReviewedToday = countNewReviewedToday(entries, now);
-  let newShown = 0;
   const newCapacity = Math.max(
     0,
     settings.newCardsPerDay - newReviewedToday,
@@ -342,11 +341,6 @@ export function buildSrsQueue(
     const entry = migrateReviewState(raw, now);
     const review = entry.review!;
     if (review.dueAt > now) continue;
-
-    if (review.cardState === 'new') {
-      if (newShown >= newCapacity) continue;
-      newShown += 1;
-    }
 
     items.push({ kind: entry.kind, entry, dueAt: review.dueAt });
   }
@@ -370,7 +364,13 @@ export function buildSrsQueue(
     return a.entry.id.localeCompare(b.entry.id);
   });
 
-  return items;
+  let newShown = 0;
+  return items.filter((item) => {
+    if (item.entry.review?.cardState !== 'new') return true;
+    if (newShown >= newCapacity) return false;
+    newShown += 1;
+    return true;
+  });
 }
 
 export function getSrsStats(

@@ -212,6 +212,38 @@ describe('parseBackup with FSRS review state', () => {
     );
   });
 
+  it.each([
+    ['intervalDays', -1],
+    ['repetitions', -1],
+    ['repetitions', 1.5],
+    ['lapses', -1],
+    ['lapses', 1.5],
+    ['stability', -0.1],
+    ['difficulty', 0.9],
+    ['difficulty', 10.1],
+    ['elapsedDays', -1],
+    ['scheduledDays', -1],
+    ['retrievability', -0.1],
+    ['retrievability', 1.1],
+  ] as const)(
+    'rejects an out-of-range FSRS %s value',
+    (field, invalidValue) => {
+      const broken = {
+        ...inbox,
+        words: [
+          {
+            ...word,
+            review: { ...fsrsReview, [field]: invalidValue },
+          },
+        ],
+      };
+
+      expect(() => parseBackup(JSON.stringify(broken))).toThrow(
+        BackupParseError,
+      );
+    },
+  );
+
   it('rejects a malformed review log entry', () => {
     const broken = {
       ...inbox,

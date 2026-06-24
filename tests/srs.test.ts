@@ -12,7 +12,12 @@ import {
   RATING_TO_GRADE,
   toFsrsCard,
 } from '../lib/srs';
-import type { Inbox, SrsSettings, WordEntry } from '../lib/types';
+import type {
+  Inbox,
+  QuoteEntry,
+  SrsSettings,
+  WordEntry,
+} from '../lib/types';
 
 const NOW = new Date('2026-06-24T10:30:00').getTime();
 const YESTERDAY = new Date('2026-06-23T08:00:00').getTime();
@@ -31,6 +36,25 @@ function word(overrides: Partial<WordEntry> = {}): WordEntry {
     createdAt: YESTERDAY,
     updatedAt: YESTERDAY,
     occurrences: [],
+    ...overrides,
+  };
+}
+
+function quote(overrides: Partial<QuoteEntry> = {}): QuoteEntry {
+  return {
+    id: 'quote-1',
+    kind: 'quote',
+    text: '学而时习之',
+    category: 'classic',
+    tags: [],
+    note: '',
+    status: 'inbox',
+    createdAt: YESTERDAY,
+    updatedAt: YESTERDAY,
+    sourceTitle: 'Analects',
+    sourceUrl: 'https://example.com/analects',
+    sourceDomain: 'example.com',
+    surrounding: '学而时习之，不亦说乎',
     ...overrides,
   };
 }
@@ -463,6 +487,35 @@ describe('buildSrsQueue', () => {
     );
     expect(ids).toContain('rev1');
     expect(ids.filter((id) => id.startsWith('new'))).toHaveLength(1);
+  });
+
+  it('sorts all due new cards globally before applying the daily cap', () => {
+    const settings = { ...NO_FUZZ, newCardsPerDay: 1 };
+    const inbox: Inbox = {
+      words: [
+        migrateReviewState(
+          word({
+            id: 'newer-word',
+            createdAt: NOW - 1_000,
+            updatedAt: NOW - 1_000,
+          }),
+        ),
+      ],
+      quotes: [
+        migrateReviewState(
+          quote({
+            id: 'older-quote',
+            createdAt: YESTERDAY,
+            updatedAt: YESTERDAY,
+          }),
+        ),
+      ],
+    };
+
+    const ids = buildSrsQueue(inbox, NOW, settings).map(
+      (item) => item.entry.id,
+    );
+    expect(ids).toEqual(['older-quote']);
   });
 
   it('does not mutate new cards hidden by the cap', () => {

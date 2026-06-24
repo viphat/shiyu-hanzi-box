@@ -68,6 +68,28 @@ describe('renderDay', () => {
     expect(md).not.toContain('## Words');
     expect(md).not.toContain('## Quotes');
   });
+
+  it('adds a concise SRS review line when review state exists', () => {
+    const reviewedWord: WordEntry = {
+      ...word,
+      review: {
+        scheduler: 'fsrs-v1',
+        dueAt: Date.UTC(2026, 6, 25),
+        intervalDays: 3,
+        repetitions: 2,
+        lapses: 0,
+        cardState: 'review',
+        stability: 3,
+        difficulty: 5,
+        lastReviewedAt: Date.UTC(2026, 5, 20),
+      },
+    };
+    const md = renderDay('2026-06-20', [reviewedWord], []);
+    expect(md).toContain('Review:');
+    expect(md).toContain('state review');
+    expect(md).toContain('interval 3 days');
+    expect(md).not.toContain('stability');
+  });
 });
 
 const dictEntries: DictionaryEntry[] = [

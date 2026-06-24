@@ -5,6 +5,14 @@ function esc(value: string): string {
   return value.replace(/\|/g, '\\|');
 }
 
+function reviewLine(review: WordEntry['review']): string | null {
+  if (!review) return null;
+  const due = new Date(review.dueAt);
+  const dueStr = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
+  const state = review.cardState ?? 'review';
+  return `Review: due ${dueStr}, state ${state}, interval ${review.intervalDays} days`;
+}
+
 export function renderDay(
   date: string,
   words: WordEntry[],
@@ -49,6 +57,8 @@ export function renderDay(
         }
         if (ai.notes) lines.push(`  - ${esc(ai.notes)}`);
       }
+      const rLine = reviewLine(word.review);
+      if (rLine) lines.push(`  - ${rLine}`);
       lines.push('');
     }
   }
@@ -61,6 +71,8 @@ export function renderDay(
       lines.push(`  - _category:_ ${esc(quote.category)}${tags}`);
       if (quote.note) lines.push(`  - ${esc(quote.note)}`);
       lines.push(`  - [${esc(quote.sourceTitle || quote.sourceDomain)}](${quote.sourceUrl})`);
+      const rLine = reviewLine(quote.review);
+      if (rLine) lines.push(`  - ${rLine}`);
       lines.push('');
     }
   }

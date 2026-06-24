@@ -1,5 +1,16 @@
+// @vitest-environment happy-dom
+
+import { act, useState, type ReactNode } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import {
   ReviewCard,
   ReviewQueue,
@@ -42,6 +53,50 @@ function quote(overrides: Partial<QuoteEntry> = {}): QuoteEntry {
     surrounding: '学而时习之，不亦说乎',
     ...overrides,
   };
+}
+
+let container: HTMLDivElement;
+let root: Root;
+
+beforeEach(() => {
+  (
+    globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT: boolean;
+    }
+  ).IS_REACT_ACT_ENVIRONMENT = true;
+  container = document.createElement('div');
+  document.body.append(container);
+  root = createRoot(container);
+});
+
+afterEach(async () => {
+  await act(async () => {
+    root.unmount();
+  });
+  container.remove();
+  vi.useRealTimers();
+});
+
+async function renderClient(node: ReactNode) {
+  await act(async () => {
+    root.render(node);
+  });
+}
+
+function button(label: string): HTMLButtonElement {
+  const match = [...container.querySelectorAll('button')].find(
+    (candidate) => candidate.textContent?.includes(label),
+  );
+  if (!match) throw new Error(`Button not found: ${label}`);
+  return match;
+}
+
+async function click(target: HTMLButtonElement) {
+  await act(async () => {
+    target.dispatchEvent(
+      new MouseEvent('click', { bubbles: true }),
+    );
+  });
 }
 
 describe('ReviewQueue single-card rendering', () => {
@@ -143,5 +198,124 @@ describe('ReviewQueue single-card rendering', () => {
 
     expect(html).toContain('min-h-[420px]');
     expect(html).toContain('max-w-4xl');
+  });
+});
+
+describe('ReviewQueue advancement', () => {
+  it('disables actions during exit and advances to the next card', async () => {
+    vi.useFakeTimers();
+    const first = migrateReviewState(quote({ id: 'q1' }), NOW);
+    const second = migrateReviewState(
+      quote({
+        id: 'q2',
+        text: '温故而知新',
+        note: '',
+        category: 'classic',
+      }),
+      NOW,
+    );
+
+    function Harness() {
+      const [items, setItems] = useState([
+        { kind: 'quote' as const, entry: first, dueAt: NOW },
+        { kind: 'quote' as const, entry: second, dueAt: NOW },
+      ]);
+
+      return (
+        <ReviewQueue
+          items={items}
+          onAnswer={async () => {
+            setItems((current) => current.slice(1));
+          }}
+          onPostpone={async () => {
+            setItems((current) => current.slice(1));
+          }}
+          locale="en"
+        />
+      );
+    }
+
+    await renderClient(<Harness />);
+    const again = button(messages.en['review.again']);
+    await click(again);
+
+    expect(again.disabled).toBe(true);
+    expect(
+      container.querySelector('[aria-busy="true"]'),
+    ).not.toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(180);
+    });
+
+    expect(container.textContent).toContain('温故而知新');
+    expect(container.textContent).not.toContain('学而时习之');
+    expect(document.activeElement?.textContent).toContain('温故而知新');
+  });
+
+  it('resets word reveal state when the next word becomes active', async () => {
+    vi.useFakeTimers();
+    const first = migrateReviewState(word({ id: 'w1', text: '你好' }), NOW);
+    const second = migrateReviewState(
+      word({ id: 'w2', text: '再见', normalized: '再见' }),
+      NOW,
+    );
+
+    function Harness() {
+      const [items, setItems] = useState([
+        { kind: 'word' as const, entry: first, dueAt: NOW },
+        { kind: 'word' as const, entry: second, dueAt: NOW },
+      ]);
+
+      return (
+        <ReviewQueue
+          items={items}
+          onAnswer={async () => {
+            setItems((current) => current.slice(1));
+          }}
+          onPostpone={async () => {
+            setItems((current) => current.slice(1));
+          }}
+          locale="en"
+        />
+      );
+    }
+
+    await renderClient(<Harness />);
+    await click(button(messages.en['review.reveal']));
+    expect(container.textContent).toContain(messages.en['review.good']);
+
+    await click(button(messages.en['review.good']));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(180);
+    });
+
+    expect(container.textContent).toContain('再见');
+    expect(container.textContent).toContain(messages.en['review.reveal']);
+    expect(container.textContent).not.toContain(messages.en['review.good']);
+  });
+
+  it('advances a quote without requiring Reveal', async () => {
+    vi.useFakeTimers();
+    const onAnswer = vi.fn().mockResolvedValue(undefined);
+    const entry = migrateReviewState(quote(), NOW);
+
+    await renderClient(
+      <ReviewQueue
+        items={[{ kind: 'quote', entry, dueAt: NOW }]}
+        onAnswer={onAnswer}
+        onPostpone={vi.fn().mockResolvedValue(undefined)}
+        locale="en"
+      />,
+    );
+
+    expect(container.textContent).not.toContain(
+      messages.en['review.reveal'],
+    );
+    await click(button(messages.en['review.easy']));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(180);
+    });
+    expect(onAnswer).toHaveBeenCalledWith('quote', 'q1', 'easy');
   });
 });

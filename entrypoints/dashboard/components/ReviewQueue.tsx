@@ -4,7 +4,7 @@ import {
   RotateCw,
   WholeWord,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatMessage, t } from '@/lib/i18n';
 import type { SrsQueueItem } from '@/lib/srs';
 import type { Entry, ReviewRating, UiLocale } from '@/lib/types';
@@ -61,6 +61,12 @@ type PostponeHandler = (
   id: string,
 ) => void | Promise<void>;
 
+const REVIEW_TRANSITION_MS = 160;
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 export function ReviewQueue({
   items,
   onAnswer,
@@ -109,8 +115,32 @@ function ActiveReviewCard({
   onPostpone: PostponeHandler;
   locale: UiLocale;
 }) {
+  const [busy, setBusy] = useState(false);
+  const [exiting, setExiting] = useState(false);
+  const previousActiveKey = useRef<string | null>(null);
   const activeItem = items[0];
   const activeKey = `${activeItem.kind}:${activeItem.entry.id}`;
+  const focusOnMount =
+    previousActiveKey.current !== null &&
+    previousActiveKey.current !== activeKey;
+
+  useEffect(() => {
+    previousActiveKey.current = activeKey;
+  }, [activeKey]);
+
+  async function runAction(action: () => void | Promise<void>) {
+    if (busy) return;
+    setBusy(true);
+    setExiting(true);
+
+    try {
+      await wait(REVIEW_TRANSITION_MS);
+      await action();
+    } finally {
+      setExiting(false);
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="mx-auto w-full max-w-4xl">
@@ -119,12 +149,21 @@ function ActiveReviewCard({
         item={activeItem}
         remainingCount={items.length}
         onAnswer={(rating) =>
-          onAnswer(activeItem.kind, activeItem.entry.id, rating)
+          runAction(() =>
+            onAnswer(activeItem.kind, activeItem.entry.id, rating),
+          )
         }
         onPostpone={() =>
-          onPostpone(activeItem.kind, activeItem.entry.id)
+          runAction(() =>
+            onPostpone(activeItem.kind, activeItem.entry.id),
+          )
         }
         locale={locale}
+        busy={busy}
+        focusOnMount={focusOnMount}
+        transitionClassName={
+          exiting ? 'review-card-exit' : 'review-card-enter'
+        }
       />
     </div>
   );
@@ -138,6 +177,7 @@ export function ReviewCard({
   locale,
   initiallyRevealed = false,
   busy = false,
+  focusOnMount = false,
   transitionClassName = 'review-card-enter',
 }: {
   item: SrsQueueItem;
@@ -147,8 +187,10 @@ export function ReviewCard({
   locale: UiLocale;
   initiallyRevealed?: boolean;
   busy?: boolean;
+  focusOnMount?: boolean;
   transitionClassName?: string;
 }) {
+  const cardRef = useRef<HTMLElement>(null);
   const { entry } = item;
   const [revealed, setRevealed] = useState(
     entry.kind === 'quote' || initiallyRevealed,
@@ -156,10 +198,16 @@ export function ReviewCard({
   const answerVisible = entry.kind === 'quote' || revealed;
   const source = getSourceLabel(entry);
 
+  useEffect(() => {
+    if (focusOnMount) cardRef.current?.focus();
+  }, [focusOnMount]);
+
   return (
     <article
+      ref={cardRef}
+      tabIndex={-1}
       aria-busy={busy}
-      className={`flex min-h-[420px] flex-col rounded-sm border border-border bg-paper-light p-6 shadow-md sm:p-8 ${transitionClassName}`}
+      className={`flex min-h-[420px] flex-col rounded-sm border border-border bg-paper-light p-6 shadow-md outline-none sm:p-8 ${transitionClassName}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted">

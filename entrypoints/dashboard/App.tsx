@@ -151,19 +151,22 @@ export function App() {
     kind: Entry['kind'],
     id: string,
     rating: ReviewRating,
-  ) {
+  ): Promise<void> {
     const now = Date.now();
-    mutate((current) =>
+    return mutate((current) =>
       updateReviewEntry(current, kind, id, (entry) =>
         answerReview(entry, rating, now, settings.srs),
       ),
     );
   }
 
-  function postponeEntry(kind: Entry['kind'], id: string) {
+  function postponeEntry(
+    kind: Entry['kind'],
+    id: string,
+  ): Promise<void> {
     const now = Date.now();
     const dueAt = startOfNextDay(now);
-    mutate((current) =>
+    return mutate((current) =>
       updateReviewEntry(current, kind, id, (entry) =>
         postponeReview(entry, now, dueAt),
       ),

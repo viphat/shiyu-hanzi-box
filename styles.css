@@ -90,3 +90,39 @@ textarea {
   background: var(--color-cinnabar-fade);
   content: "";
 }
+
+@keyframes review-card-enter {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.review-card-enter {
+  animation: review-card-enter 160ms ease-out;
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.review-card-exit {
+  opacity: 0;
+  transform: translateX(-12px);
+  transition:
+    opacity 160ms ease-in,
+    transform 160ms ease-in;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .review-card-enter {
+    animation: none;
+  }
+
+  .review-card-exit {
+    transform: none;
+    transition: none;
+  }
+}

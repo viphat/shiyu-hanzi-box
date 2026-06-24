@@ -73,4 +73,13 @@ describe('i18n messages', () => {
     );
     expect(t('zh-CN', 'settings.srsNewPerDay')).toBe('每日新卡片数');
   });
+
+  it('formats the remaining review-card count in both locales', () => {
+    expect(formatMessage('en', 'review.remaining', { count: 12 })).toBe(
+      '12 remaining',
+    );
+    expect(
+      formatMessage('zh-CN', 'review.remaining', { count: 12 }),
+    ).toBe('剩余 12 张');
+  });
 });

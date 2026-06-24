@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_KAIKKI_SOURCE_URL,
+  DEFAULT_SRS_SETTINGS,
   DEFAULT_SETTINGS,
   enableKaikki,
+  normalizeSettings,
   recordKaikkiImport,
   resetKaikki,
+  setSrsSettings,
   setUiLocale,
 } from '../lib/settings';
+import type { AppSettings } from '../lib/types';
 
 describe('settings helpers', () => {
   it('defaults to the existing zh-CN UI', () => {
@@ -77,5 +81,61 @@ describe('settings helpers', () => {
     expect(reset.kaikki.hash).toBeNull();
     expect(reset.kaikki.entryCount).toBe(0);
     expect(reset.kaikki.enabled).toBe(false);
+  });
+});
+
+describe('SRS settings', () => {
+  it('exposes default SRS settings with desired retention 0.9', () => {
+    expect(DEFAULT_SRS_SETTINGS).toEqual({
+      desiredRetention: 0.9,
+      maximumIntervalDays: 3650,
+      newCardsPerDay: 20,
+      enableFuzz: true,
+    });
+  });
+
+  it('includes srs in DEFAULT_SETTINGS', () => {
+    expect(DEFAULT_SETTINGS.srs).toEqual(DEFAULT_SRS_SETTINGS);
+  });
+
+  it('normalizes legacy settings that are missing the srs key', () => {
+    const legacy = {
+      uiLocale: 'en' as const,
+      kaikki: DEFAULT_SETTINGS.kaikki,
+    } as unknown as AppSettings;
+
+    const normalized = normalizeSettings(legacy);
+
+    expect(normalized.srs).toEqual(DEFAULT_SRS_SETTINGS);
+    expect((legacy as { srs?: unknown }).srs).toBeUndefined();
+  });
+
+  it('preserves user-customized srs settings during normalization', () => {
+    const customized: AppSettings = {
+      uiLocale: 'zh-CN',
+      kaikki: DEFAULT_SETTINGS.kaikki,
+      srs: {
+        desiredRetention: 0.85,
+        maximumIntervalDays: 1000,
+        newCardsPerDay: 10,
+        enableFuzz: true,
+      },
+    };
+
+    expect(normalizeSettings(customized).srs).toEqual({
+      desiredRetention: 0.85,
+      maximumIntervalDays: 1000,
+      newCardsPerDay: 10,
+      enableFuzz: true,
+    });
+  });
+
+  it('updates SRS settings immutably', () => {
+    const next = setSrsSettings(DEFAULT_SETTINGS, {
+      ...DEFAULT_SRS_SETTINGS,
+      desiredRetention: 0.95,
+    });
+    expect(next.srs.desiredRetention).toBe(0.95);
+    expect(DEFAULT_SETTINGS.srs.desiredRetention).toBe(0.9);
   });
 });

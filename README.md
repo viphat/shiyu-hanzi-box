@@ -30,6 +30,9 @@ Implemented:
 - Dashboard page opened from the toolbar popup or extension action menu, with
   search, status filters, cards, edit controls, pinyin, export actions, and
   backup/restore controls.
+- Focused one-card-at-a-time spaced repetition for saved words and quotes,
+  with FSRS scheduling, local review analytics, and configurable retention/new
+  card limits.
 - One-click Simplified to Taiwan Traditional conversion on word and quote cards,
   powered by OpenCC and cached on each entry.
 - Offline Word Insight Panel with CC-CEDICT definitions, tone chips, source
@@ -60,8 +63,9 @@ Expanding a saved word in the dashboard shows:
 - **External links** — click-only links to Youdao (Chinese-English) and
   百度汉语 (Chinese-Chinese). Nothing is fetched until you click.
 
-Review cards gain a **显示释义** reveal button so you can test yourself before
-seeing pinyin and definitions.
+In the Review tab, one large card is shown at a time. Word cards keep pinyin,
+definitions, notes, examples, pronunciation, and AI insight behind
+**Reveal / 查看答案**. Quote cards show their saved text and note immediately.
 
 ### Pronunciation (TTS)
 
@@ -132,16 +136,23 @@ Saved words and quotes are scheduled by the FSRS algorithm (via `ts-fsrs`),
 which models each item's memory from difficulty, stability, and your target
 retention.
 
-**Review flow:** each card shows the prompt first. Click **Reveal** to see the
-answer, then rate your recall:
+**Review flow:** the Review tab shows one large due card at a time.
+
+- For a **word**, the saved word is the prompt. Click **Reveal** to see pinyin,
+  definitions, notes, examples, pronunciation, and AI insight.
+- For a **quote**, the saved quote and note are visible immediately because the
+  current quote model has no separate answer side.
+
+Rate the card:
 
 - **Again** — you forgot it; it comes back soon.
 - **Hard** — you recalled it with serious effort.
 - **Good** — you recalled it correctly.
 - **Easy** — you recalled it instantly.
 
-The scheduler sets the next due date from your rating. **Postpone** moves a card
-to tomorrow without changing its memory state.
+The scheduler sets the next due date from your rating. After a rating or
+**Postpone**, the next due card slides into place. Postpone moves the current
+card to tomorrow without changing its memory state.
 
 **Settings (Settings → Spaced repetition):**
 
@@ -229,7 +240,7 @@ entrypoints/
   settings/
     index.html
     main.tsx
-    SettingsApp.tsx      # locale + AI key + optional Kaikki dictionary settings
+    SettingsApp.tsx      # locale + SRS + AI + optional Kaikki settings
   dashboard/
     index.html
     main.tsx
@@ -256,6 +267,8 @@ lib/
   normalize.ts           # word normalization
   page-context.ts        # injected selection reader
   pinyin.ts              # pinyin-pro wrapper
+  review.ts              # compatibility wrapper around the SRS queue
+  srs.ts                 # FSRS adapter, migration, queue, actions, stats
   traditional.ts         # opencc-js Simplified -> Taiwan Traditional wrapper
   storage.ts             # WXT storage item and serialized mutations
   settings.ts            # WXT app settings storage and helpers
@@ -347,3 +360,5 @@ The current test suite covers:
   rejection.
 - AI settings presets, permission origin requests, prompt building, response
   parsing, client error handling, component rendering, and backup round-trip.
+- FSRS migration, rating schedules, learning-step persistence, daily new-card
+  caps, due-time wakeups, settings normalization, and one-card review UI.

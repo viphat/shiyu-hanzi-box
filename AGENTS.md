@@ -14,8 +14,13 @@ The implementation plan is in:
 - `docs/superpowers/plans/2026-06-21-word-insight-panel-ai.md`
 - `docs/superpowers/specs/2026-06-22-traditional-chinese-conversion-design.md`
 - `docs/superpowers/plans/2026-06-22-traditional-chinese-conversion.md`
+- `docs/superpowers/specs/2026-06-22-real-srs-system-design.md`
+- `docs/superpowers/plans/2026-06-24-real-srs-system.md`
+- `docs/superpowers/specs/2026-06-24-single-card-review-design.md`
+- `docs/superpowers/plans/2026-06-24-single-card-review.md`
 
-Tasks 0 through 15 and the Traditional Chinese conversion feature have landed.
+Tasks 0 through 15, Traditional Chinese conversion, TTS, the real FSRS system,
+and the focused single-card review experience have landed.
 
 ## Commands
 
@@ -38,6 +43,12 @@ npx vitest run tests/capture.test.ts
 npx vitest run tests/capture-handler.test.ts
 npx vitest run tests/pinyin.test.ts
 npx vitest run tests/traditional.test.ts
+npx vitest run tests/types-srs.test.ts
+npx vitest run tests/settings.test.ts
+npx vitest run tests/srs.test.ts
+npx vitest run tests/review.test.ts
+npx vitest run tests/review-queue.test.tsx
+npx vitest run tests/backup.test.ts
 npx vitest run tests/markdown.test.ts
 npx vitest run tests/export.test.ts
 ```
@@ -74,6 +85,13 @@ The central data path is:
     add one-click Simplified → Taiwan Traditional conversion for word and quote
     cards. Converted text is generated only after an explicit user click, then
     persisted on `EntryBase.traditionalText`.
+11. `lib/srs.ts` is the only importer of `ts-fsrs`. It lazily migrates legacy
+    review state, schedules ratings, builds the due queue, computes review
+    stats, and preserves minute-scale learning steps.
+12. `entrypoints/dashboard/components/ReviewQueue.tsx` renders only the first
+    filtered due card. Word answers remain hidden until Reveal; quote content
+    is shown immediately. Rating/postpone updates storage and the recalculated
+    queue supplies the next card.
 
 Core modules:
 
@@ -86,6 +104,13 @@ Core modules:
 - `lib/pinyin.ts`: `pinyin-pro` wrapper for lazy dashboard pinyin generation.
 - `lib/traditional.ts`: `opencc-js` wrapper for lazy dashboard Simplified →
   Taiwan Traditional conversion using `cn -> twp`.
+- `lib/srs.ts`: the only `ts-fsrs` importer; scheduler construction,
+  ReviewState/Card conversion, lazy migration, ratings, postpone, due queue,
+  wake time, and local review stats.
+- `lib/review.ts`: compatibility wrapper that delegates queue building to
+  `lib/srs.ts`.
+- `lib/settings.ts`: `local:settings` storage plus normalized read, watch,
+  mutation, and replacement helpers so old installs gain nested defaults.
 - `lib/pinyin-helpers.ts`: CC-CEDICT numbered pinyin → tone marks/numbers, and
   pinyin-pro fallback for tone chips when no dictionary match exists.
 - `lib/dictionary.ts`: CC-CEDICT parsing, compact asset build/materialize,
@@ -149,6 +174,12 @@ Core modules:
 - Keep Traditional conversion as a display annotation. Do not use
   `traditionalText` for capture, normalize, dedupe, review scheduling, Markdown
   export, or zip export behavior.
+- Keep all scheduler calls and `ts-fsrs` imports inside `lib/srs.ts`.
+- Treat the SRS queue as the review-session source of truth; do not persist a
+  separate current-card index.
+- In Review, hide word insight until Reveal, but display quote text and notes
+  immediately.
+- Keep SRS state local on each entry. Do not use it for capture dedupe.
 - Use `@/*` imports where existing WXT code does, and relative imports where the
   file already uses that style.
 - Use `apply_patch` for manual edits.

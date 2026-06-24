@@ -20,8 +20,8 @@ Dashboard.
 ## Single Purpose
 
 Capture selected Chinese words, phrases, and quotes while reading, store them
-locally, enrich them with local dictionary context, and export daily Markdown
-notes.
+locally, enrich them with local dictionary and review tools, and export daily
+Markdown notes.
 
 ## Permission Audit
 
@@ -66,11 +66,13 @@ does not load or execute JavaScript from remote servers.
 ## User Data Disclosure
 
 Disclose that the extension handles website content selected by the user, page
-metadata for captured sources, user notes, extension settings, and optional API
-keys. Data is stored locally by default. AI provider transfer occurs only after
-the user enables AI and clicks an AI action. When pronunciation is requested,
-the selected saved word is passed to Chrome's configured speech engine; some
-installed voices may use a remote speech resource.
+metadata for captured sources, user notes, local review ratings and schedules,
+extension settings, and optional API keys. Data is stored locally by default.
+Spaced-repetition scheduling does not require network access. AI provider
+transfer occurs only after the user enables AI and clicks an AI action. When
+pronunciation is requested, the selected saved word is passed to Chrome's
+configured speech engine; some installed voices may use a remote speech
+resource.
 
 ## Store Assets
 

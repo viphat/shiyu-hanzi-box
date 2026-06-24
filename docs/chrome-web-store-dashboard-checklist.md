@@ -34,6 +34,7 @@ Core features:
 - Save selected Chinese words, phrases, and quotes.
 - Deduplicate words while preserving source occurrences.
 - View local dictionary definitions, pinyin tone chips, pronunciation, and source examples.
+- Review saved words and quotes one card at a time with local spaced-repetition scheduling.
 - Export daily Markdown notes and backup/restore local data.
 - Optionally import a local Kaikki JSONL dictionary fallback.
 - Optionally use BYO-key AI insight with DeepSeek, OpenAI, or a custom HTTPS OpenAI-compatible endpoint.
@@ -81,7 +82,7 @@ https://github.com/viphat/shiyu-hanzi-box/blob/master/PRIVACY.md
 Use this:
 
 ```text
-Capture selected Chinese words, phrases, and quotes while reading, store them locally, enrich them with local dictionary context, and export daily Markdown notes.
+Capture selected Chinese words, phrases, and quotes while reading, store them locally, enrich them with local dictionary and review tools, and export daily Markdown notes.
 ```
 
 ## Permission Justifications
@@ -140,15 +141,15 @@ Disclose these categories if the dashboard asks:
 
 - Website content: selected text and surrounding source context saved by the
   user.
-- User activity: saved review status, notes, and export actions inside the
-  extension.
+- User activity: saved review ratings, schedules, notes, and explicit export
+  actions inside the extension.
 - Authentication information: optional user-provided AI API key, stored locally.
 - Website metadata: source page title, URL, and domain for saved entries.
 
 Suggested explanation:
 
 ```text
-The extension stores selected text, notes, source metadata, local settings, optional API keys, and generated AI insights locally in the user's browser. AI data transfer happens only when the user enables AI and explicitly clicks an AI action. When pronunciation is requested, the saved word is passed to Chrome's configured speech engine; some installed voices may use a remote speech resource. The extension does not operate a developer-owned server, does not create accounts, and does not sell user data.
+The extension stores selected text, notes, source metadata, review ratings and schedules, local settings, optional API keys, and generated AI insights locally in the user's browser. Spaced-repetition ratings and schedules are calculated and stored locally. AI data transfer happens only when the user enables AI and explicitly clicks an AI action. When pronunciation is requested, the saved word is passed to Chrome's configured speech engine; some installed voices may use a remote speech resource. The extension does not operate a developer-owned server, does not create accounts, and does not sell user data.
 ```
 
 ## Remote Code

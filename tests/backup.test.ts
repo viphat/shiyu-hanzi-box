@@ -5,7 +5,12 @@ import {
   parseBackup,
   serializeBackup,
 } from '../lib/backup';
-import type { Inbox, QuoteEntry, WordEntry } from '../lib/types';
+import type {
+  Inbox,
+  QuoteEntry,
+  ReviewState,
+  WordEntry,
+} from '../lib/types';
 
 const word: WordEntry = {
   id: 'w1',
@@ -118,6 +123,112 @@ describe('parseBackup', () => {
 
     expect(() => parseBackup(JSON.stringify(broken))).toThrow(
       /Invalid backup inbox/,
+    );
+  });
+});
+
+const fsrsReview: ReviewState = {
+  scheduler: 'fsrs-v1',
+  dueAt: Date.UTC(2026, 5, 22),
+  intervalDays: 3,
+  repetitions: 2,
+  lapses: 0,
+  lastReviewedAt: Date.UTC(2026, 5, 21),
+  cardState: 'review',
+  stability: 3,
+  difficulty: 5.5,
+  elapsedDays: 3,
+  scheduledDays: 3,
+  learningSteps: 0,
+  retrievability: 0.9,
+  reviewLog: [
+    {
+      reviewedAt: Date.UTC(2026, 5, 21),
+      rating: 'good',
+      elapsedDays: 0,
+      scheduledDays: 3,
+      stateBefore: 'new',
+      stateAfter: 'review',
+      stabilityBefore: 0.1,
+      stabilityAfter: 3,
+      difficultyBefore: 5,
+      difficultyAfter: 5,
+    },
+  ],
+};
+
+describe('parseBackup with FSRS review state', () => {
+  it('accepts valid fsrs-v1 review state', () => {
+    const inboxWithFsrs: Inbox = {
+      words: [{ ...word, review: fsrsReview }],
+      quotes: [],
+    };
+    const restored = parseBackup(serializeBackup(inboxWithFsrs));
+    expect(restored.words[0].review).toEqual(fsrsReview);
+  });
+
+  it('rejects an invalid scheduler value', () => {
+    const broken = {
+      ...inbox,
+      words: [
+        {
+          ...word,
+          review: { ...fsrsReview, scheduler: 'unknown' },
+        },
+      ],
+    };
+    expect(() => parseBackup(JSON.stringify(broken))).toThrow(
+      BackupParseError,
+    );
+  });
+
+  it('rejects an invalid cardState value', () => {
+    const broken = {
+      ...inbox,
+      words: [
+        {
+          ...word,
+          review: { ...fsrsReview, cardState: 'frozen' },
+        },
+      ],
+    };
+    expect(() => parseBackup(JSON.stringify(broken))).toThrow(
+      BackupParseError,
+    );
+  });
+
+  it('rejects a malformed learning step index', () => {
+    const broken = {
+      ...inbox,
+      words: [
+        {
+          ...word,
+          review: { ...fsrsReview, learningSteps: -1 },
+        },
+      ],
+    };
+    expect(() => parseBackup(JSON.stringify(broken))).toThrow(
+      BackupParseError,
+    );
+  });
+
+  it('rejects a malformed review log entry', () => {
+    const broken = {
+      ...inbox,
+      words: [
+        {
+          ...word,
+          review: {
+            ...fsrsReview,
+            reviewLog: [
+              { reviewedAt: 'not-a-number', rating: 'good' },
+            ],
+          },
+        },
+      ],
+    };
+    expect(() => parseBackup(JSON.stringify(broken))).toThrow(
+      BackupParseError,
     );
   });
 });

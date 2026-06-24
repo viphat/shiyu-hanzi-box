@@ -1,4 +1,14 @@
-import type { Inbox, Occurrence, QuoteEntry, ReviewState, Status, WordEntry } from './types';
+import type {
+  Inbox,
+  Occurrence,
+  QuoteEntry,
+  ReviewCardState,
+  ReviewRating,
+  ReviewScheduler,
+  ReviewState,
+  Status,
+  WordEntry,
+} from './types';
 
 export const BACKUP_APP = 'shiyu-hanzi-box';
 export const BACKUP_FORMAT_VERSION = 1;
@@ -140,6 +150,36 @@ function isOccurrence(value: unknown): value is Occurrence {
   );
 }
 
+function isReviewScheduler(value: unknown): value is ReviewScheduler {
+  return value === 'fixed-v1' || value === 'fsrs-v1';
+}
+
+function isReviewCardState(value: unknown): value is ReviewCardState {
+  return (
+    value === 'new' ||
+    value === 'learning' ||
+    value === 'review' ||
+    value === 'relearning'
+  );
+}
+
+function isReviewRating(value: unknown): value is ReviewRating {
+  return (
+    value === 'again' ||
+    value === 'hard' ||
+    value === 'good' ||
+    value === 'easy'
+  );
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 0
+  );
+}
+
 function isReviewState(value: unknown): value is ReviewState {
   return (
     isRecord(value) &&
@@ -147,8 +187,47 @@ function isReviewState(value: unknown): value is ReviewState {
     isFiniteNumber(value.intervalDays) &&
     isFiniteNumber(value.repetitions) &&
     isFiniteNumber(value.lapses) &&
+    (value.scheduler === undefined ||
+      isReviewScheduler(value.scheduler)) &&
     (value.lastReviewedAt === undefined || isFiniteNumber(value.lastReviewedAt)) &&
-    (value.queueRank === undefined || isFiniteNumber(value.queueRank))
+    (value.queueRank === undefined || isFiniteNumber(value.queueRank)) &&
+    (value.cardState === undefined ||
+      isReviewCardState(value.cardState)) &&
+    (value.stability === undefined ||
+      isFiniteNumber(value.stability)) &&
+    (value.difficulty === undefined ||
+      isFiniteNumber(value.difficulty)) &&
+    (value.elapsedDays === undefined ||
+      isFiniteNumber(value.elapsedDays)) &&
+    (value.scheduledDays === undefined ||
+      isFiniteNumber(value.scheduledDays)) &&
+    (value.learningSteps === undefined ||
+      isNonNegativeInteger(value.learningSteps)) &&
+    (value.retrievability === undefined ||
+      isFiniteNumber(value.retrievability)) &&
+    (value.reviewLog === undefined ||
+      (Array.isArray(value.reviewLog) &&
+        value.reviewLog.every(isReviewLogEntry)))
+  );
+}
+
+function isReviewLogEntry(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isFiniteNumber(value.reviewedAt) &&
+    isReviewRating(value.rating) &&
+    isFiniteNumber(value.elapsedDays) &&
+    isFiniteNumber(value.scheduledDays) &&
+    isReviewCardState(value.stateBefore) &&
+    isReviewCardState(value.stateAfter) &&
+    (value.stabilityBefore === undefined ||
+      isFiniteNumber(value.stabilityBefore)) &&
+    (value.stabilityAfter === undefined ||
+      isFiniteNumber(value.stabilityAfter)) &&
+    (value.difficultyBefore === undefined ||
+      isFiniteNumber(value.difficultyBefore)) &&
+    (value.difficultyAfter === undefined ||
+      isFiniteNumber(value.difficultyAfter))
   );
 }
 

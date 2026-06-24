@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
   answerReview,
+  buildSrsQueue,
   DEFAULT_SRS_SETTINGS,
   createSrsScheduler,
+  getNextSrsWakeAt,
+  getSrsStats,
   migrateReviewState,
   postponeReview,
   previewReview,
   RATING_TO_GRADE,
   toFsrsCard,
 } from '../lib/srs';
-import type { SrsSettings, WordEntry } from '../lib/types';
+import type { Inbox, SrsSettings, WordEntry } from '../lib/types';
 
 const NOW = new Date('2026-06-24T10:30:00').getTime();
 const YESTERDAY = new Date('2026-06-23T08:00:00').getTime();
@@ -325,5 +328,366 @@ describe('postponeReview', () => {
     expect(postponed.review?.scheduler).toBe('fsrs-v1');
     expect(postponed.review?.cardState).toBe('review');
     expect(postponed.review?.stability).toBe(7);
+  });
+});
+
+describe('buildSrsQueue', () => {
+  it('includes items with dueAt <= now, not end-of-day', () => {
+    const laterToday = NOW + 3 * 60 * 60 * 1000;
+    const inbox: Inbox = {
+      words: [
+        migrateReviewState(
+          word({
+            id: 'due-now',
+            review: {
+              scheduler: 'fsrs-v1',
+              cardState: 'review',
+              dueAt: NOW - 1,
+              intervalDays: 3,
+              repetitions: 2,
+              lapses: 0,
+              stability: 3,
+              difficulty: 5,
+              lastReviewedAt: YESTERDAY,
+            },
+          }),
+        ),
+        migrateReviewState(
+          word({
+            id: 'due-later-today',
+            review: {
+              scheduler: 'fsrs-v1',
+              cardState: 'review',
+              dueAt: laterToday,
+              intervalDays: 3,
+              repetitions: 2,
+              lapses: 0,
+              stability: 3,
+              difficulty: 5,
+              lastReviewedAt: YESTERDAY,
+            },
+          }),
+        ),
+      ],
+      quotes: [],
+    };
+
+    const ids = buildSrsQueue(inbox, NOW, NO_FUZZ).map(
+      (item) => item.entry.id,
+    );
+    expect(ids).toEqual(['due-now']);
+  });
+
+  it('excludes archived entries', () => {
+    const inbox: Inbox = {
+      words: [
+        migrateReviewState(word({ id: 'a', status: 'archived' })),
+      ],
+      quotes: [],
+    };
+    expect(buildSrsQueue(inbox, NOW, NO_FUZZ)).toHaveLength(0);
+  });
+
+  it('sorts learning/relearning before long-term review', () => {
+    const inbox: Inbox = {
+      words: [
+        migrateReviewState(
+          word({
+            id: 'review-card',
+            review: {
+              scheduler: 'fsrs-v1',
+              cardState: 'review',
+              dueAt: NOW - 100,
+              intervalDays: 3,
+              repetitions: 2,
+              lapses: 0,
+              stability: 3,
+              difficulty: 5,
+              lastReviewedAt: YESTERDAY,
+            },
+          }),
+        ),
+        migrateReviewState(
+          word({
+            id: 'learning-card',
+            review: {
+              scheduler: 'fsrs-v1',
+              cardState: 'learning',
+              dueAt: NOW - 50,
+              intervalDays: 0,
+              repetitions: 0,
+              lapses: 0,
+              stability: 0.1,
+              difficulty: 5,
+              lastReviewedAt: NOW - 60_000,
+            },
+          }),
+        ),
+      ],
+      quotes: [],
+    };
+    const ids = buildSrsQueue(inbox, NOW, NO_FUZZ).map(
+      (item) => item.entry.id,
+    );
+    expect(ids).toEqual(['learning-card', 'review-card']);
+  });
+
+  it('caps new cards per day but never learning, relearning, or review cards', () => {
+    const newWord = (id: string) => migrateReviewState(word({ id }));
+    const reviewWord = (id: string) =>
+      migrateReviewState(
+        word({
+          id,
+          review: {
+            scheduler: 'fsrs-v1',
+            cardState: 'review',
+            dueAt: NOW - 1,
+            intervalDays: 3,
+            repetitions: 2,
+            lapses: 0,
+            stability: 3,
+            difficulty: 5,
+            lastReviewedAt: YESTERDAY,
+          },
+        }),
+      );
+
+    const settings = { ...NO_FUZZ, newCardsPerDay: 1 };
+    const inbox: Inbox = {
+      words: [newWord('new1'), newWord('new2'), reviewWord('rev1')],
+      quotes: [],
+    };
+
+    const ids = buildSrsQueue(inbox, NOW, settings).map(
+      (item) => item.entry.id,
+    );
+    expect(ids).toContain('rev1');
+    expect(ids.filter((id) => id.startsWith('new'))).toHaveLength(1);
+  });
+
+  it('does not mutate new cards hidden by the cap', () => {
+    const settings = { ...NO_FUZZ, newCardsPerDay: 0 };
+    const inbox: Inbox = {
+      words: [migrateReviewState(word({ id: 'new1' }))],
+      quotes: [],
+    };
+    expect(buildSrsQueue(inbox, NOW, settings)).toHaveLength(0);
+    expect(inbox.words[0].review?.cardState).toBe('new');
+  });
+});
+
+describe('getSrsStats', () => {
+  it('counts due now, due later today, new available today, and reviewed today', () => {
+    const laterToday = NOW + 3 * 60 * 60 * 1000;
+    const inbox: Inbox = {
+      words: [
+        migrateReviewState(
+          word({
+            id: 'due',
+            review: {
+              scheduler: 'fsrs-v1',
+              cardState: 'review',
+              dueAt: NOW - 1,
+              intervalDays: 3,
+              repetitions: 2,
+              lapses: 0,
+              stability: 3,
+              difficulty: 5,
+              lastReviewedAt: YESTERDAY,
+            },
+          }),
+        ),
+        migrateReviewState(
+          word({
+            id: 'later',
+            review: {
+              scheduler: 'fsrs-v1',
+              cardState: 'review',
+              dueAt: laterToday,
+              intervalDays: 3,
+              repetitions: 2,
+              lapses: 0,
+              stability: 3,
+              difficulty: 5,
+              lastReviewedAt: YESTERDAY,
+            },
+          }),
+        ),
+      ],
+      quotes: [],
+    };
+    const dueNow = buildSrsQueue(inbox, NOW, NO_FUZZ).length;
+    const stats = getSrsStats(inbox, NOW, NO_FUZZ, dueNow);
+    expect(stats.dueNow).toBe(1);
+    expect(stats.dueLaterToday).toBe(1);
+    expect(stats.newAvailableToday).toBe(0);
+  });
+
+  it('counts reviewed today from review logs on the current local day', () => {
+    const startOfToday = new Date(
+      new Date(NOW).getFullYear(),
+      new Date(NOW).getMonth(),
+      new Date(NOW).getDate(),
+    ).getTime();
+    const inbox: Inbox = {
+      words: [
+        migrateReviewState(
+          word({
+            id: 'reviewed-today',
+            review: {
+              scheduler: 'fsrs-v1',
+              cardState: 'review',
+              dueAt: NOW + DAY_MS,
+              intervalDays: 3,
+              repetitions: 1,
+              lapses: 0,
+              stability: 3,
+              difficulty: 5,
+              lastReviewedAt: NOW,
+              reviewLog: [
+                {
+                  reviewedAt: startOfToday + 60_000,
+                  rating: 'good',
+                  elapsedDays: 0,
+                  scheduledDays: 3,
+                  stateBefore: 'new',
+                  stateAfter: 'review',
+                },
+              ],
+            },
+          }),
+        ),
+      ],
+      quotes: [],
+    };
+    const dueNow = buildSrsQueue(inbox, NOW, NO_FUZZ).length;
+    expect(getSrsStats(inbox, NOW, NO_FUZZ, dueNow).reviewedToday).toBe(1);
+  });
+
+  it('caps new available today at the remaining daily capacity', () => {
+    const startOfToday = new Date(
+      new Date(NOW).getFullYear(),
+      new Date(NOW).getMonth(),
+      new Date(NOW).getDate(),
+    ).getTime();
+    const consumed = migrateReviewState(
+      word({
+        id: 'consumed',
+        review: {
+          scheduler: 'fsrs-v1',
+          cardState: 'review',
+          dueAt: NOW + DAY_MS,
+          intervalDays: 1,
+          repetitions: 1,
+          lapses: 0,
+          stability: 1,
+          difficulty: 5,
+          reviewLog: [
+            {
+              reviewedAt: startOfToday + 60_000,
+              rating: 'good',
+              elapsedDays: 0,
+              scheduledDays: 1,
+              stateBefore: 'new',
+              stateAfter: 'review',
+            },
+          ],
+        },
+      }),
+    );
+    const inbox: Inbox = {
+      words: [
+        consumed,
+        migrateReviewState(word({ id: 'new-1' })),
+        migrateReviewState(word({ id: 'new-2' })),
+        migrateReviewState(word({ id: 'new-3' })),
+      ],
+      quotes: [],
+    };
+
+    const settings = { ...NO_FUZZ, newCardsPerDay: 2 };
+    const dueNow = buildSrsQueue(inbox, NOW, settings).length;
+    expect(
+      getSrsStats(inbox, NOW, settings, dueNow).newAvailableToday,
+    ).toBe(1);
+  });
+
+  it('shows retention only after ten logged reviews', () => {
+    const logs = Array.from({ length: 10 }, (_, index) => ({
+      reviewedAt: NOW - index,
+      rating: index === 0 ? ('again' as const) : ('good' as const),
+      elapsedDays: 1,
+      scheduledDays: 1,
+      stateBefore: 'review' as const,
+      stateAfter: 'review' as const,
+    }));
+    const withLogs = (reviewLog: typeof logs): Inbox => ({
+      words: [
+        migrateReviewState(
+          word({
+            review: {
+              scheduler: 'fsrs-v1',
+              cardState: 'review',
+              dueAt: NOW + DAY_MS,
+              intervalDays: 1,
+              repetitions: reviewLog.length,
+              lapses: 1,
+              stability: 1,
+              difficulty: 5,
+              reviewLog,
+            },
+          }),
+        ),
+      ],
+      quotes: [],
+    });
+
+    const beforeThreshold = withLogs(logs.slice(0, 9));
+    const atThreshold = withLogs(logs);
+    expect(
+      getSrsStats(
+        beforeThreshold,
+        NOW,
+        NO_FUZZ,
+        buildSrsQueue(beforeThreshold, NOW, NO_FUZZ).length,
+      ).retention,
+    ).toBeNull();
+    expect(
+      getSrsStats(
+        atThreshold,
+        NOW,
+        NO_FUZZ,
+        buildSrsQueue(atThreshold, NOW, NO_FUZZ).length,
+      ).retention,
+    ).toBe(0.9);
+  });
+});
+
+describe('getNextSrsWakeAt', () => {
+  it('returns the next future due timestamp so sub-day cards wake the dashboard', () => {
+    const dueAt = NOW + 10 * 60_000;
+    const inbox: Inbox = {
+      words: [
+        migrateReviewState(
+          word({
+            review: {
+              scheduler: 'fsrs-v1',
+              cardState: 'learning',
+              dueAt,
+              intervalDays: 0,
+              repetitions: 1,
+              lapses: 0,
+              stability: 1,
+              difficulty: 5,
+              learningSteps: 1,
+              lastReviewedAt: NOW,
+            },
+          }),
+        ),
+      ],
+      quotes: [],
+    };
+
+    expect(getNextSrsWakeAt(inbox, NOW)).toBe(dueAt);
   });
 });

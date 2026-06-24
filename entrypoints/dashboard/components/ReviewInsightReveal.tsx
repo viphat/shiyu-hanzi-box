@@ -7,8 +7,16 @@ import { SpeakButton } from './SpeakButton';
 import { SourceExamples } from './SourceExamples';
 import { ToneChips } from './ToneChips';
 
-export function ReviewInsightReveal({ word, locale }: { word: WordEntry; locale: UiLocale }) {
-  const [revealed, setRevealed] = useState(false);
+export function ReviewInsightReveal({
+  word,
+  locale,
+  initiallyRevealed = false,
+}: {
+  word: WordEntry;
+  locale: UiLocale;
+  initiallyRevealed?: boolean;
+}) {
+  const [revealed, setRevealed] = useState(initiallyRevealed);
 
   if (!revealed) {
     return (

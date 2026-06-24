@@ -1,15 +1,27 @@
 import { BookOpen, CheckCircle2, Inbox, ScrollText } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import iconUrl from '../../assets/icon.png';
 import {
-  buildReviewQueue,
-  repeatReview,
-  skipReview,
-  viewReview,
-} from '@/lib/review';
+  answerReview,
+  buildSrsQueue,
+  getNextSrsWakeAt,
+  getSrsStats,
+  postponeReview,
+  startOfNextDay,
+  type SrsQueueItem,
+  type SrsStats,
+} from '@/lib/srs';
 import { t } from '@/lib/i18n';
-import type { Entry, Inbox as InboxState, QuoteEntry, Status, UiLocale, WordEntry } from '@/lib/types';
+import type {
+  Entry,
+  Inbox as InboxState,
+  QuoteEntry,
+  ReviewRating,
+  Status,
+  UiLocale,
+  WordEntry,
+} from '@/lib/types';
 import { QuoteList } from './components/QuoteList';
 import { ReviewQueue } from './components/ReviewQueue';
 import { Toolbar } from './components/Toolbar';
@@ -27,7 +39,22 @@ export function App() {
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<Tab>('review');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('inbox');
+  const [reviewNow, setReviewNow] = useState(() => Date.now());
   const normalizedQuery = query.trim().toLowerCase();
+  const nextSrsWakeAt = useMemo(
+    () => getNextSrsWakeAt(inbox, reviewNow),
+    [inbox, reviewNow],
+  );
+
+  useEffect(() => {
+    const delay = Math.max(250, nextSrsWakeAt - Date.now());
+    const timer = window.setTimeout(
+      () => setReviewNow(Date.now()),
+      Math.min(delay, 2_147_000_000),
+    );
+    return () => window.clearTimeout(timer);
+  }, [nextSrsWakeAt]);
+
   const today = new Intl.DateTimeFormat(locale, {
     month: 'long',
     day: 'numeric',
@@ -49,15 +76,26 @@ export function App() {
     };
   }, [inbox, normalizedQuery, statusFilter]);
 
+  const srsSnapshot = useMemo(() => {
+    const items = buildSrsQueue(inbox, reviewNow, settings.srs);
+    return {
+      items,
+      stats: getSrsStats(inbox, reviewNow, settings.srs, items.length),
+    };
+  }, [inbox, reviewNow, settings.srs]);
+
+  const allReviewItems: SrsQueueItem[] = srsSnapshot.items;
+  const srsStats: SrsStats = srsSnapshot.stats;
+
   const reviewItems = useMemo(
     () =>
-      buildReviewQueue(inbox).filter((item) =>
+      allReviewItems.filter((item) =>
         entryMatchesQuery(item.entry, normalizedQuery),
       ),
-    [inbox, normalizedQuery],
+    [allReviewItems, normalizedQuery],
   );
 
-  const reviewDueCount = useMemo(() => buildReviewQueue(inbox).length, [inbox]);
+  const reviewDueCount = allReviewItems.length;
 
   const stats = useMemo(() => {
     const entries = [...inbox.words, ...inbox.quotes];
@@ -109,35 +147,27 @@ export function App() {
     }));
   }
 
-  function viewEntry(kind: Entry['kind'], id: string) {
+  function answerEntry(
+    kind: Entry['kind'],
+    id: string,
+    rating: ReviewRating,
+  ) {
     const now = Date.now();
     mutate((current) =>
-      updateReviewEntry(current, kind, id, (entry) => viewReview(entry, now)),
+      updateReviewEntry(current, kind, id, (entry) =>
+        answerReview(entry, rating, now, settings.srs),
+      ),
     );
   }
 
-  function skipEntry(kind: Entry['kind'], id: string) {
+  function postponeEntry(kind: Entry['kind'], id: string) {
     const now = Date.now();
+    const dueAt = startOfNextDay(now);
     mutate((current) =>
-      updateReviewEntry(current, kind, id, (entry) => skipReview(entry, now)),
+      updateReviewEntry(current, kind, id, (entry) =>
+        postponeReview(entry, now, dueAt),
+      ),
     );
-  }
-
-  function repeatEntry(kind: Entry['kind'], id: string) {
-    const now = Date.now();
-    mutate((current) => {
-      const queueRank =
-        Math.max(
-          now,
-          ...buildReviewQueue(current, now).map(
-            (item) => item.entry.review?.queueRank ?? now,
-          ),
-        ) + 1;
-
-      return updateReviewEntry(current, kind, id, (entry) =>
-        repeatReview(entry, now, queueRank),
-      );
-    });
   }
 
   return (
@@ -194,6 +224,8 @@ export function App() {
           locale={locale}
         />
 
+        <SrsStatsPanel stats={srsStats} locale={locale} />
+
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-strong pb-3">
           <div className="flex gap-1">
             {(['review', 'words', 'quotes'] as Tab[]).map((nextTab) => (
@@ -244,9 +276,8 @@ export function App() {
           {tab === 'review' ? (
             <ReviewQueue
               items={reviewItems}
-              onView={viewEntry}
-              onSkip={skipEntry}
-              onRepeat={repeatEntry}
+              onAnswer={answerEntry}
+              onPostpone={postponeEntry}
               locale={locale}
             />
           ) : tab === 'words' ? (
@@ -327,5 +358,42 @@ function StatCard({
       </div>
       <div className="mt-1 text-2xl font-bold">{value}</div>
     </div>
+  );
+}
+
+function SrsStatsPanel({
+  stats,
+  locale,
+}: {
+  stats: SrsStats;
+  locale: UiLocale;
+}) {
+  const items = [
+    [t(locale, 'srs.dueNow'), String(stats.dueNow)],
+    [t(locale, 'srs.dueLaterToday'), String(stats.dueLaterToday)],
+    [t(locale, 'srs.newAvailableToday'), String(stats.newAvailableToday)],
+    [t(locale, 'srs.reviewedToday'), String(stats.reviewedToday)],
+    [
+      t(locale, 'srs.retention'),
+      stats.retention === null
+        ? '—'
+        : `${Math.round(stats.retention * 100)}%`,
+    ],
+  ] as const;
+
+  return (
+    <dl className="grid gap-2 rounded-sm border border-border bg-paper-light p-3 text-center sm:grid-cols-5">
+      {items.map(([label, value]) => (
+        <div
+          key={label}
+          className="rounded-sm bg-paper-input px-2 py-2"
+        >
+          <dt className="text-[11px] tracking-[1px] text-muted">
+            {label}
+          </dt>
+          <dd className="mt-1 text-lg font-semibold text-ink">{value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }

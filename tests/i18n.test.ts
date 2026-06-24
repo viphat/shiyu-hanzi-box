@@ -44,4 +44,14 @@ describe('i18n messages', () => {
       '要从「notes.json」还原 3 条记录吗？这会替换当前本地收藏箱。',
     );
   });
+
+  it('returns SRS analytics labels in both locales', () => {
+    expect(t('en', 'srs.dueNow')).toBe('Due now');
+    expect(t('en', 'srs.dueLaterToday')).toBe('Later today');
+    expect(t('en', 'srs.newAvailableToday')).toBe('New today');
+    expect(t('en', 'srs.reviewedToday')).toBe('Reviewed today');
+    expect(t('en', 'srs.retention')).toBe('Retention');
+    expect(t('zh-CN', 'srs.dueNow')).toBe('现在到期');
+    expect(t('zh-CN', 'srs.retention')).toBe('记忆率');
+  });
 });

@@ -1,12 +1,40 @@
 export type Status = 'inbox' | 'reviewed' | 'archived';
 
+export type ReviewScheduler = 'fixed-v1' | 'fsrs-v1';
+export type ReviewCardState = 'new' | 'learning' | 'review' | 'relearning';
+export type ReviewRating = 'again' | 'hard' | 'good' | 'easy';
+
+export interface ReviewLogEntry {
+  reviewedAt: number;
+  rating: ReviewRating;
+  elapsedDays: number;
+  scheduledDays: number;
+  stateBefore: ReviewCardState;
+  stateAfter: ReviewCardState;
+  stabilityBefore?: number;
+  stabilityAfter?: number;
+  difficultyBefore?: number;
+  difficultyAfter?: number;
+}
+
 export interface ReviewState {
+  scheduler?: ReviewScheduler;
   dueAt: number;
   intervalDays: number;
   repetitions: number;
   lapses: number;
   lastReviewedAt?: number;
   queueRank?: number;
+
+  cardState?: ReviewCardState;
+  stability?: number;
+  difficulty?: number;
+  elapsedDays?: number;
+  scheduledDays?: number;
+  /** Current ts-fsrs (re)learning step index. Must round-trip across sessions. */
+  learningSteps?: number;
+  retrievability?: number;
+  reviewLog?: ReviewLogEntry[];
 }
 
 /** Captured once per save. Words aggregate many of these. */
@@ -76,9 +104,17 @@ export interface KaikkiSettings {
   importedAt: number | null;
 }
 
+export interface SrsSettings {
+  desiredRetention: number;
+  maximumIntervalDays: number;
+  newCardsPerDay: number;
+  enableFuzz: boolean;
+}
+
 export interface AppSettings {
   uiLocale: UiLocale;
   kaikki: KaikkiSettings;
+  srs: SrsSettings;
 }
 
 // ---------------------------------------------------------------------------

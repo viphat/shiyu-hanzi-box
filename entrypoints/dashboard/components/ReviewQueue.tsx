@@ -5,7 +5,7 @@ import {
   WholeWord,
 } from 'lucide-react';
 import { useState } from 'react';
-import { t } from '@/lib/i18n';
+import { formatMessage, t } from '@/lib/i18n';
 import type { SrsQueueItem } from '@/lib/srs';
 import type { Entry, ReviewRating, UiLocale } from '@/lib/types';
 import { ReviewInsightReveal } from './ReviewInsightReveal';
@@ -50,6 +50,17 @@ const RATINGS: Array<{
   },
 ];
 
+type AnswerHandler = (
+  kind: Entry['kind'],
+  id: string,
+  rating: ReviewRating,
+) => void | Promise<void>;
+
+type PostponeHandler = (
+  kind: Entry['kind'],
+  id: string,
+) => void | Promise<void>;
+
 export function ReviewQueue({
   items,
   onAnswer,
@@ -57,12 +68,8 @@ export function ReviewQueue({
   locale,
 }: {
   items: SrsQueueItem[];
-  onAnswer: (
-    kind: Entry['kind'],
-    id: string,
-    rating: ReviewRating,
-  ) => void;
-  onPostpone: (kind: Entry['kind'], id: string) => void;
+  onAnswer: AnswerHandler;
+  onPostpone: PostponeHandler;
   locale: UiLocale;
 }) {
   if (items.length === 0) {
@@ -82,144 +89,227 @@ export function ReviewQueue({
   }
 
   return (
-    <div className="grid gap-3">
-      {items.map((item) => (
-        <ReviewCard
-          key={`${item.kind}:${item.entry.id}`}
-          item={item}
-          onAnswer={(rating) =>
-            onAnswer(item.kind, item.entry.id, rating)
-          }
-          onPostpone={() => onPostpone(item.kind, item.entry.id)}
-          locale={locale}
-        />
-      ))}
+    <ActiveReviewCard
+      items={items}
+      onAnswer={onAnswer}
+      onPostpone={onPostpone}
+      locale={locale}
+    />
+  );
+}
+
+function ActiveReviewCard({
+  items,
+  onAnswer,
+  onPostpone,
+  locale,
+}: {
+  items: SrsQueueItem[];
+  onAnswer: AnswerHandler;
+  onPostpone: PostponeHandler;
+  locale: UiLocale;
+}) {
+  const activeItem = items[0];
+  const activeKey = `${activeItem.kind}:${activeItem.entry.id}`;
+
+  return (
+    <div className="mx-auto w-full max-w-4xl">
+      <ReviewCard
+        key={activeKey}
+        item={activeItem}
+        remainingCount={items.length}
+        onAnswer={(rating) =>
+          onAnswer(activeItem.kind, activeItem.entry.id, rating)
+        }
+        onPostpone={() =>
+          onPostpone(activeItem.kind, activeItem.entry.id)
+        }
+        locale={locale}
+      />
     </div>
   );
 }
 
 export function ReviewCard({
   item,
+  remainingCount,
   onAnswer,
   onPostpone,
   locale,
   initiallyRevealed = false,
+  busy = false,
+  transitionClassName = 'review-card-enter',
 }: {
   item: SrsQueueItem;
-  onAnswer: (rating: ReviewRating) => void;
-  onPostpone: () => void;
+  remainingCount: number;
+  onAnswer: (rating: ReviewRating) => void | Promise<void>;
+  onPostpone: () => void | Promise<void>;
   locale: UiLocale;
   initiallyRevealed?: boolean;
+  busy?: boolean;
+  transitionClassName?: string;
 }) {
   const { entry } = item;
-  const [revealed, setRevealed] = useState(initiallyRevealed);
+  const [revealed, setRevealed] = useState(
+    entry.kind === 'quote' || initiallyRevealed,
+  );
+  const answerVisible = entry.kind === 'quote' || revealed;
   const source = getSourceLabel(entry);
 
   return (
-    <article className="rounded-sm border border-border bg-paper-light p-4 shadow-sm transition hover:border-border-hover hover:shadow-md">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-        <span className="inline-flex items-center gap-1 rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-1 font-medium text-cinnabar tracking-[1px]">
-          {entry.kind === 'word' ? (
-            <WholeWord className="h-3.5 w-3.5" />
-          ) : (
-            <MessageSquareQuote className="h-3.5 w-3.5" />
-          )}
-          {entry.kind === 'word'
-            ? t(locale, 'review.kindWord')
-            : t(locale, 'review.kindQuote')}
-        </span>
-        <span className="rounded-sm border border-border bg-paper-input px-2 py-1">
-          {entry.status === 'inbox'
-            ? t(locale, 'app.inbox')
-            : t(locale, 'app.reviewed')}
-        </span>
-        {entry.kind === 'quote' && (
+    <article
+      aria-busy={busy}
+      className={`flex min-h-[420px] flex-col rounded-sm border border-border bg-paper-light p-6 shadow-md sm:p-8 ${transitionClassName}`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+          <span className="inline-flex items-center gap-1 rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-1 font-medium text-cinnabar tracking-[1px]">
+            {entry.kind === 'word' ? (
+              <WholeWord className="h-3.5 w-3.5" />
+            ) : (
+              <MessageSquareQuote className="h-3.5 w-3.5" />
+            )}
+            {entry.kind === 'word'
+              ? t(locale, 'review.kindWord')
+              : t(locale, 'review.kindQuote')}
+          </span>
           <span className="rounded-sm border border-border bg-paper-input px-2 py-1">
-            {entry.category}
+            {entry.status === 'inbox'
+              ? t(locale, 'app.inbox')
+              : t(locale, 'app.reviewed')}
           </span>
-        )}
-        {source && (
-          <span className="truncate rounded-sm border border-border bg-paper-input px-2 py-1">
-            {source}
-          </span>
-        )}
+          {entry.kind === 'quote' && (
+            <span className="rounded-sm border border-border bg-paper-input px-2 py-1">
+              {entry.category}
+            </span>
+          )}
+          {source && (
+            <span className="max-w-64 truncate rounded-sm border border-border bg-paper-input px-2 py-1">
+              {source}
+            </span>
+          )}
+        </div>
+        <span className="shrink-0 rounded-sm border border-border bg-paper-input px-3 py-1.5 text-xs text-muted">
+          {formatMessage(locale, 'review.remaining', {
+            count: remainingCount,
+          })}
+        </span>
       </div>
 
-      {entry.kind === 'word' ? (
-        <h2 className="mt-3 text-[32px] font-bold leading-none text-ink tracking-[4px]">
-          {entry.text}
-        </h2>
-      ) : (
-        <p className="mt-3 text-sm text-muted tracking-[1px]">
-          {revealed ? null : t(locale, 'review.revealTitle')}
-        </p>
-      )}
-
-      {revealed && entry.kind === 'quote' && (
-        <blockquote className="relative mt-3 border-l-[3px] border-cinnabar-fade py-1 pl-5 pr-4 text-base leading-8 text-ink tracking-[1px]">
-          <span
-            aria-hidden="true"
-            className="absolute left-2 top-0 text-xl text-cinnabar/40"
+      {entry.kind === 'word' && (
+        <div className="flex min-h-[220px] flex-1 items-center justify-center py-8 text-center">
+          <h2
+            tabIndex={-1}
+            className="text-5xl font-bold leading-tight text-ink tracking-[8px] sm:text-6xl"
           >
-            「
-          </span>
-          <span>{entry.text}</span>
-          <span
-            aria-hidden="true"
-            className="absolute bottom-0 right-1 text-xl text-cinnabar/40"
+            {entry.text}
+          </h2>
+        </div>
+      )}
+
+      {entry.kind === 'quote' && (
+        <div className="flex flex-1 flex-col justify-center py-8">
+          <blockquote
+            tabIndex={-1}
+            className="relative border-l-[3px] border-cinnabar-fade py-3 pl-7 pr-5 text-2xl leading-[2] text-ink tracking-[2px] sm:text-3xl"
           >
-            」
-          </span>
-        </blockquote>
+            <span
+              aria-hidden="true"
+              className="absolute left-2 top-1 text-2xl text-cinnabar/40"
+            >
+              「
+            </span>
+            <span>{entry.text}</span>
+            <span
+              aria-hidden="true"
+              className="absolute bottom-0 right-1 text-2xl text-cinnabar/40"
+            >
+              」
+            </span>
+          </blockquote>
+          {entry.note && (
+            <p className="mt-5 rounded-sm border border-border bg-paper-input px-4 py-3 text-sm leading-7 text-ink-secondary">
+              {entry.note}
+            </p>
+          )}
+        </div>
       )}
 
-      {revealed && entry.kind === 'quote' && entry.note && (
-        <p className="mt-3 rounded-sm border border-border bg-paper-input px-3 py-2 text-sm leading-6 text-ink-secondary">
-          {entry.note}
-        </p>
+      {answerVisible && entry.kind === 'word' && (
+        <div className="mb-6 border-t border-border pt-4">
+          <ReviewInsightReveal
+            word={entry}
+            locale={locale}
+            initiallyRevealed
+          />
+        </div>
       )}
 
-      {revealed && entry.kind === 'word' && (
-        <ReviewInsightReveal
-          word={entry}
-          locale={locale}
-          initiallyRevealed
-        />
-      )}
-
-      <div className="mt-4 flex flex-wrap justify-end gap-2">
-        {!revealed ? (
-          <button
-            onClick={() => setRevealed(true)}
-            title={t(locale, 'review.revealTitle')}
-            className="inline-flex items-center gap-1 rounded-sm bg-cinnabar px-3 py-2 text-sm font-medium text-white shadow-sm tracking-[2px] transition hover:brightness-95"
-          >
-            <Eye className="h-4 w-4" /> {t(locale, 'review.reveal')}
-          </button>
+      <div className="mt-auto flex flex-wrap justify-end gap-2 border-t border-border pt-5">
+        {entry.kind === 'word' && !revealed ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setRevealed(true)}
+              disabled={busy}
+              title={t(locale, 'review.revealTitle')}
+              className="inline-flex items-center gap-1 rounded-sm bg-cinnabar px-4 py-2.5 text-sm font-medium text-white shadow-sm tracking-[2px] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Eye className="h-4 w-4" />
+              {t(locale, 'review.reveal')}
+            </button>
+            <PostponeButton
+              busy={busy}
+              onPostpone={onPostpone}
+              locale={locale}
+            />
+          </>
         ) : (
           <>
             {RATINGS.map(({ rating, labelKey, titleKey, tone }) => (
               <button
+                type="button"
                 key={rating}
                 onClick={() => onAnswer(rating)}
+                disabled={busy}
                 title={t(locale, titleKey)}
-                className={`inline-flex items-center gap-1 rounded-sm px-3 py-2 text-sm font-medium tracking-[2px] transition ${toneClasses(tone)}`}
+                className={`inline-flex items-center gap-1 rounded-sm px-4 py-2.5 text-sm font-medium tracking-[2px] transition disabled:cursor-not-allowed disabled:opacity-50 ${toneClasses(tone)}`}
               >
                 {t(locale, labelKey)}
               </button>
             ))}
-            <button
-              onClick={onPostpone}
-              title={t(locale, 'review.postponeTitle')}
-              className="inline-flex items-center gap-1 rounded-sm border border-border bg-transparent px-3 py-2 text-sm font-medium text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input"
-            >
-              <RotateCw className="h-4 w-4" />{' '}
-              {t(locale, 'review.postpone')}
-            </button>
+            <PostponeButton
+              busy={busy}
+              onPostpone={onPostpone}
+              locale={locale}
+            />
           </>
         )}
       </div>
     </article>
+  );
+}
+
+function PostponeButton({
+  busy,
+  onPostpone,
+  locale,
+}: {
+  busy: boolean;
+  onPostpone: () => void | Promise<void>;
+  locale: UiLocale;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onPostpone}
+      disabled={busy}
+      title={t(locale, 'review.postponeTitle')}
+      className="inline-flex items-center gap-1 rounded-sm border border-border bg-transparent px-4 py-2.5 text-sm font-medium text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <RotateCw className="h-4 w-4" />
+      {t(locale, 'review.postpone')}
+    </button>
   );
 }
 

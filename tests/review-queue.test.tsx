@@ -44,76 +44,104 @@ function quote(overrides: Partial<QuoteEntry> = {}): QuoteEntry {
   };
 }
 
-describe('ReviewQueue reveal-then-rate flow', () => {
-  it('has Again/Hard/Good/Easy and Reveal/Postpone labels in i18n', () => {
-    expect(messages.en).toHaveProperty('review.reveal');
-    expect(messages.en).toHaveProperty('review.again');
-    expect(messages.en).toHaveProperty('review.hard');
-    expect(messages.en).toHaveProperty('review.good');
-    expect(messages.en).toHaveProperty('review.easy');
-    expect(messages.en).toHaveProperty('review.postpone');
-    expect(messages['zh-CN']).toHaveProperty('review.reveal');
-    expect(messages['zh-CN']).toHaveProperty('review.again');
+describe('ReviewQueue single-card rendering', () => {
+  it('renders only the first queue item and shows the remaining count', () => {
+    const first = migrateReviewState(word({ id: 'w1', text: '你好' }), NOW);
+    const second = migrateReviewState(
+      word({ id: 'w2', text: '再见', normalized: '再见' }),
+      NOW,
+    );
+    const html = renderToStaticMarkup(
+      <ReviewQueue
+        items={[
+          { kind: 'word', entry: first, dueAt: NOW },
+          { kind: 'word', entry: second, dueAt: NOW },
+        ]}
+        onAnswer={vi.fn().mockResolvedValue(undefined)}
+        onPostpone={vi.fn().mockResolvedValue(undefined)}
+        locale="en"
+      />,
+    );
+
+    expect(html).toContain('你好');
+    expect(html).not.toContain('再见');
+    expect(html).toContain('2 remaining');
   });
 
-  it('shows the word prompt and a Reveal button before answer details', () => {
-    const entry = migrateReviewState(word(), NOW);
+  it('shows a word and Reveal while hiding insight and ratings', () => {
+    const entry = migrateReviewState(
+      word({ note: 'remember this note' }),
+      NOW,
+    );
     const html = renderToStaticMarkup(
       <ReviewQueue
         items={[{ kind: 'word', entry, dueAt: NOW }]}
-        onAnswer={vi.fn()}
-        onPostpone={vi.fn()}
+        onAnswer={vi.fn().mockResolvedValue(undefined)}
+        onPostpone={vi.fn().mockResolvedValue(undefined)}
         locale="en"
       />,
     );
+
     expect(html).toContain('你好');
     expect(html).toContain(messages.en['review.reveal']);
+    expect(html).toContain(messages.en['review.postpone']);
+    expect(html).not.toContain('remember this note');
+    expect(html).not.toContain(messages.en['review.again']);
+    expect(html).not.toContain(messages.en['review.good']);
   });
 
-  it('hides the quote text until reveal (shows category/source first)', () => {
-    const entry = migrateReviewState(quote(), NOW);
-    const html = renderToStaticMarkup(
-      <ReviewQueue
-        items={[{ kind: 'quote', entry, dueAt: NOW }]}
-        onAnswer={vi.fn()}
-        onPostpone={vi.fn()}
-        locale="en"
-      />,
-    );
-    expect(html).toContain('classic');
-    expect(html).toContain(messages.en['review.reveal']);
-    expect(html).not.toContain('学而时习之');
-  });
-
-  it('shows quote answer details and rating controls after reveal', () => {
-    const entry = migrateReviewState(quote(), NOW);
-    const html = renderToStaticMarkup(
-      <ReviewCard
-        item={{ kind: 'quote', entry, dueAt: NOW }}
-        onAnswer={vi.fn()}
-        onPostpone={vi.fn()}
-        locale="en"
-        initiallyRevealed
-      />,
-    );
-    expect(html).toContain('学而时习之');
-    expect(html).toContain('a note');
-    expect(html).toContain(messages.en['review.again']);
-    expect(html).toContain(messages.en['review.easy']);
-  });
-
-  it('opens the existing word insight reveal with the main answer reveal', () => {
+  it('shows revealed word insight and ratings in the large card', () => {
     const entry = migrateReviewState(word(), NOW);
     const html = renderToStaticMarkup(
       <ReviewCard
         item={{ kind: 'word', entry, dueAt: NOW }}
-        onAnswer={vi.fn()}
-        onPostpone={vi.fn()}
+        remainingCount={1}
+        onAnswer={vi.fn().mockResolvedValue(undefined)}
+        onPostpone={vi.fn().mockResolvedValue(undefined)}
         locale="en"
         initiallyRevealed
       />,
     );
-    expect(html).not.toContain(messages.en['review.showDefinitions']);
+
+    expect(html).not.toContain(messages.en['review.reveal']);
+    expect(html).toContain(messages.en['review.again']);
+    expect(html).toContain(messages.en['review.hard']);
     expect(html).toContain(messages.en['review.good']);
+    expect(html).toContain(messages.en['review.easy']);
+  });
+
+  it('shows quote content, note, and ratings immediately without Reveal', () => {
+    const entry = migrateReviewState(quote(), NOW);
+    const html = renderToStaticMarkup(
+      <ReviewQueue
+        items={[{ kind: 'quote', entry, dueAt: NOW }]}
+        onAnswer={vi.fn().mockResolvedValue(undefined)}
+        onPostpone={vi.fn().mockResolvedValue(undefined)}
+        locale="en"
+      />,
+    );
+
+    expect(html).toContain('学而时习之');
+    expect(html).toContain('a note');
+    expect(html).toContain('Analects');
+    expect(html).toContain(messages.en['review.again']);
+    expect(html).toContain(messages.en['review.easy']);
+    expect(html).not.toContain(messages.en['review.reveal']);
+    expect(html).not.toContain(messages.en['review.revealTitle']);
+  });
+
+  it('uses the larger focused review-card layout', () => {
+    const entry = migrateReviewState(word(), NOW);
+    const html = renderToStaticMarkup(
+      <ReviewQueue
+        items={[{ kind: 'word', entry, dueAt: NOW }]}
+        onAnswer={vi.fn().mockResolvedValue(undefined)}
+        onPostpone={vi.fn().mockResolvedValue(undefined)}
+        locale="en"
+      />,
+    );
+
+    expect(html).toContain('min-h-[420px]');
+    expect(html).toContain('max-w-4xl');
   });
 });

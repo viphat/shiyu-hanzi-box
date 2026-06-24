@@ -3,7 +3,7 @@ import { ClipboardPaste, LayoutDashboard, Loader2, Quote, Type } from 'lucide-re
 import { browser } from 'wxt/browser';
 import iconUrl from '../../assets/icon.png';
 import { t } from '@/lib/i18n';
-import { settingsStorage } from '@/lib/settings';
+import { getSettings, watchSettings } from '@/lib/settings';
 import type { UiLocale } from '@/lib/types';
 import {
   handleCapture,
@@ -21,11 +21,11 @@ export function Popup() {
 
   useEffect(() => {
     let mounted = true;
-    settingsStorage.getValue().then((settings) => {
+    getSettings().then((settings) => {
       if (mounted) setLocale(settings.uiLocale);
     });
-    const unwatch = settingsStorage.watch((settings) => {
-      if (mounted && settings) setLocale(settings.uiLocale);
+    const unwatch = watchSettings((settings) => {
+      if (mounted) setLocale(settings.uiLocale);
     });
     return () => {
       mounted = false;

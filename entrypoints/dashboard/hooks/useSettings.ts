@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { DEFAULT_SETTINGS, settingsStorage } from '@/lib/settings';
+import {
+  DEFAULT_SETTINGS,
+  getSettings,
+  mutateSettings,
+  replaceSettings,
+  watchSettings,
+} from '@/lib/settings';
 import type { AppSettings } from '@/lib/types';
 
 export function useSettings() {
@@ -8,14 +14,14 @@ export function useSettings() {
 
   useEffect(() => {
     let mounted = true;
-    settingsStorage.getValue().then((value) => {
+    getSettings().then((value) => {
       if (mounted) {
         setSettings(value);
         setLoading(false);
       }
     });
-    const unwatch = settingsStorage.watch((next) => {
-      if (mounted) setSettings(next ?? DEFAULT_SETTINGS);
+    const unwatch = watchSettings((next) => {
+      if (mounted) setSettings(next);
     });
     return () => {
       mounted = false;
@@ -23,14 +29,15 @@ export function useSettings() {
     };
   }, []);
 
-  const mutate = useCallback(async (fn: (settings: AppSettings) => AppSettings) => {
-    const current = await settingsStorage.getValue();
-    await settingsStorage.setValue(fn(current));
-  }, []);
+  const mutate = useCallback(
+    async (fn: (settings: AppSettings) => AppSettings) => mutateSettings(fn),
+    [],
+  );
 
-  const replace = useCallback(async (next: AppSettings) => {
-    await settingsStorage.setValue(next);
-  }, []);
+  const replace = useCallback(
+    async (next: AppSettings) => replaceSettings(next),
+    [],
+  );
 
   return { settings, loading, mutate, replace };
 }

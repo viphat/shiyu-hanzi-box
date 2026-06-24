@@ -1,14 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fakeBrowser } from 'wxt/testing/fake-browser';
 import {
   DEFAULT_KAIKKI_SOURCE_URL,
   DEFAULT_SRS_SETTINGS,
   DEFAULT_SETTINGS,
   enableKaikki,
+  getSettings,
+  mutateSettings,
   normalizeSettings,
   recordKaikkiImport,
   resetKaikki,
+  settingsStorage,
   setSrsSettings,
   setUiLocale,
+  watchSettings,
 } from '../lib/settings';
 import type { AppSettings } from '../lib/types';
 
@@ -137,5 +142,55 @@ describe('SRS settings', () => {
     });
     expect(next.srs.desiredRetention).toBe(0.95);
     expect(DEFAULT_SETTINGS.srs.desiredRetention).toBe(0.9);
+  });
+});
+
+describe('normalized settings access', () => {
+  beforeEach(() => {
+    fakeBrowser.reset();
+  });
+
+  it('normalizes a partial stored object on read', async () => {
+    const legacy = {
+      uiLocale: 'en',
+      kaikki: DEFAULT_SETTINGS.kaikki,
+    } as unknown as AppSettings;
+    await settingsStorage.setValue(legacy);
+
+    const value = await getSettings();
+
+    expect(value.uiLocale).toBe('en');
+    expect(value.srs).toEqual(DEFAULT_SRS_SETTINGS);
+  });
+
+  it('normalizes watched values before notifying consumers', async () => {
+    const listener = vi.fn();
+    const unwatch = watchSettings(listener);
+
+    await settingsStorage.setValue({
+      uiLocale: 'en',
+      kaikki: DEFAULT_SETTINGS.kaikki,
+    } as unknown as AppSettings);
+
+    await vi.waitFor(() => {
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({ srs: DEFAULT_SRS_SETTINGS }),
+      );
+    });
+    unwatch();
+  });
+
+  it('normalizes before mutation and persists the complete shape', async () => {
+    await settingsStorage.setValue({
+      uiLocale: 'zh-CN',
+      kaikki: DEFAULT_SETTINGS.kaikki,
+    } as unknown as AppSettings);
+
+    await mutateSettings((current) => ({ ...current, uiLocale: 'en' }));
+
+    expect(await settingsStorage.getValue()).toMatchObject({
+      uiLocale: 'en',
+      srs: DEFAULT_SRS_SETTINGS,
+    });
   });
 });

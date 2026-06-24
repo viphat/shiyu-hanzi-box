@@ -35,6 +35,27 @@ export const settingsStorage = storage.defineItem<AppSettings>('local:settings',
   fallback: DEFAULT_SETTINGS,
 });
 
+export async function getSettings(): Promise<AppSettings> {
+  return normalizeSettings(await settingsStorage.getValue());
+}
+
+export function watchSettings(
+  listener: (settings: AppSettings) => void,
+): () => void {
+  return settingsStorage.watch((next) => listener(normalizeSettings(next)));
+}
+
+export async function mutateSettings(
+  mutate: (settings: AppSettings) => AppSettings,
+): Promise<void> {
+  const current = await getSettings();
+  await settingsStorage.setValue(normalizeSettings(mutate(current)));
+}
+
+export async function replaceSettings(settings: AppSettings): Promise<void> {
+  await settingsStorage.setValue(normalizeSettings(settings));
+}
+
 export function setUiLocale(settings: AppSettings, uiLocale: UiLocale): AppSettings {
   return { ...settings, uiLocale };
 }

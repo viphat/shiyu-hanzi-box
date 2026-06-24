@@ -7,7 +7,7 @@ import {
 } from './dictionary';
 import { getDictionaryCache, setDictionaryCache } from './dictionary-cache';
 import { getKaikkiCache } from './kaikki-cache';
-import { settingsStorage } from './settings';
+import { getSettings } from './settings';
 import type { CompactDictionaryAsset, DictionaryAssetMeta, DictionaryIndex } from './types';
 
 export type DictionaryLoadStatus = 'cached' | 'built' | 'unavailable';
@@ -49,7 +49,7 @@ export async function loadDictionary(): Promise<DictionaryLoadResult> {
 }
 
 async function withOptionalKaikki(primary: DictionaryIndex): Promise<DictionaryIndex> {
-  const settings = await settingsStorage.getValue();
+  const settings = await getSettings();
   if (!settings.kaikki.enabled || !settings.kaikki.hash) return primary;
   const cached = await getKaikkiCache(settings.kaikki.hash);
   if (!cached) return primary;

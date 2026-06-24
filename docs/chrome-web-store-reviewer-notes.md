@@ -1,6 +1,6 @@
 # Chrome Web Store Reviewer Notes
 
-Last updated: 2026-06-22
+Last updated: 2026-06-24
 
 Use this file when filling the reviewer notes field during Chrome Web Store
 submission.
@@ -13,6 +13,8 @@ submission.
 AI insight is disabled by default. To test AI, open Settings, enable AI, choose a provider, enter a valid user-owned API key, and click Test Connection. The extension requests the provider host permission lazily at that point. Without a user-provided API key, all local dictionary features still work offline.
 
 The bundled CC-CEDICT dictionary is packaged with the extension and used offline. The optional Kaikki workflow opens the Kaikki download page in a regular tab and processes a user-selected JSONL file locally.
+
+The tts permission supports the user-triggered speaker button on saved words. Clicking the button passes only that saved word to Chrome's configured Chinese speech engine. No audio is stored, and no developer-operated speech server is used.
 ```
 
 ## Manual Test Script
@@ -31,14 +33,16 @@ Use this flow for reviewer instructions or your own pre-submit smoke test.
 8. Confirm the saved word and quote appear in the dashboard.
 9. Expand the saved word. Local dictionary definitions, tone chips, source
    examples, and external dictionary links should appear without AI.
-10. Click the daily Markdown export action and confirm Chrome downloads a
+10. Click the speaker button beside the saved word and confirm Chrome pronounces
+    it with an available Chinese voice. Click it again to stop playback.
+11. Click the daily Markdown export action and confirm Chrome downloads a
     `.md` file.
-11. Click the zip export action and confirm Chrome downloads a `.zip` file.
-12. Click the backup action and confirm Chrome downloads a `.json` backup file.
-13. Open Settings from the dashboard.
-14. Change the UI language between `zh-CN` and English, then return to the
+12. Click the zip export action and confirm Chrome downloads a `.zip` file.
+13. Click the backup action and confirm Chrome downloads a `.json` backup file.
+14. Open Settings from the dashboard.
+15. Change the UI language between `zh-CN` and English, then return to the
     dashboard to confirm labels update.
-15. Optional AI test: enable AI, choose DeepSeek or OpenAI, enter a valid API
+16. Optional AI test: enable AI, choose DeepSeek or OpenAI, enter a valid API
     key, click Test Connection, return to a saved word, and click Ask AI.
 
 ## Popup Fallback Test
@@ -58,6 +62,9 @@ manual fallback.
 - External dictionary links open only when clicked.
 - AI is opt-in, BYO-key, and initiated only by explicit user action.
 - API keys and generated AI insight are stored locally in extension storage.
+- Pronunciation runs only after a speaker-button click and stores no audio.
+- Chrome/OS or an installed speech engine provides the voice; some installed
+  voices may use a remote speech resource.
 - Markdown, zip, and backup files are created only after explicit download
   actions.
 
@@ -66,5 +73,7 @@ manual fallback.
 - Chrome internal pages and some restricted pages cannot be scripted; use the
   popup manual fallback there.
 - Custom AI endpoints must use HTTPS.
+- The pronunciation button is hidden if Chrome exposes no compatible Chinese
+  voice.
 - Kaikki dictionary import can take time for large JSONL files and should be
   run while the Settings page remains open.

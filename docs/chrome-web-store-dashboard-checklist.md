@@ -1,6 +1,6 @@
 # Chrome Web Store Dashboard Checklist
 
-Last updated: 2026-06-22
+Last updated: 2026-06-24
 
 Use this when completing the Chrome Developer Dashboard fields after uploading
 `.output/shiyu-hanzi-box-0.1.0-chrome.zip`.
@@ -26,12 +26,14 @@ Suggested detailed description:
 
 Select Chinese text on a page and save it as a word, phrase, or quote through the context menu, keyboard shortcut, or toolbar popup. The dashboard keeps your collection in local browser storage, shows offline dictionary insight from the bundled CC-CEDICT asset, and exports daily Markdown notes, zip archives, or JSON backups.
 
+Saved words include one-click Mandarin pronunciation through Chrome/OS Chinese text-to-speech voices. Pronunciation runs only when the user clicks the speaker button and requires no API key.
+
 AI insight is optional and disabled by default. If enabled, users bring their own API key and explicitly click Ask AI for a saved word. The extension stores generated insight locally so each word only needs to be generated once.
 
 Core features:
 - Save selected Chinese words, phrases, and quotes.
 - Deduplicate words while preserving source occurrences.
-- View local dictionary definitions, pinyin tone chips, and source examples.
+- View local dictionary definitions, pinyin tone chips, pronunciation, and source examples.
 - Export daily Markdown notes and backup/restore local data.
 - Optionally import a local Kaikki JSONL dictionary fallback.
 - Optionally use BYO-key AI insight with DeepSeek, OpenAI, or a custom HTTPS OpenAI-compatible endpoint.
@@ -114,6 +116,10 @@ unlimitedStorage: Supports the local-first inbox, dictionary cache, and optional
 clipboardRead: Supports the toolbar popup "paste from clipboard and save" fallback when selected-text capture is unavailable.
 ```
 
+```text
+tts: Pronounces a saved Chinese word only after the user clicks its speaker button. Chrome selects a compatible Chinese voice from the operating system or an installed speech engine.
+```
+
 ## Optional Host Permission Justifications
 
 ```text
@@ -142,7 +148,7 @@ Disclose these categories if the dashboard asks:
 Suggested explanation:
 
 ```text
-The extension stores selected text, notes, source metadata, local settings, optional API keys, and generated AI insights locally in the user's browser. AI data transfer happens only when the user enables AI and explicitly clicks an AI action. The extension does not operate a developer-owned server, does not create accounts, and does not sell user data.
+The extension stores selected text, notes, source metadata, local settings, optional API keys, and generated AI insights locally in the user's browser. AI data transfer happens only when the user enables AI and explicitly clicks an AI action. When pronunciation is requested, the saved word is passed to Chrome's configured speech engine; some installed voices may use a remote speech resource. The extension does not operate a developer-owned server, does not create accounts, and does not sell user data.
 ```
 
 ## Remote Code

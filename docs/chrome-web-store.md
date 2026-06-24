@@ -1,6 +1,6 @@
 # Chrome Web Store Submission Notes
 
-Last updated: 2026-06-22
+Last updated: 2026-06-24
 
 ## Package
 
@@ -39,6 +39,9 @@ notes.
   optional large Kaikki import data.
 - `clipboardRead`: Supports the popup "paste from clipboard and save" fallback
   when selected-text capture is unavailable.
+- `tts`: Pronounces a saved Chinese word only after the user clicks its speaker
+  button. Chrome selects a compatible Chinese voice from the operating system
+  or an installed speech engine.
 
 No declared required permission was found unused as of this audit.
 
@@ -65,7 +68,9 @@ does not load or execute JavaScript from remote servers.
 Disclose that the extension handles website content selected by the user, page
 metadata for captured sources, user notes, extension settings, and optional API
 keys. Data is stored locally by default. AI provider transfer occurs only after
-the user enables AI and clicks an AI action.
+the user enables AI and clicks an AI action. When pronunciation is requested,
+the selected saved word is passed to Chrome's configured speech engine; some
+installed voices may use a remote speech resource.
 
 ## Store Assets
 

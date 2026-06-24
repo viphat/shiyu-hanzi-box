@@ -1,5 +1,12 @@
 # TTS (Text-to-Speech) Design
 
+> Implementation update, 2026-06-24: the shipped implementation prefers the
+> Chrome extension `tts` API and declares the required `tts` permission, with
+> browser Web Speech as fallback. Chrome/OS or an installed speech engine
+> supplies the voice, and Chrome reports that some installed voices may be
+> remote. This supersedes the initial no-permission, Web-Speech-only assumptions
+> below where they conflict with the implementation.
+
 ## Summary
 
 Add a play/pronounce button to Word cards that reads the word aloud using the

@@ -87,7 +87,7 @@ helpers such as:
 buildSrsQueue(inbox, now, settings)
 answerReview(entry, rating, now, settings)
 previewReview(entry, now, settings)
-postponeReview(entry, now, settings, days = 1)
+postponeReview(entry, now, dueAt)
 migrateReviewState(entry)
 ```
 
@@ -124,7 +124,7 @@ export interface ReviewLogEntry {
 }
 
 export interface ReviewState {
-  scheduler: ReviewScheduler;
+  scheduler?: ReviewScheduler;
   dueAt: number;
   intervalDays: number;
   repetitions: number;
@@ -137,6 +137,7 @@ export interface ReviewState {
   difficulty?: number;
   elapsedDays?: number;
   scheduledDays?: number;
+  learningSteps?: number;
   retrievability?: number;
   reviewLog?: ReviewLogEntry[];
 }
@@ -245,6 +246,8 @@ appear immediately, which is wrong for sub-day learning steps.
 Queue rules:
 
 - Main queue includes items with `dueAt <= now`.
+- The dashboard schedules a local timer for the next future `dueAt` and local
+  midnight so sub-day cards appear without a storage mutation or manual reload.
 - "Due today" stat can count items with `dueAt <= endOfDay(now)`.
 - New-card limiting applies only to cards whose migrated state is `new`.
   Learning, relearning, and long-term review cards are never hidden by the
@@ -270,6 +273,7 @@ Backup parsing must validate the new optional fields:
 - `difficulty`
 - `elapsedDays`
 - `scheduledDays`
+- `learningSteps`
 - `retrievability`
 - `reviewLog`
 
@@ -290,7 +294,7 @@ Add small dashboard stats, computed locally:
 - Due later today
 - New available today
 - Reviewed today
-- Retention estimate, when enough review logs exist
+- Retention estimate after at least 10 review logs exist
 
 Do not add charts in the first pass. Keep stats textual and useful.
 
@@ -332,6 +336,8 @@ Focused tests:
   - Migrates old fixed-ladder review state without losing due dates.
   - Schedules different intervals for Again, Hard, Good, and Easy.
   - Preserves deterministic results with fuzz disabled.
+  - Persists and round-trips `learningSteps` so a learning card graduates
+    correctly after reload.
   - Passes SRS settings into queue, preview, answer, and scheduler construction.
   - Builds due-now queues using `dueAt <= now`, not end-of-day.
   - Enforces `newCardsPerDay` only for new cards and never for learning,
@@ -375,11 +381,12 @@ reviewed, or postponed.
 
 1. Review cards use Reveal followed by Again/Hard/Good/Easy ratings.
 2. Ratings produce different schedules for the same item.
-3. The scheduler persists card state, stability, difficulty, due date, interval,
-   and review log locally.
+3. The scheduler persists card state, stability, difficulty, learning-step
+   progress, due date, interval, and review log locally.
 4. Existing entries without new SRS fields still appear in the review queue.
 5. Existing fixed-ladder review states migrate without losing due dates.
-6. Queue membership uses `dueAt <= now`.
+6. Queue membership uses `dueAt <= now`, and the dashboard wakes when the next
+   future sub-day card becomes due.
 7. SRS settings exist with desired retention defaulting to `0.90`.
 8. Older stored `local:settings` values without `srs` are normalized to include
    default SRS settings.

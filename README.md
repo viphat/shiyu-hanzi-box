@@ -34,6 +34,8 @@ Implemented:
   powered by OpenCC and cached on each entry.
 - Offline Word Insight Panel with CC-CEDICT definitions, tone chips, source
   examples, external dictionary links, and review reveal mode.
+- One-click Mandarin pronunciation for saved words through Chrome/OS Chinese
+  text-to-speech voices, with browser Web Speech fallback.
 - Opt-in AI Insight layer with BYO API key, provider picker, generated bilingual
   notes persisted on words, and Markdown/backup/review integration.
 - Settings page with English / zh-CN UI locale selection, full AI provider
@@ -49,6 +51,7 @@ Implemented:
 Expanding a saved word in the dashboard shows:
 
 - **Tone chips** — one per Chinese character, with tone marks and numbers.
+- **Pronunciation** — click the speaker button to hear the saved word.
 - **Definitions** — from the bundled CC-CEDICT offline dictionary.
 - **Component fallback** — for phrases with no exact match, definitions for
   the component characters.
@@ -59,6 +62,20 @@ Expanding a saved word in the dashboard shows:
 
 Review cards gain a **显示释义** reveal button so you can test yourself before
 seeing pinyin and definitions.
+
+### Pronunciation (TTS)
+
+Word cards, expanded word insight, and review reveal include a speaker button.
+Clicking it reads the saved Simplified Chinese word aloud using a `zh-CN` voice
+when available, with another `zh-*` voice as fallback. Clicking the active
+speaker button stops playback; clicking another word replaces the current
+utterance.
+
+Pronunciation requires no API key and stores no audio or playback state. The
+extension prefers Chrome's `tts` API and falls back to the browser Web Speech
+API. Speech is handled by the operating system or a speech engine installed in
+Chrome. Depending on the user's configured voice, that engine may use a remote
+speech service.
 
 ### Traditional Chinese Conversion
 

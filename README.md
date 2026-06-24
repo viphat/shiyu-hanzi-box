@@ -126,6 +126,34 @@ The local Word Insight sections are fully offline. The only outbound dictionary
 requests are the two external dictionary links, and only when you click them.
 AI requests are separate, opt-in, and use only the provider configured by you.
 
+## Spaced repetition (Review tab)
+
+Saved words and quotes are scheduled by the FSRS algorithm (via `ts-fsrs`),
+which models each item's memory from difficulty, stability, and your target
+retention.
+
+**Review flow:** each card shows the prompt first. Click **Reveal** to see the
+answer, then rate your recall:
+
+- **Again** — you forgot it; it comes back soon.
+- **Hard** — you recalled it with serious effort.
+- **Good** — you recalled it correctly.
+- **Easy** — you recalled it instantly.
+
+The scheduler sets the next due date from your rating. **Postpone** moves a card
+to tomorrow without changing its memory state.
+
+**Settings (Settings → Spaced repetition):**
+
+- **Target retention** — the recall probability FSRS schedules for (default
+  90%).
+- **Maximum interval (days)** — cap on the longest scheduling gap.
+- **New cards per day** — limits how many never-reviewed cards appear each day.
+  Already-learning and due review cards are never hidden by this cap.
+
+All review data is stored locally on each entry and travels with JSON backups.
+No network access is required.
+
 ## Settings, AI, And Optional Kaikki Dictionary
 
 Open **Settings** from the dashboard toolbar to choose the UI locale:
@@ -291,8 +319,7 @@ npm run zip
 
 - Add capture undo and clearer save feedback after context menu, shortcut, and
   popup captures.
-- Add review settings such as daily cap, interval presets, and review streak
-  visibility.
+- Add review streak visibility.
 
 ## Useful Notes
 

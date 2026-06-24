@@ -9,6 +9,7 @@ import {
 import type {
   Entry,
   ReviewCardState,
+  ReviewLogEntry,
   ReviewRating,
   ReviewState,
   SrsSettings,
@@ -36,6 +37,8 @@ const FSRS_TO_CARD_STATE: Record<number, ReviewCardState> = {
   [State.Review]: 'review',
   [State.Relearning]: 'relearning',
 };
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function createSrsScheduler(settings: SrsSettings): FSRS {
   return fsrs({
@@ -171,5 +174,87 @@ export function toReviewLogEntry(
     stabilityAfter: card.stability,
     difficultyBefore,
     difficultyAfter: card.difficulty,
+  };
+}
+
+export interface SrsPreviewItem {
+  cardState: ReviewCardState;
+  dueAt: number;
+  intervalDays: number;
+}
+
+export type SrsPreview = Record<ReviewRating, SrsPreviewItem>;
+
+const RATING_KEYS: ReviewRating[] = ['again', 'hard', 'good', 'easy'];
+
+function appendLog(
+  review: ReviewState,
+  entry: ReviewLogEntry,
+): ReviewLogEntry[] {
+  const next = review.reviewLog ? [...review.reviewLog] : [];
+  next.push(entry);
+  return next;
+}
+
+export function answerReview<T extends Entry>(
+  entry: T,
+  rating: ReviewRating,
+  now: number,
+  settings: SrsSettings,
+): T {
+  const migrated = migrateReviewState(entry, now);
+  const review = migrated.review!;
+  const scheduler = createSrsScheduler(settings);
+  const card = toFsrsCard(review);
+  const result = scheduler.next(card, now, RATING_TO_GRADE[rating]);
+  const log = toReviewLogEntry(review, result.card, rating, now);
+  const nextReview = fromFsrsResult(result.card, review, now);
+  return {
+    ...migrated,
+    status: migrated.status === 'archived' ? 'archived' : 'reviewed',
+    updatedAt: now,
+    review: {
+      ...nextReview,
+      reviewLog: appendLog(review, log),
+    },
+  };
+}
+
+export function previewReview(
+  entry: Entry,
+  now: number,
+  settings: SrsSettings,
+): SrsPreview {
+  const migrated = migrateReviewState(entry, now);
+  const scheduler = createSrsScheduler(settings);
+  const preview = scheduler.repeat(toFsrsCard(migrated.review!), now);
+  const result: Partial<SrsPreview> = {};
+  for (const key of RATING_KEYS) {
+    const item = preview[RATING_TO_GRADE[key]];
+    result[key] = {
+      cardState: FSRS_TO_CARD_STATE[item.card.state],
+      dueAt: item.card.due.getTime(),
+      intervalDays: item.card.scheduled_days,
+    };
+  }
+  return result as SrsPreview;
+}
+
+export function postponeReview<T extends Entry>(
+  entry: T,
+  now: number,
+  dueAt: number,
+): T {
+  const migrated = migrateReviewState(entry, now);
+  const review = migrated.review!;
+  return {
+    ...migrated,
+    updatedAt: now,
+    review: {
+      ...review,
+      dueAt,
+      scheduledDays: Math.max(0, Math.ceil((dueAt - now) / DAY_MS)),
+      queueRank: undefined,
+    },
   };
 }

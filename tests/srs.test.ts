@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  answerReview,
   DEFAULT_SRS_SETTINGS,
   createSrsScheduler,
   migrateReviewState,
+  postponeReview,
+  previewReview,
   RATING_TO_GRADE,
   toFsrsCard,
 } from '../lib/srs';
@@ -10,6 +13,7 @@ import type { SrsSettings, WordEntry } from '../lib/types';
 
 const NOW = new Date('2026-06-24T10:30:00').getTime();
 const YESTERDAY = new Date('2026-06-23T08:00:00').getTime();
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const NO_FUZZ: SrsSettings = { ...DEFAULT_SRS_SETTINGS, enableFuzz: false };
 
@@ -142,5 +146,184 @@ describe('toFsrsCard', () => {
     expect(card.learning_steps).toBe(0);
     expect(card.due.getTime()).toBe(NOW);
     expect(card.last_review?.getTime()).toBe(YESTERDAY);
+  });
+});
+
+describe('answerReview', () => {
+  it('schedules different intervals for Again, Hard, Good, and Easy', () => {
+    const base = migrateReviewState(word(), NOW);
+    const again = answerReview(base, 'again', NOW, NO_FUZZ);
+    const hard = answerReview(base, 'hard', NOW, NO_FUZZ);
+    const good = answerReview(base, 'good', NOW, NO_FUZZ);
+    const easy = answerReview(base, 'easy', NOW, NO_FUZZ);
+
+    const due = (entry: WordEntry) => entry.review?.dueAt ?? 0;
+    expect(due(again)).toBeLessThanOrEqual(due(hard));
+    expect(due(hard)).toBeLessThan(due(good));
+    expect(due(good)).toBeLessThan(due(easy));
+  });
+
+  it('persists card state, stability, difficulty, interval, and review log', () => {
+    const base = migrateReviewState(word(), NOW);
+    const next = answerReview(base, 'good', NOW, NO_FUZZ);
+    const review = next.review!;
+    expect(review.scheduler).toBe('fsrs-v1');
+    expect(review.cardState).toBeDefined();
+    expect(review.stability).toBeGreaterThan(0);
+    expect(review.difficulty).toBeGreaterThanOrEqual(1);
+    expect(review.dueAt).toBeGreaterThan(NOW);
+    expect(review.learningSteps).toBe(1);
+    expect(review.lastReviewedAt).toBe(NOW);
+    expect(review.reviewLog).toHaveLength(1);
+    expect(review.reviewLog![0].rating).toBe('good');
+    expect(review.reviewLog![0].stateBefore).toBe('new');
+  });
+
+  it('is deterministic with fuzz disabled', () => {
+    const base = migrateReviewState(word(), NOW);
+    const a = answerReview(base, 'good', NOW, NO_FUZZ);
+    const b = answerReview(base, 'good', NOW, NO_FUZZ);
+    expect(a.review?.dueAt).toBe(b.review?.dueAt);
+    expect(a.review?.stability).toBe(b.review?.stability);
+  });
+
+  it('round-trips learning step progress so the next Good graduates the card', () => {
+    const first = answerReview(
+      migrateReviewState(word(), NOW),
+      'good',
+      NOW,
+      NO_FUZZ,
+    );
+    expect(first.review).toMatchObject({
+      cardState: 'learning',
+      learningSteps: 1,
+    });
+
+    const secondNow = first.review!.dueAt;
+    const second = answerReview(first, 'good', secondNow, NO_FUZZ);
+
+    expect(second.review).toMatchObject({
+      cardState: 'review',
+      learningSteps: 0,
+    });
+    expect(second.review!.dueAt).toBeGreaterThan(secondNow);
+  });
+
+  it('migrates an old fixed-ladder entry before answering', () => {
+    const entry = word({
+      review: {
+        dueAt: NOW,
+        intervalDays: 7,
+        repetitions: 3,
+        lapses: 0,
+        lastReviewedAt: YESTERDAY,
+      },
+    });
+    const next = answerReview(entry, 'good', NOW, NO_FUZZ);
+    expect(next.review?.scheduler).toBe('fsrs-v1');
+    expect(next.review?.reviewLog).toHaveLength(1);
+    expect(next.review?.reviewLog![0].stateBefore).toBe('review');
+  });
+
+  it('Again re-shows the card sooner than Good', () => {
+    const base = migrateReviewState(word(), NOW);
+    const good = answerReview(base, 'good', NOW, NO_FUZZ);
+    const again = answerReview(base, 'again', NOW, NO_FUZZ);
+    expect(again.review!.dueAt).toBeLessThanOrEqual(good.review!.dueAt);
+  });
+
+  it('Answering Again on a settled review card increments lapses', () => {
+    const settled = migrateReviewState(
+      word({
+        review: {
+          scheduler: 'fsrs-v1',
+          dueAt: NOW - 1,
+          intervalDays: 14,
+          repetitions: 4,
+          lapses: 0,
+          cardState: 'review',
+          stability: 14,
+          difficulty: 5,
+          lastReviewedAt: NOW - 14 * DAY_MS,
+        },
+      }),
+      NOW,
+    );
+    const before = settled.review!.lapses;
+    const forgot = answerReview(settled, 'again', NOW, NO_FUZZ);
+    expect(forgot.review!.lapses).toBeGreaterThan(before);
+    expect(['learning', 'relearning', 'review']).toContain(
+      forgot.review?.cardState,
+    );
+  });
+});
+
+describe('previewReview', () => {
+  it('returns a preview entry for each of the four ratings', () => {
+    const base = migrateReviewState(word(), NOW);
+    const preview = previewReview(base, NOW, NO_FUZZ);
+    expect(Object.keys(preview).sort()).toEqual([
+      'again',
+      'easy',
+      'good',
+      'hard',
+    ]);
+    expect(preview.good.dueAt).toBeGreaterThan(preview.again.dueAt);
+  });
+});
+
+describe('postponeReview', () => {
+  it('changes the due date without changing memory state or adding a log', () => {
+    const base = answerReview(
+      migrateReviewState(word(), NOW),
+      'good',
+      NOW,
+      NO_FUZZ,
+    );
+    const before = { ...base.review! };
+    const postponed = postponeReview(base, NOW, NOW + 5 * DAY_MS);
+    const after = postponed.review!;
+
+    expect(after.dueAt).toBe(NOW + 5 * DAY_MS);
+    expect(after.scheduler).toBe('fsrs-v1');
+    expect(after.stability).toBe(before.stability);
+    expect(after.difficulty).toBe(before.difficulty);
+    expect(after.repetitions).toBe(before.repetitions);
+    expect(after.lapses).toBe(before.lapses);
+    expect(after.cardState).toBe(before.cardState);
+    expect(after.scheduledDays).toBe(5);
+    expect(after.reviewLog).toBe(before.reviewLog);
+    expect(after.queueRank).toBeUndefined();
+    expect(postponed.updatedAt).toBe(NOW);
+  });
+
+  it('migrates and persists a never-reviewed entry as an fsrs new card on postpone', () => {
+    const postponed = postponeReview(word(), NOW, NOW + DAY_MS);
+    const review = postponed.review!;
+    expect(review.scheduler).toBe('fsrs-v1');
+    expect(review.cardState).toBe('new');
+    expect(review.repetitions).toBe(0);
+    expect(review.lapses).toBe(0);
+    expect(review.stability).toBeUndefined();
+    expect(review.dueAt).toBe(NOW + DAY_MS);
+    expect(review.scheduledDays).toBe(1);
+    expect(review.reviewLog).toBeUndefined();
+    expect(postponed.status).toBe('inbox');
+  });
+
+  it('migrates a fixed-ladder entry before postponing', () => {
+    const entry = word({
+      review: {
+        dueAt: NOW,
+        intervalDays: 7,
+        repetitions: 3,
+        lapses: 0,
+        lastReviewedAt: YESTERDAY,
+      },
+    });
+    const postponed = postponeReview(entry, NOW, NOW + DAY_MS);
+    expect(postponed.review?.scheduler).toBe('fsrs-v1');
+    expect(postponed.review?.cardState).toBe('review');
+    expect(postponed.review?.stability).toBe(7);
   });
 });

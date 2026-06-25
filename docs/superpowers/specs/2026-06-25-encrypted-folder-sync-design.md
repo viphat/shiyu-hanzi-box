@@ -149,6 +149,30 @@ preserve the ID. Uninstalling and reinstalling may create a new ID and leave the
 old replica file in the folder; stale replica data remains harmless because
 field versions and tombstones participate in every merge.
 
+### Scale and storage cost
+
+This design targets a small number of replicas per vault, on the order of a
+handful of browser profiles, and a personal-scale dataset of words and quotes.
+It is not designed for large teams or very large corpora.
+
+Three costs grow with the dataset and should be understood at design time:
+
+- Per-field version stamps attach a `HybridTimestamp` to every synchronized
+  scalar field. The `replicaId` inside each stamp is a repeated string, so
+  metadata can rival or exceed the domain data for a large inbox. Replica IDs
+  are interned to a small per-replica table referenced by index rather than
+  stored inline on every stamp.
+- Each sync pass reads and decrypts every replica file and rewrites this
+  profile's entire converged state. Cost is proportional to the number of
+  replicas multiplied by the full converged state size.
+- Tombstones are retained indefinitely, so the converged state grows
+  monotonically with deletions.
+
+The extension requests the `unlimitedStorage` permission, because the default
+`chrome.storage.local` quota is too small to hold the materialized domain state,
+sync metadata, and the remembered key together at the upper end of the intended
+scale.
+
 ## Synchronized Representation
 
 The encrypted replica contains a versioned synchronization envelope rather than
@@ -239,10 +263,21 @@ Occurrences form an observed-remove collection keyed by stable occurrence ID.
 Concurrent captures are unioned. Identical legacy occurrences converge through
 their deterministic migration IDs.
 
+A legacy occurrence's deterministic ID is derived from its owning word ID plus
+the canonicalized tuple of `sourceUrl`, `surrounding`, and `capturedAt`.
+Including `capturedAt` means two captures from the same page at different times
+remain distinct occurrences, while two independently migrated copies of the
+exact same capture converge to one. Captures that share a URL and surrounding
+text but differ in capture time are intentionally treated as distinct.
+
 ### Quotes
 
 Quotes remain independent and are keyed by their existing entry IDs. No
-text-based quote deduplication is introduced.
+text-based quote deduplication is introduced. As an accepted consequence, two
+profiles that capture the same quote while offline produce two entries with
+distinct IDs, and both survive the merge. This differs intentionally from words,
+which converge by normalized text, because quotes are freeform and a profile may
+legitimately keep near-identical quotes.
 
 ### Deletes and restoration
 
@@ -271,6 +306,26 @@ tie-breakers. The merge layer does not replay FSRS itself, preserving
 This rule guarantees convergence and preserves evidence of both reviews, while
 accepting that the losing concurrent branch does not affect the final due
 snapshot.
+
+The synchronized scheduler snapshot is the subset of `ReviewState` produced by a
+review: scheduler identifier, `dueAt`, interval, repetitions, lapses,
+`lastReviewedAt`, card state, stability, difficulty, elapsed/scheduled days,
+learning step index, and retrievability. These fields move together as one
+snapshot tied to the winning review event; they are not independent per-field
+registers, because they are jointly computed by a single FSRS step and must stay
+internally consistent.
+
+`queueRank` is explicitly **not synchronized**. It is a local ordering artifact
+assigned by the fair-queue logic in `lib/srs.ts` and is recomputed locally after
+every merge. Two replicas may hold different ranks for the same card without
+affecting convergence.
+
+Changing SRS settings recomputes due dates across many cards without producing
+review events. The recomputed scheduler values are derived state: they are
+recomputed locally after merge from the converged settings and review history,
+so they are not propagated as snapshot writes and never conflict across
+replicas. Only the SRS setting fields themselves merge as per-field registers
+(see Settings).
 
 ### Settings
 
@@ -308,7 +363,10 @@ pre-existing local entries:
 - For an established vault, remote portable app and AI settings win over the
   joining profile's unversioned settings. This prevents a fresh profile's
   defaults from overwriting established configuration; local inbox entries are
-  still merged.
+  still merged. Because this replaces the joining profile's app and AI settings,
+  including any AI provider, base URL, model, and API key already configured in
+  that profile, the join flow must warn before joining that local settings will
+  be replaced by the vault's settings, and must require explicit confirmation.
 - Local-only Kaikki state is preserved.
 
 The converged result is applied locally and written to the joining profile's
@@ -317,6 +375,13 @@ new replica file.
 ## Encryption
 
 ### Vault creation
+
+The create flow first checks the selected folder for an existing app-owned
+subdirectory and `vault.json`. If one is present, creation is refused and the UI
+directs the user to the Join flow instead, so a second profile cannot overwrite
+an established vault by choosing Create. Two profiles creating against a truly
+empty folder at the same instant is treated as an unsupported setup race; the
+later writer wins `vault.json` and the user reconnects.
 
 The first profile:
 
@@ -328,8 +393,15 @@ The first profile:
 6. Writes `vault.json`.
 7. Writes its first encrypted replica.
 
-KDF and encryption parameters are versioned in `vault.json` so future formats
-can use stronger algorithms without silently changing existing vaults.
+PBKDF2-HMAC-SHA-256 is a deliberate version-1 compromise chosen because it is
+the strongest key-derivation function natively available in Web Crypto. It is
+not memory-hard, so it offers weaker resistance to GPU and ASIC cracking than
+Argon2id or scrypt. This matters because the encrypted payload sits in
+third-party cloud storage and contains AI API keys, the highest-value secret in
+the dataset. KDF and encryption parameters are versioned in `vault.json` so a
+future format can adopt a memory-hard KDF, delivered through WebAssembly if
+necessary, without silently changing existing vaults. The 600,000-iteration
+count is treated as a minimum floor, not a target.
 
 ### Replica encryption
 
@@ -359,6 +431,12 @@ obtains only the synchronized files. It does not protect against an attacker
 who can inspect the local Chrome profile or extension storage. The settings UI
 must explain this limitation.
 
+The folder still leaks bounded metadata that is not encrypted: the number of
+replica files, and, because replica IDs are sortable time-based identifiers, the
+approximate creation time of each replica encoded in its filename. No user
+content, settings, labels, or secrets are exposed this way. This residual
+metadata leak is accepted in the first version.
+
 The user can forget the remembered key without disconnecting the folder. The
 next sync then requires the passphrase. A forgotten passphrase cannot be
 recovered by the extension.
@@ -367,9 +445,20 @@ recovered by the extension.
 
 ### Serialized coordinator
 
-One coordinator serializes all sync attempts within a profile. Triggers arriving
-during an active sync set a rerun flag rather than starting a competing file
-operation.
+One coordinator serializes all sync attempts within a profile. It runs in the
+background service worker, which is the single context that owns synchronized
+writes, so serialization holds as long as triggers route through the worker.
+Triggers arriving during an active sync set a rerun flag rather than starting a
+competing file operation.
+
+Because the Manifest V3 service worker is suspended aggressively, the coordinator
+cannot rely on in-memory timers surviving between events. Debounced and periodic
+syncs are scheduled through `chrome.alarms` rather than `setTimeout`, and pending
+state is persisted in storage so a sync that was scheduled but not yet run is
+recovered when the worker next wakes. The minimum practical alarm period bounds
+how short the debounce can be; a mutation that cannot be flushed before the
+worker suspends simply remains pending until the next alarm, startup, or manual
+trigger.
 
 A sync pass:
 
@@ -456,7 +545,10 @@ Add a **Folder Sync** section with these states and controls:
 - Disconnect.
 
 Create and join flows require selecting the parent folder and entering the
-passphrase. Joining validates the vault before modifying local data.
+passphrase. Joining validates the vault before modifying local data, and warns
+that the joining profile's existing app and AI settings, including a configured
+AI API key, will be replaced by the established vault's settings. Local inbox
+entries are merged, not replaced.
 
 The UI warns that:
 
@@ -570,6 +662,12 @@ selects persisted review snapshots; it does not construct a scheduler.
 - Quote independence.
 - Tombstone suppression and intentional restoration.
 - Review event union and winning scheduler snapshot.
+- Scheduler snapshot moves as one unit, not as independent per-field registers.
+- `queueRank` is not synchronized and is recomputed locally after merge.
+- SRS-settings change recomputes due dates locally without producing snapshot
+  writes or cross-replica conflicts.
+- Joining an established vault replaces local app and AI settings, including the
+  API key, while still merging local inbox entries.
 - Leaf-level app and AI settings merge.
 - Portable versus local-only Kaikki fields.
 - Legacy local bootstrap and first-join merge.
@@ -594,6 +692,9 @@ selects persisted review snapshots; it does not construct a scheduler.
 - One corrupt replica alongside valid replicas.
 - Interrupted or rejected write.
 - Conflict-copy filename filtering.
+- Create flow refuses a folder that already contains a vault and offers Join.
+- Debounced and periodic syncs scheduled through alarms survive a simulated
+  service-worker suspension.
 - Same-machine browser profiles represented as independent replicas.
 - Multiple devices represented as independent replicas.
 - Repeated multi-replica passes converge to identical local state.

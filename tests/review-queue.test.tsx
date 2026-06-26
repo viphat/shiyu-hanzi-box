@@ -466,9 +466,10 @@ describe('Cloze review card', () => {
   });
 
   it('reveal shows the answer highlighted and the note, then rating buttons', async () => {
+    // Use a note that contains the answer '学而' — it must be hidden before reveal (spoiler)
     const cloze = makeCloze({ id: 'c1', start: 0, end: 2, hint: 'none' });
     const entry = migrateReviewState(
-      quoteWithClozes('学而时习之', [cloze], 'my note'),
+      quoteWithClozes('学而时习之', [cloze], '学而 spoiler note'),
       NOW,
     );
 
@@ -482,16 +483,16 @@ describe('Cloze review card', () => {
       />,
     );
 
-    // Before reveal: answer absent, note absent, no ratings
+    // Before reveal: answer absent, spoiler note absent, no ratings
     expect(container.textContent).not.toContain('学而');
-    expect(container.textContent).not.toContain('my note');
+    expect(container.textContent).not.toContain('学而 spoiler note');
     expect(container.textContent).not.toContain(messages.en['review.again']);
 
     await click(button(messages.en['review.reveal']));
 
     // After reveal: answer highlighted (full text present), note present, ratings visible
     expect(container.textContent).toContain('学而时习之');
-    expect(container.textContent).toContain('my note');
+    expect(container.textContent).toContain('学而 spoiler note');
     expect(container.textContent).toContain(messages.en['review.again']);
     expect(container.textContent).toContain(messages.en['review.good']);
   });
@@ -514,6 +515,26 @@ describe('Cloze review card', () => {
     );
     // Note should be hidden when it contains the answer
     expect(html).not.toContain('学而 is learning');
+  });
+
+  it('shows the note on the front when the note does NOT contain the answer substring', () => {
+    // note = 'a helpful mnemonic' — does not contain the answer '学而'
+    const cloze = makeCloze({ id: 'c1', start: 0, end: 2, hint: 'none' });
+    const entry = migrateReviewState(
+      quoteWithClozes('学而时习之', [cloze], 'a helpful mnemonic'),
+      NOW,
+    );
+    const html = renderToStaticMarkup(
+      <ReviewCard
+        item={{ kind: 'quote', entry, dueAt: NOW, clozeId: 'c1' }}
+        remainingCount={1}
+        onAnswer={vi.fn()}
+        onPostpone={vi.fn()}
+        locale="en"
+      />,
+    );
+    // Non-spoiler note must be visible on the front (before reveal)
+    expect(html).toContain('a helpful mnemonic');
   });
 
   it('shows the note after reveal even when it contains the answer', async () => {

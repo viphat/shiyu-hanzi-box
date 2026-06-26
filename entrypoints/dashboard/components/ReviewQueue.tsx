@@ -381,7 +381,7 @@ function ClozeQuoteBody({
   const text = quote.text;
 
   if (!activeCloze) {
-    // Fallback: render the full text
+    // Fallback: render the full text. No answer known, so hide note until reveal.
     return (
       <div className="flex flex-1 flex-col justify-center py-8">
         <blockquote
@@ -392,7 +392,7 @@ function ClozeQuoteBody({
           <span>{text}</span>
           <span aria-hidden="true" className="absolute bottom-0 right-1 text-2xl text-cinnabar/40">」</span>
         </blockquote>
-        {quote.note && (
+        {quote.note && revealed && (
           <p className="mt-5 rounded-sm border border-border bg-paper-input px-4 py-3 text-sm leading-7 text-ink-secondary">
             {quote.note}
           </p>
@@ -411,10 +411,10 @@ function ClozeQuoteBody({
   // Since clozes don't overlap, the simplest approach is to render the full text
   // split at the active cloze boundaries. Other clozes appear in "before" or "after" as plain text.
 
-  // Note visibility: always hide on the front (revealed=false) for cloze cards;
-  // if the note does not contain the answer at all, still hide it on front to
-  // keep the card clean. Show it after reveal unconditionally.
-  const showNote = revealed;
+  // Note visibility: show after reveal always.
+  // On the front, show the note only if it does NOT contain the answer substring
+  // (e.g. a mnemonic tip is safe; a note quoting the answer would be a spoiler).
+  const showNote = revealed || (!!quote.note && !quote.note.includes(answer));
 
   if (revealed) {
     return (

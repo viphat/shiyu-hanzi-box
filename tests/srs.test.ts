@@ -506,13 +506,13 @@ describe('buildSrsQueue', () => {
         ),
       ],
       quotes: [
-        migrateReviewState(
-          quote({
-            id: 'older-quote',
-            createdAt: YESTERDAY,
-            updatedAt: YESTERDAY,
-          }),
-        ),
+        // Use a clozed quote so it produces cards; older createdAt should win the cap slot
+        quote({
+          id: 'older-quote',
+          createdAt: YESTERDAY,
+          updatedAt: YESTERDAY,
+          clozes: [{ id: 'cz-old', start: 0, end: 1, hint: 'none' }],
+        }),
       ],
     };
 
@@ -828,5 +828,106 @@ describe('getNextSrsWakeAt', () => {
     };
 
     expect(getNextSrsWakeAt(inbox, NOW)).toBe(dueAt);
+  });
+});
+
+describe('quote cloze expansion', () => {
+  it('expands a quote into one card per cloze', () => {
+    const inbox: Inbox = { words: [], quotes: [clozedQuote()] };
+    const due = buildSrsQueue(inbox, NOW, NO_FUZZ);
+    expect(due.filter((i) => i.kind === 'quote')).toHaveLength(2);
+    expect(due.map((i) => i.clozeId).sort()).toEqual(['cz1', 'cz2']);
+  });
+
+  it('contributes no cards for a quote with no clozes', () => {
+    const inbox: Inbox = { words: [], quotes: [quote({ clozes: [] })] };
+    expect(buildSrsQueue(inbox, NOW, NO_FUZZ)).toHaveLength(0);
+  });
+
+  it('contributes no cards for a quote with absent clozes field', () => {
+    const inbox: Inbox = { words: [], quotes: [quote()] };
+    expect(buildSrsQueue(inbox, NOW, NO_FUZZ)).toHaveLength(0);
+  });
+
+  it('counts each new cloze against the daily new-card cap', () => {
+    const settings = { ...NO_FUZZ, newCardsPerDay: 1 };
+    const inbox: Inbox = { words: [], quotes: [clozedQuote()] };
+    // clozedQuote has 2 new clozes; cap=1 => only 1 card shown
+    const due = buildSrsQueue(inbox, NOW, settings);
+    expect(due).toHaveLength(1);
+    expect(due[0].kind).toBe('quote');
+    expect(due[0].clozeId).toBeDefined();
+  });
+
+  it('does not count a quote with no clozes in getSrsStats', () => {
+    const inbox: Inbox = {
+      words: [],
+      quotes: [quote({ clozes: [] }), quote({ id: 'quote-2', clozes: [] })],
+    };
+    const stats = getSrsStats(inbox, NOW, NO_FUZZ, 0);
+    expect(stats.newAvailableToday).toBe(0);
+    expect(stats.dueLaterToday).toBe(0);
+  });
+
+  it('counts each cloze as a separate new card in getSrsStats', () => {
+    const inbox: Inbox = { words: [], quotes: [clozedQuote()] };
+    const dueNow = buildSrsQueue(inbox, NOW, NO_FUZZ).length;
+    const stats = getSrsStats(inbox, NOW, NO_FUZZ, dueNow);
+    // clozedQuote has 2 new clozes, both due now (new cards have dueAt = createdAt = YESTERDAY <= NOW)
+    expect(dueNow).toBe(2);
+  });
+
+  it('counts new-reviewed-today from cloze review logs', () => {
+    const startOfToday = new Date(
+      new Date(NOW).getFullYear(),
+      new Date(NOW).getMonth(),
+      new Date(NOW).getDate(),
+    ).getTime();
+    // A quote where cz1 was reviewed today (state new -> learning)
+    const reviewedQuote: QuoteEntry = {
+      ...clozedQuote(),
+      clozes: [
+        {
+          id: 'cz1',
+          start: 1,
+          end: 5,
+          hint: 'none',
+          review: {
+            scheduler: 'fsrs-v1',
+            cardState: 'learning',
+            dueAt: NOW + 60_000,
+            intervalDays: 0,
+            repetitions: 1,
+            lapses: 0,
+            learningSteps: 1,
+            reviewLog: [
+              {
+                reviewedAt: startOfToday + 60_000,
+                rating: 'good',
+                elapsedDays: 0,
+                scheduledDays: 0,
+                stateBefore: 'new',
+                stateAfter: 'learning',
+              },
+            ],
+          },
+        },
+        { id: 'cz2', start: 6, end: 7, hint: 'none' },
+      ],
+    };
+    const settings = { ...NO_FUZZ, newCardsPerDay: 2 };
+    const inbox: Inbox = { words: [], quotes: [reviewedQuote] };
+    // cz1 was already reviewed today from 'new', so newReviewedToday=1
+    // newCapacity = 2 - 1 = 1, so only cz2 (still new) can appear
+    const due = buildSrsQueue(inbox, NOW, settings);
+    // cz1 is learning (dueAt future), cz2 is new (dueAt <= NOW)
+    expect(due.map((i) => i.clozeId)).toEqual(['cz2']);
+  });
+
+  it('stable sort tiebreak: two clozes of same quote have deterministic order', () => {
+    const inbox: Inbox = { words: [], quotes: [clozedQuote()] };
+    const due1 = buildSrsQueue(inbox, NOW, NO_FUZZ);
+    const due2 = buildSrsQueue(inbox, NOW, NO_FUZZ);
+    expect(due1.map((i) => i.clozeId)).toEqual(due2.map((i) => i.clozeId));
   });
 });

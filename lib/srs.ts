@@ -363,6 +363,19 @@ export interface SrsQueueItem {
   kind: Entry['kind'];
   entry: Entry;
   dueAt: number;
+  clozeId?: string;
+}
+
+/** Returns the effective ReviewState for a queue item.
+ * Words -> entry.review (already migrated).
+ * Quote clozes -> the cloze's review, falling back to a new state. */
+function itemReview(item: SrsQueueItem): ReviewState {
+  if (item.kind === 'word' || !item.clozeId) {
+    return item.entry.review!;
+  }
+  const quote = item.entry as QuoteEntry;
+  const cloze = (quote.clozes ?? []).find((c: Cloze) => c.id === item.clozeId);
+  return cloze?.review ?? newReviewState(item.entry.createdAt);
 }
 
 export interface SrsStats {
@@ -407,13 +420,30 @@ function countNewReviewedToday(entries: Entry[], now: number): number {
   const nextDay = startOfNextDay(now);
   let count = 0;
   for (const entry of entries) {
-    for (const log of entry.review?.reviewLog ?? []) {
-      if (
-        log.stateBefore === 'new' &&
-        log.reviewedAt >= dayStart &&
-        log.reviewedAt < nextDay
-      ) {
-        count += 1;
+    if (entry.kind === 'word') {
+      // Words: scan entry.review.reviewLog
+      for (const log of entry.review?.reviewLog ?? []) {
+        if (
+          log.stateBefore === 'new' &&
+          log.reviewedAt >= dayStart &&
+          log.reviewedAt < nextDay
+        ) {
+          count += 1;
+        }
+      }
+    } else {
+      // Quotes: scan each cloze's review.reviewLog
+      const quote = entry as QuoteEntry;
+      for (const cloze of quote.clozes ?? []) {
+        for (const log of cloze.review?.reviewLog ?? []) {
+          if (
+            log.stateBefore === 'new' &&
+            log.reviewedAt >= dayStart &&
+            log.reviewedAt < nextDay
+          ) {
+            count += 1;
+          }
+        }
       }
     }
   }
@@ -438,34 +468,54 @@ export function buildSrsQueue(
   const items: SrsQueueItem[] = [];
   for (const raw of entries) {
     const entry = migrateReviewState(raw, now);
-    const review = entry.review!;
-    if (review.dueAt > now) continue;
-
-    items.push({ kind: entry.kind, entry, dueAt: review.dueAt });
+    if (entry.kind === 'word') {
+      const review = entry.review!;
+      if (review.dueAt > now) continue;
+      items.push({ kind: 'word', entry, dueAt: review.dueAt });
+    } else {
+      // Quote: expand into one item per cloze; no clozes => skip entirely
+      const quote = entry as QuoteEntry;
+      for (const cloze of quote.clozes ?? []) {
+        const effectiveReview = cloze.review ?? newReviewState(entry.createdAt);
+        if (effectiveReview.dueAt > now) continue;
+        items.push({
+          kind: 'quote',
+          entry,
+          dueAt: effectiveReview.dueAt,
+          clozeId: cloze.id,
+        });
+      }
+    }
   }
 
   items.sort((a, b) => {
-    const aState = a.entry.review?.cardState ?? 'new';
-    const bState = b.entry.review?.cardState ?? 'new';
+    const aReview = itemReview(a);
+    const bReview = itemReview(b);
+    const aState = aReview.cardState ?? 'new';
+    const bState = bReview.cardState ?? 'new';
     if (STATE_RANK[aState] !== STATE_RANK[bState]) {
       return STATE_RANK[aState] - STATE_RANK[bState];
     }
-    const aRepeated = a.entry.review?.queueRank !== undefined;
-    const bRepeated = b.entry.review?.queueRank !== undefined;
+    const aRepeated = aReview.queueRank !== undefined;
+    const bRepeated = bReview.queueRank !== undefined;
     if (aRepeated !== bRepeated) return aRepeated ? 1 : -1;
     if (aRepeated && bRepeated) {
-      return a.entry.review!.queueRank! - b.entry.review!.queueRank!;
+      return aReview.queueRank! - bReview.queueRank!;
     }
     if (a.dueAt !== b.dueAt) return a.dueAt - b.dueAt;
     if (a.entry.createdAt !== b.entry.createdAt) {
       return a.entry.createdAt - b.entry.createdAt;
     }
-    return a.entry.id.localeCompare(b.entry.id);
+    const idCmp = a.entry.id.localeCompare(b.entry.id);
+    if (idCmp !== 0) return idCmp;
+    // Stable tiebreak for two clozes of the same quote
+    return (a.clozeId ?? '').localeCompare(b.clozeId ?? '');
   });
 
   let newShown = 0;
   return items.filter((item) => {
-    if (item.entry.review?.cardState !== 'new') return true;
+    const review = itemReview(item);
+    if (review.cardState !== 'new') return true;
     if (newShown >= newCapacity) return false;
     newShown += 1;
     return true;
@@ -493,12 +543,27 @@ export function getSrsStats(
   );
 
   for (const raw of entries) {
-    const review = migrateReviewState(raw, now).review!;
-    if (review.cardState === 'new' && review.dueAt <= dayEnd) {
-      dueNewCards += 1;
-    }
-    if (review.dueAt > now && review.dueAt <= dayEnd) {
-      dueLaterToday += 1;
+    const entry = migrateReviewState(raw, now);
+    if (entry.kind === 'word') {
+      const review = entry.review!;
+      if (review.cardState === 'new' && review.dueAt <= dayEnd) {
+        dueNewCards += 1;
+      }
+      if (review.dueAt > now && review.dueAt <= dayEnd) {
+        dueLaterToday += 1;
+      }
+    } else {
+      // Quote: expand per cloze; quotes without clozes contribute nothing
+      const quote = entry as QuoteEntry;
+      for (const cloze of quote.clozes ?? []) {
+        const effectiveReview = cloze.review ?? newReviewState(entry.createdAt);
+        if (effectiveReview.cardState === 'new' && effectiveReview.dueAt <= dayEnd) {
+          dueNewCards += 1;
+        }
+        if (effectiveReview.dueAt > now && effectiveReview.dueAt <= dayEnd) {
+          dueLaterToday += 1;
+        }
+      }
     }
   }
 
@@ -508,12 +573,26 @@ export function getSrsStats(
   let remembered = 0;
   let totalReviews = 0;
   for (const entry of entries) {
-    for (const log of entry.review?.reviewLog ?? []) {
-      if (log.reviewedAt >= dayStart && log.reviewedAt < nextDay) {
-        reviewedToday += 1;
+    if (entry.kind === 'word') {
+      for (const log of entry.review?.reviewLog ?? []) {
+        if (log.reviewedAt >= dayStart && log.reviewedAt < nextDay) {
+          reviewedToday += 1;
+        }
+        totalReviews += 1;
+        if (log.rating !== 'again') remembered += 1;
       }
-      totalReviews += 1;
-      if (log.rating !== 'again') remembered += 1;
+    } else {
+      // Quote: scan each cloze's review log
+      const quote = entry as QuoteEntry;
+      for (const cloze of quote.clozes ?? []) {
+        for (const log of cloze.review?.reviewLog ?? []) {
+          if (log.reviewedAt >= dayStart && log.reviewedAt < nextDay) {
+            reviewedToday += 1;
+          }
+          totalReviews += 1;
+          if (log.rating !== 'again') remembered += 1;
+        }
+      }
     }
   }
 
@@ -530,8 +609,19 @@ export function getNextSrsWakeAt(inbox: Inbox, now: number): number {
   let next = startOfNextDay(now);
   for (const raw of [...inbox.words, ...inbox.quotes]) {
     if (raw.status === 'archived') continue;
-    const dueAt = migrateReviewState(raw, now).review!.dueAt;
-    if (dueAt > now && dueAt < next) next = dueAt;
+    const entry = migrateReviewState(raw, now);
+    if (entry.kind === 'word') {
+      const dueAt = entry.review!.dueAt;
+      if (dueAt > now && dueAt < next) next = dueAt;
+    } else {
+      // Quote: check each cloze's due date
+      const quote = entry as QuoteEntry;
+      for (const cloze of quote.clozes ?? []) {
+        const effectiveReview = cloze.review ?? newReviewState(entry.createdAt);
+        const dueAt = effectiveReview.dueAt;
+        if (dueAt > now && dueAt < next) next = dueAt;
+      }
+    }
   }
   return next;
 }

@@ -73,7 +73,7 @@ describe('serializeBackup', () => {
     expect(backup.inbox.words[0]).not.toHaveProperty('tags');
     expect(backup).toMatchObject({
       app: 'shiyu-hanzi-box',
-      formatVersion: 1,
+      formatVersion: 2,
       exportedAt: '2026-06-20T12:34:56.000Z',
       inbox,
     });
@@ -262,5 +262,119 @@ describe('parseBackup with FSRS review state', () => {
     expect(() => parseBackup(JSON.stringify(broken))).toThrow(
       BackupParseError,
     );
+  });
+});
+
+describe('parseBackup – version compatibility and cloze validation', () => {
+  it('accepts a v1 backup (formatVersion 1) and loads quotes with clozes absent', () => {
+    const v1Backup = {
+      app: 'shiyu-hanzi-box',
+      formatVersion: 1,
+      exportedAt: '2026-06-20T12:00:00.000Z',
+      inbox: { words: [], quotes: [quote] },
+    };
+    const restored = parseBackup(JSON.stringify(v1Backup));
+    expect(restored.quotes).toHaveLength(1);
+    expect(restored.quotes[0].id).toBe('q1');
+    expect(restored.quotes[0].clozes).toBeUndefined();
+  });
+
+  it('accepts a v2 backup with valid clozes and round-trips them unchanged', () => {
+    const cloze = {
+      id: 'c1',
+      start: 0,
+      end: 2,
+      hint: 'none' as const,
+      wordId: 'w1',
+    };
+    const quoteWithClozes: QuoteEntry = { ...quote, clozes: [cloze] };
+    const v2Backup = {
+      app: 'shiyu-hanzi-box',
+      formatVersion: 2,
+      exportedAt: '2026-06-20T12:00:00.000Z',
+      inbox: { words: [], quotes: [quoteWithClozes] },
+    };
+    const restored = parseBackup(JSON.stringify(v2Backup));
+    expect(restored.quotes[0].clozes).toEqual([cloze]);
+  });
+
+  it('drops clozes to [] when a cloze has overlapping spans, but keeps the quote', () => {
+    const quoteWithOverlap = {
+      ...quote,
+      clozes: [
+        { id: 'c1', start: 0, end: 3 },
+        { id: 'c2', start: 2, end: 5 }, // overlaps c1
+      ],
+    };
+    const v2Backup = {
+      app: 'shiyu-hanzi-box',
+      formatVersion: 2,
+      exportedAt: '2026-06-20T12:00:00.000Z',
+      inbox: { words: [], quotes: [quoteWithOverlap] },
+    };
+    const restored = parseBackup(JSON.stringify(v2Backup));
+    expect(restored.quotes).toHaveLength(1);
+    expect(restored.quotes[0].id).toBe('q1');
+    expect(restored.quotes[0].clozes).toEqual([]);
+  });
+
+  it('drops clozes to [] when a cloze end exceeds text.length, but keeps the quote', () => {
+    const quoteWithOutOfRange = {
+      ...quote, // text is '学而时习之' (5 chars)
+      clozes: [
+        { id: 'c1', start: 0, end: 999 }, // end > textLength
+      ],
+    };
+    const v2Backup = {
+      app: 'shiyu-hanzi-box',
+      formatVersion: 2,
+      exportedAt: '2026-06-20T12:00:00.000Z',
+      inbox: { words: [], quotes: [quoteWithOutOfRange] },
+    };
+    const restored = parseBackup(JSON.stringify(v2Backup));
+    expect(restored.quotes[0].clozes).toEqual([]);
+  });
+
+  it('drops clozes to [] when a cloze is missing id, but keeps the quote', () => {
+    const quoteWithMissingId = {
+      ...quote,
+      clozes: [
+        { start: 0, end: 2 }, // no id field
+      ],
+    };
+    const v2Backup = {
+      app: 'shiyu-hanzi-box',
+      formatVersion: 2,
+      exportedAt: '2026-06-20T12:00:00.000Z',
+      inbox: { words: [], quotes: [quoteWithMissingId] },
+    };
+    const restored = parseBackup(JSON.stringify(v2Backup));
+    expect(restored.quotes[0].clozes).toEqual([]);
+  });
+
+  it('does not throw when importing a quote with a malformed cloze array', () => {
+    const quoteWithBadClozes = {
+      ...quote,
+      clozes: 'not-an-array',
+    };
+    const v2Backup = {
+      app: 'shiyu-hanzi-box',
+      formatVersion: 2,
+      exportedAt: '2026-06-20T12:00:00.000Z',
+      inbox: { words: [], quotes: [quoteWithBadClozes] },
+    };
+    expect(() => parseBackup(JSON.stringify(v2Backup))).not.toThrow();
+    const restored = parseBackup(JSON.stringify(v2Backup));
+    expect(restored.quotes[0].clozes).toEqual([]);
+  });
+
+  it('rejects a backup with formatVersion greater than current', () => {
+    const futureBackup = {
+      app: 'shiyu-hanzi-box',
+      formatVersion: 999,
+      exportedAt: '2026-06-20T12:00:00.000Z',
+      inbox: { words: [], quotes: [] },
+    };
+    expect(() => parseBackup(JSON.stringify(futureBackup))).toThrow(BackupParseError);
   });
 });

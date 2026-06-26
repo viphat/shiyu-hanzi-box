@@ -1,4 +1,6 @@
+import { clozesOverlap } from './cloze';
 import type {
+  Cloze,
   Inbox,
   Occurrence,
   QuoteEntry,
@@ -11,7 +13,7 @@ import type {
 } from './types';
 
 export const BACKUP_APP = 'shiyu-hanzi-box';
-export const BACKUP_FORMAT_VERSION = 1;
+export const BACKUP_FORMAT_VERSION = 2;
 
 export interface InboxBackup {
   app: typeof BACKUP_APP;
@@ -66,7 +68,10 @@ function readInboxPayload(value: unknown): unknown {
     throw new BackupParseError('Unsupported backup app.');
   }
 
-  if (value.formatVersion !== BACKUP_FORMAT_VERSION) {
+  if (
+    typeof value.formatVersion !== 'number' ||
+    value.formatVersion > BACKUP_FORMAT_VERSION
+  ) {
     throw new BackupParseError(
       `Unsupported backup format version: ${String(value.formatVersion)}.`,
     );
@@ -121,7 +126,45 @@ function isQuoteEntry(value: unknown): value is QuoteEntry {
     isString(value.sourceUrl) &&
     isString(value.sourceDomain) &&
     isString(value.surrounding)
+    // clozes: not checked here — sanitized in cloneInbox (invalid → [])
   );
+}
+
+function isCloze(value: unknown, textLength: number): value is Cloze {
+  if (!isRecord(value)) return false;
+  if (!isString(value.id)) return false;
+  if (!isFiniteNumber(value.start) || !isFiniteNumber(value.end)) return false;
+  if (
+    value.start < 0 ||
+    value.end <= value.start ||
+    value.end > textLength
+  ) {
+    return false;
+  }
+  if (
+    value.hint !== undefined &&
+    value.hint !== 'none' &&
+    value.hint !== 'pinyin' &&
+    value.hint !== 'length'
+  ) {
+    return false;
+  }
+  if (value.wordId !== undefined && !isString(value.wordId)) return false;
+  if (value.review !== undefined && !isReviewState(value.review)) return false;
+  return true;
+}
+
+function sanitizeQuoteClozes(quote: QuoteEntry): QuoteEntry {
+  if (quote.clozes === undefined) return quote;
+  // Not an array: sanitize to []
+  if (!Array.isArray(quote.clozes)) return { ...quote, clozes: [] };
+  const textLength = quote.text.length;
+  // All entries must be valid clozes
+  const allValid = quote.clozes.every((c) => isCloze(c, textLength));
+  if (!allValid) return { ...quote, clozes: [] };
+  // No overlapping spans
+  if (clozesOverlap(quote.clozes)) return { ...quote, clozes: [] };
+  return quote;
 }
 
 function hasEntryBase(value: Record<string, unknown>): boolean {
@@ -273,6 +316,6 @@ function cloneInbox(inbox: Inbox): Inbox {
       const { tags: _tags, ...rest } = word as WordEntry & { tags?: unknown };
       return cloneJson(rest) as WordEntry;
     }),
-    quotes: cloneJson(inbox.quotes),
+    quotes: cloneJson(inbox.quotes).map((quote) => sanitizeQuoteClozes(quote)),
   };
 }

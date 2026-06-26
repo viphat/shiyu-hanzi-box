@@ -7,7 +7,11 @@ import {
 } from './capture-handler';
 
 export default defineBackground(() => {
-  browser.runtime.onInstalled.addListener(() => {
+  // Context-menu items persist across service-worker restarts, and onInstalled
+  // fires again on reload/update. Clear existing items first so re-registration
+  // never fails with "Cannot create item with duplicate id".
+  async function registerContextMenus() {
+    await browser.contextMenus.removeAll();
     browser.contextMenus.create({
       id: MENU_SAVE_WORD,
       title: 'Save as word (拾语汉字box)',
@@ -23,7 +27,9 @@ export default defineBackground(() => {
       title: 'Open dashboard (拾语汉字box)',
       contexts: ['action'],
     });
-  });
+  }
+
+  browser.runtime.onInstalled.addListener(() => registerContextMenus());
 
   browser.contextMenus.onClicked.addListener((info, tab) => {
     if (info.menuItemId === MENU_SAVE_WORD) {

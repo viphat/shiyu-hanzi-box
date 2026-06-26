@@ -27,6 +27,7 @@ describe('background context menus', () => {
     vi.spyOn(fakeBrowser.runtime.onInstalled, 'addListener').mockImplementation((listener) => {
       installedListener = listener as InstalledListener;
     });
+    vi.spyOn(fakeBrowser.contextMenus, 'removeAll').mockResolvedValue(undefined);
     vi.spyOn(fakeBrowser.contextMenus, 'create').mockImplementation(() => '' as any);
     vi.spyOn(fakeBrowser.contextMenus.onClicked, 'addListener').mockImplementation((listener) => {
       menuClickListener = listener as MenuClickListener;
@@ -36,11 +37,28 @@ describe('background context menus', () => {
     vi.spyOn(fakeBrowser.tabs, 'create').mockResolvedValue({ id: 9 } as Browser.tabs.Tab);
   });
 
-  it('registers selection capture menus and action dashboard menu', () => {
+  it('clears existing menus before registering, so reload never duplicates ids', async () => {
     background.main?.();
     expect(installedListener).toBeDefined();
 
-    installedListener?.();
+    await installedListener?.();
+    // Re-firing onInstalled (reload/update) must not throw a duplicate-id error.
+    await installedListener?.();
+
+    expect(fakeBrowser.contextMenus.removeAll).toHaveBeenCalledTimes(2);
+    // removeAll runs before create on each registration.
+    const removeOrder = (fakeBrowser.contextMenus.removeAll as ReturnType<typeof vi.fn>)
+      .mock.invocationCallOrder[0];
+    const createOrder = (fakeBrowser.contextMenus.create as ReturnType<typeof vi.fn>)
+      .mock.invocationCallOrder[0];
+    expect(removeOrder).toBeLessThan(createOrder);
+  });
+
+  it('registers selection capture menus and action dashboard menu', async () => {
+    background.main?.();
+    expect(installedListener).toBeDefined();
+
+    await installedListener?.();
 
     expect(fakeBrowser.contextMenus.create).toHaveBeenCalledWith({
       id: MENU_SAVE_WORD,

@@ -67,7 +67,31 @@ export function renderDay(
     lines.push('## Quotes', '');
     for (const quote of quotes) {
       const tags = quote.tags.length > 0 ? ` ${quote.tags.map((tag) => `#${tag}`).join(' ')}` : '';
-      lines.push(`- [ ] > ${esc(quote.text)}`);
+
+      // Build the quote body with clozes if present
+      let quoteLine: string;
+      if (quote.clozes?.length) {
+        const sortedClozes = [...quote.clozes].sort((a, b) => a.start - b.start);
+        let body = '';
+        let cursor = 0;
+        for (let i = 0; i < sortedClozes.length; i++) {
+          const c = sortedClozes[i];
+          // Append text before this cloze
+          body += esc(quote.text.slice(cursor, c.start));
+          // Append cloze with number (1-indexed)
+          const clozeNum = i + 1;
+          const answer = quote.text.slice(c.start, c.end);
+          body += `{{c${clozeNum}::${esc(answer)}}}`;
+          cursor = c.end;
+        }
+        // Append remaining text after last cloze
+        body += esc(quote.text.slice(cursor));
+        quoteLine = `- [ ] > ${body}`;
+      } else {
+        quoteLine = `- [ ] > ${esc(quote.text)}`;
+      }
+
+      lines.push(quoteLine);
       lines.push(`  - _category:_ ${esc(quote.category)}${tags}`);
       if (quote.note) lines.push(`  - ${esc(quote.note)}`);
       lines.push(`  - [${esc(quote.sourceTitle || quote.sourceDomain)}](${quote.sourceUrl})`);

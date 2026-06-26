@@ -127,6 +127,24 @@ describe('renderDay with dictionary', () => {
   });
 });
 
+describe('renderDay with clozes', () => {
+  it('renders clozes as numbered {{cN::...}} in document order', () => {
+    const md = renderDay('2026-06-25', [], [
+      {
+        ...quote,
+        text: '他义无反顾地走了',
+        clozes: [{ id: 'b', start: 6, end: 7 }, { id: 'a', start: 1, end: 5 }],
+      },
+    ]);
+    expect(md).toContain('- [ ] > 他{{c1::义无反顾}}地{{c2::走}}了');
+  });
+
+  it('renders a clozeless quote as plain text (unchanged)', () => {
+    const md = renderDay(day, [], [quote]);
+    expect(md).toContain('- [ ] > 学而时习之');
+  });
+});
+
 const aiInsight: AiInsight = {
   provider: 'deepseek',
   model: 'deepseek-chat',

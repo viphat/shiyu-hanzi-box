@@ -1,6 +1,6 @@
 # Chrome Web Store Submission Notes
 
-Last updated: 2026-06-24
+Last updated: 2026-06-26
 
 ## Package
 
@@ -47,10 +47,12 @@ No declared required permission was found unused as of this audit.
 
 ## Optional Host Permissions
 
-- `https://api.deepseek.com/*`: Requested only when the user enables DeepSeek AI
-  insight or tests the DeepSeek connection.
-- `https://api.openai.com/*`: Requested only when the user enables OpenAI AI
-  insight or tests the OpenAI connection.
+- `https://api.deepseek.com/*`: Requested only when the user enables DeepSeek
+  and uses an AI action — word "Ask AI" insight or quote "建议填空" cloze
+  suggestions — or tests the DeepSeek connection.
+- `https://api.openai.com/*`: Requested only when the user enables OpenAI and
+  uses an AI action (word insight or quote cloze suggestions) or tests the
+  OpenAI connection.
 - `https://*/*`: Allows users to configure a custom HTTPS OpenAI-compatible AI
   endpoint. This remains optional and is requested lazily for the specific
   origin derived from the configured Base URL.
@@ -69,7 +71,9 @@ Disclose that the extension handles website content selected by the user, page
 metadata for captured sources, user notes, local review ratings and schedules,
 extension settings, and optional API keys. Data is stored locally by default.
 Spaced-repetition scheduling does not require network access. AI provider
-transfer occurs only after the user enables AI and clicks an AI action. When
+transfer occurs only after the user enables AI and clicks an AI action: word
+"Ask AI" insight sends the saved word and its dictionary context, and quote
+"建议填空" cloze suggestions send that quote's sentence text. When
 pronunciation is requested, the selected saved word is passed to Chrome's
 configured speech engine; some installed voices may use a remote speech
 resource.

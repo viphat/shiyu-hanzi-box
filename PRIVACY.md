@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: 2026-06-24
+Last updated: 2026-06-26
 
 拾语汉字box is a local-first Chrome extension for saving selected Chinese words,
 phrases, and quotes while reading.
@@ -32,10 +32,16 @@ the saved entry. They are not sent to a developer-operated service.
 The bundled CC-CEDICT dictionary is used offline. External dictionary links open
 only when you click them.
 
-AI insight is optional and disabled by default. If you enable it and click an AI
-action, the extension sends the saved word, optional pinyin, local dictionary
-glosses, and one recent captured occurrence to the AI provider you configured.
-Your API key is sent only to that provider. Provider requests use HTTPS.
+AI features are optional and disabled by default. If you enable AI and click an
+AI action, the extension sends data to the AI provider you configured:
+
+- **Ask AI** (word insight) sends the saved word, optional pinyin, local
+  dictionary glosses, and one recent captured occurrence.
+- **建议填空 / Suggest blanks** (cloze suggestions for a quote) sends that
+  quote's sentence text so the provider can propose words to blank out.
+
+Your API key is sent only to that provider. Provider requests use HTTPS. When AI
+is disabled, the extension makes no AI provider requests.
 
 The optional Kaikki dictionary workflow opens the Kaikki download page in a
 normal browser tab when you click the download button. Imported Kaikki JSONL

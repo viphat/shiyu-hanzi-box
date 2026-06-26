@@ -1,6 +1,6 @@
 # Chrome Web Store Reviewer Notes
 
-Last updated: 2026-06-24
+Last updated: 2026-06-26
 
 Use this file when filling the reviewer notes field during Chrome Web Store
 submission.
@@ -10,13 +10,13 @@ submission.
 ```text
 拾语汉字box is a local-first Chinese reading extension. It captures selected text only after explicit user action through the context menu, keyboard shortcut, or toolbar popup. Saved entries are stored in local extension storage and can be exported as Markdown, zip, or JSON backup files.
 
-AI insight is disabled by default. To test AI, open Settings, enable AI, choose a provider, enter a valid user-owned API key, and click Test Connection. The extension requests the provider host permission lazily at that point. Without a user-provided API key, all local dictionary features still work offline.
+AI is disabled by default. It powers two optional, user-triggered actions: "Ask AI" word insight, and "建议填空 / Suggest blanks" cloze suggestions for a saved quote. To test AI, open Settings, enable AI, choose a provider, enter a valid user-owned API key, and click Test Connection. The extension requests the provider host permission lazily at that point. Without a user-provided API key, all local dictionary, capture, and review features still work offline.
 
 The bundled CC-CEDICT dictionary is packaged with the extension and used offline. The optional Kaikki workflow opens the Kaikki download page in a regular tab and processes a user-selected JSONL file locally.
 
 The tts permission supports the user-triggered speaker button on saved words. Clicking the button passes only that saved word to Chrome's configured Chinese speech engine. No audio is stored, and no developer-operated speech server is used.
 
-The Review tab shows one due card at a time and schedules it locally from the user's Again, Hard, Good, or Easy rating. Word details are revealed on demand; saved quote text is shown immediately.
+The Review tab shows one due card at a time and schedules it locally from the user's Again, Hard, Good, or Easy rating. Word details are revealed on demand. Quotes are reviewed by cloze deletion: a newly saved quote starts "parked" with no blanks and does not enter the review queue until the user adds at least one blank. Blanks are added either manually (open "手动填空 / Mark blanks", wrap an answer span in braces, and click Apply) or via the optional "建议填空" AI suggestion. Each blank is an independent card; in review the active blank is hidden until the user clicks Reveal, which shows the full quote with the answer highlighted. When the user clicks "建议填空", the quote's sentence text is sent to the user-configured AI provider, the same opt-in path as other AI actions.
 ```
 
 ## Manual Test Script
@@ -37,20 +37,27 @@ Use this flow for reviewer instructions or your own pre-submit smoke test.
    examples, and external dictionary links should appear without AI.
 10. Click the speaker button beside the saved word and confirm Chrome pronounces
     it with an available Chinese voice. Click it again to stop playback.
-11. Open the **Review** tab. Confirm only one large card is visible.
-12. For a word, click **Reveal / 查看答案**, choose a rating, and confirm the next
+11. On the saved quote card, add a cloze blank: open **手动填空 / Mark blanks**,
+    wrap one word in braces (for example change `...刚需...` to `...{刚需}...`),
+    and click **Apply / 应用**. Confirm the chosen word becomes a blank chip.
+    (The quote is "parked" with no blanks until this step, so it would not
+    otherwise appear in review.)
+12. Open the **Review** tab. Confirm only one large card is visible.
+13. For a word, click **Reveal / 查看答案**, choose a rating, and confirm the next
     due card replaces it.
-13. For a quote, confirm its text is visible immediately without a Reveal
-    button, then choose a rating.
-14. Click the daily Markdown export action and confirm Chrome downloads a
+14. For a quote, confirm the active blank is hidden on the front; click
+    **Reveal** to show the full quote with the answer highlighted, then choose a
+    rating.
+15. Click the daily Markdown export action and confirm Chrome downloads a
     `.md` file.
-15. Click the zip export action and confirm Chrome downloads a `.zip` file.
-16. Click the backup action and confirm Chrome downloads a `.json` backup file.
-17. Open Settings from the dashboard.
-18. Change the UI language between `zh-CN` and English, then return to the
+16. Click the zip export action and confirm Chrome downloads a `.zip` file.
+17. Click the backup action and confirm Chrome downloads a `.json` backup file.
+18. Open Settings from the dashboard.
+19. Change the UI language between `zh-CN` and English, then return to the
     dashboard to confirm labels update.
-19. Optional AI test: enable AI, choose DeepSeek or OpenAI, enter a valid API
-    key, click Test Connection, return to a saved word, and click Ask AI.
+20. Optional AI test: enable AI, choose DeepSeek or OpenAI, enter a valid API
+    key, and click Test Connection. Then return to a saved word and click
+    **Ask AI**, and on a saved quote click **建议填空** to fetch suggested blanks.
 
 ## Popup Fallback Test
 
@@ -68,6 +75,9 @@ manual fallback.
 - Local dictionary insight is offline.
 - External dictionary links open only when clicked.
 - AI is opt-in, BYO-key, and initiated only by explicit user action.
+- Cloze blank suggestions ("建议填空") are an AI action: clicking the button
+  sends only that quote's sentence text to the user-configured provider. The
+  user still chooses which suggested blanks to accept; nothing is auto-applied.
 - API keys and generated AI insight are stored locally in extension storage.
 - Review ratings, schedules, and history stay in local extension storage.
 - Pronunciation runs only after a speaker-button click and stores no audio.
@@ -80,6 +90,8 @@ manual fallback.
 
 - Chrome internal pages and some restricted pages cannot be scripted; use the
   popup manual fallback there.
+- Newly saved quotes are "parked" with no cloze blanks and do not appear in the
+  review queue until the user adds at least one blank (manually or via AI).
 - Custom AI endpoints must use HTTPS.
 - The pronunciation button is hidden if Chrome exposes no compatible Chinese
   voice.

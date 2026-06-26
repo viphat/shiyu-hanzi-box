@@ -1,6 +1,6 @@
 # Chrome Web Store Dashboard Checklist
 
-Last updated: 2026-06-24
+Last updated: 2026-06-26
 
 Use this when completing the Chrome Developer Dashboard fields after uploading
 `.output/shiyu-hanzi-box-0.1.0-chrome.zip`.
@@ -28,13 +28,16 @@ Select Chinese text on a page and save it as a word, phrase, or quote through th
 
 Saved words include one-click Mandarin pronunciation through Chrome/OS Chinese text-to-speech voices. Pronunciation runs only when the user clicks the speaker button and requires no API key.
 
-AI insight is optional and disabled by default. If enabled, users bring their own API key and explicitly click Ask AI for a saved word. The extension stores generated insight locally so each word only needs to be generated once.
+Quotes are reviewed by cloze deletion. A saved quote starts with no blanks (parked); the user marks which words become blanks, either manually by wrapping an answer in braces or with optional AI suggestions, and each blank becomes its own spaced-repetition card.
+
+AI is optional and disabled by default. If enabled, users bring their own API key and explicitly trigger it — "Ask AI" for a saved word, or "建议填空" to suggest cloze blanks for a quote. Generated word insight is stored locally so each word only needs to be generated once.
 
 Core features:
 - Save selected Chinese words, phrases, and quotes.
 - Deduplicate words while preserving source occurrences.
 - View local dictionary definitions, pinyin tone chips, pronunciation, and source examples.
-- Review saved words and quotes one card at a time with local spaced-repetition scheduling.
+- Review saved words and quotes one card at a time with local spaced-repetition scheduling; quotes are reviewed by cloze deletion, with each blank scheduled as an independent card.
+- Add cloze blanks to quotes manually (brace markup) or with optional AI suggestions.
 - Export daily Markdown notes and backup/restore local data.
 - Optionally import a local Kaikki JSONL dictionary fallback.
 - Optionally use BYO-key AI insight with DeepSeek, OpenAI, or a custom HTTPS OpenAI-compatible endpoint.
@@ -124,11 +127,11 @@ tts: Pronounces a saved Chinese word only after the user clicks its speaker butt
 ## Optional Host Permission Justifications
 
 ```text
-https://api.deepseek.com/*: Requested only when the user enables DeepSeek AI insight or tests the DeepSeek connection.
+https://api.deepseek.com/*: Requested only when the user enables DeepSeek and uses an AI action (word "Ask AI" insight or quote "建议填空" cloze suggestions) or tests the DeepSeek connection.
 ```
 
 ```text
-https://api.openai.com/*: Requested only when the user enables OpenAI AI insight or tests the OpenAI connection.
+https://api.openai.com/*: Requested only when the user enables OpenAI and uses an AI action (word insight or quote cloze suggestions) or tests the OpenAI connection.
 ```
 
 ```text
@@ -149,7 +152,7 @@ Disclose these categories if the dashboard asks:
 Suggested explanation:
 
 ```text
-The extension stores selected text, notes, source metadata, review ratings and schedules, local settings, optional API keys, and generated AI insights locally in the user's browser. Spaced-repetition ratings and schedules are calculated and stored locally. AI data transfer happens only when the user enables AI and explicitly clicks an AI action. When pronunciation is requested, the saved word is passed to Chrome's configured speech engine; some installed voices may use a remote speech resource. The extension does not operate a developer-owned server, does not create accounts, and does not sell user data.
+The extension stores selected text, notes, source metadata, review ratings and schedules, local settings, optional API keys, and generated AI insights locally in the user's browser. Spaced-repetition ratings and schedules are calculated and stored locally. AI data transfer happens only when the user enables AI and explicitly clicks an AI action: word insight sends the saved word and its dictionary context, and quote cloze suggestions send that quote's sentence text. When pronunciation is requested, the saved word is passed to Chrome's configured speech engine; some installed voices may use a remote speech resource. The extension does not operate a developer-owned server, does not create accounts, and does not sell user data.
 ```
 
 ## Remote Code

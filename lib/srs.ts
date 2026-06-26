@@ -7,8 +7,10 @@ import {
   State,
 } from 'ts-fsrs';
 import type {
+  Cloze,
   Entry,
   Inbox,
+  QuoteEntry,
   ReviewCardState,
   ReviewLogEntry,
   ReviewRating,
@@ -49,7 +51,7 @@ export function createSrsScheduler(settings: SrsSettings): FSRS {
   });
 }
 
-function newReviewState(createdAt: number): ReviewState {
+export function newReviewState(createdAt: number): ReviewState {
   return {
     scheduler: 'fsrs-v1',
     cardState: 'new',
@@ -188,7 +190,7 @@ export type SrsPreview = Record<ReviewRating, SrsPreviewItem>;
 
 const RATING_KEYS: ReviewRating[] = ['again', 'hard', 'good', 'easy'];
 
-function appendLog(
+export function appendLog(
   review: ReviewState,
   entry: ReviewLogEntry,
 ): ReviewLogEntry[] {
@@ -257,6 +259,103 @@ export function postponeReview<T extends Entry>(
       scheduledDays: Math.max(0, Math.ceil((dueAt - now) / DAY_MS)),
       queueRank: undefined,
     },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Card identity (derived, never persisted)
+// ---------------------------------------------------------------------------
+
+export type CardSource =
+  | { kind: 'word'; entryId: string }
+  | { kind: 'cloze'; quoteId: string; clozeId: string };
+
+export type CardId = string;
+
+export function cardId(s: CardSource): CardId {
+  return s.kind === 'word'
+    ? `word:${s.entryId}`
+    : `cloze:${s.quoteId}:${s.clozeId}`;
+}
+
+// ---------------------------------------------------------------------------
+// Cloze-aware FSRS wrappers
+// ---------------------------------------------------------------------------
+
+export function answerReviewCloze(
+  quote: QuoteEntry,
+  clozeId: string,
+  rating: ReviewRating,
+  now: number,
+  settings: SrsSettings,
+): QuoteEntry {
+  const clozes = (quote.clozes ?? []).map((c: Cloze) => {
+    if (c.id !== clozeId) return c;
+    const review = c.review ?? newReviewState(now);
+    const scheduler = createSrsScheduler(settings);
+    const result = scheduler.next(toFsrsCard(review), now, RATING_TO_GRADE[rating]);
+    const log = toReviewLogEntry(review, result.card, rating, now);
+    return {
+      ...c,
+      review: {
+        ...fromFsrsResult(result.card, review, now),
+        reviewLog: appendLog(review, log),
+      },
+    };
+  });
+  return {
+    ...quote,
+    status: quote.status === 'archived' ? 'archived' : 'reviewed',
+    updatedAt: now,
+    clozes,
+  };
+}
+
+export function previewReviewCloze(
+  quote: QuoteEntry,
+  clozeId: string,
+  now: number,
+  settings: SrsSettings,
+): SrsPreview {
+  const cloze = (quote.clozes ?? []).find((c: Cloze) => c.id === clozeId);
+  const review = cloze?.review ?? newReviewState(now);
+  const scheduler = createSrsScheduler(settings);
+  const preview = scheduler.repeat(toFsrsCard(review), now);
+  const result: Partial<SrsPreview> = {};
+  for (const key of RATING_KEYS) {
+    const item = preview[RATING_TO_GRADE[key]];
+    result[key] = {
+      cardState: FSRS_TO_CARD_STATE[item.card.state],
+      dueAt: item.card.due.getTime(),
+      intervalDays: item.card.scheduled_days,
+    };
+  }
+  return result as SrsPreview;
+}
+
+export function postponeReviewCloze(
+  quote: QuoteEntry,
+  clozeId: string,
+  now: number,
+  dueAt: number,
+): QuoteEntry {
+  const clozes = (quote.clozes ?? []).map((c: Cloze) => {
+    if (c.id !== clozeId) return c;
+    const review = c.review ?? newReviewState(now);
+    return {
+      ...c,
+      review: {
+        ...review,
+        dueAt,
+        scheduledDays: Math.max(0, Math.ceil((dueAt - now) / DAY_MS)),
+        queueRank: undefined,
+      },
+    };
+  });
+  return {
+    ...quote,
+    updatedAt: now,
+    clozes,
   };
 }
 

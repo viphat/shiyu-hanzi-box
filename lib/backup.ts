@@ -1,4 +1,6 @@
+import { clozesOverlap } from './cloze';
 import type {
+  Cloze,
   Inbox,
   Occurrence,
   QuoteEntry,
@@ -11,7 +13,7 @@ import type {
 } from './types';
 
 export const BACKUP_APP = 'shiyu-hanzi-box';
-export const BACKUP_FORMAT_VERSION = 1;
+export const BACKUP_FORMAT_VERSION = 2;
 
 export interface InboxBackup {
   app: typeof BACKUP_APP;
@@ -66,7 +68,10 @@ function readInboxPayload(value: unknown): unknown {
     throw new BackupParseError('Unsupported backup app.');
   }
 
-  if (value.formatVersion !== BACKUP_FORMAT_VERSION) {
+  if (
+    typeof value.formatVersion !== 'number' ||
+    value.formatVersion > BACKUP_FORMAT_VERSION
+  ) {
     throw new BackupParseError(
       `Unsupported backup format version: ${String(value.formatVersion)}.`,
     );
@@ -120,7 +125,8 @@ function isQuoteEntry(value: unknown): value is QuoteEntry {
     isString(value.sourceTitle) &&
     isString(value.sourceUrl) &&
     isString(value.sourceDomain) &&
-    isString(value.surrounding)
+    isString(value.surrounding) &&
+    (value.clozes === undefined || Array.isArray(value.clozes))
   );
 }
 
@@ -263,6 +269,46 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function isClozeHint(value: unknown): value is 'none' | 'pinyin' | 'length' {
+  return value === 'none' || value === 'pinyin' || value === 'length';
+}
+
+function isCloze(value: unknown, textLength: number): value is Cloze {
+  return (
+    isRecord(value) &&
+    isString(value.id) &&
+    isFiniteNumber(value.start) &&
+    isFiniteNumber(value.end) &&
+    value.start >= 0 &&
+    value.start < value.end &&
+    value.end <= textLength &&
+    (value.hint === undefined || isClozeHint(value.hint)) &&
+    (value.wordId === undefined || isString(value.wordId)) &&
+    (value.review === undefined || isReviewState(value.review))
+  );
+}
+
+function hasOverlap(clozes: Cloze[]): boolean {
+  for (let i = 0; i < clozes.length; i++) {
+    for (let j = i + 1; j < clozes.length; j++) {
+      if (clozesOverlap(clozes[i], clozes[j])) return true;
+    }
+  }
+  return false;
+}
+
+function sanitizeClozesForQuote(quote: QuoteEntry): QuoteEntry {
+  if (quote.clozes === undefined) return quote;
+  const textLength = quote.text.length;
+  const allValid =
+    quote.clozes.every((c) => isCloze(c, textLength)) &&
+    !hasOverlap(quote.clozes as Cloze[]);
+  if (!allValid) {
+    return { ...quote, clozes: [] };
+  }
+  return quote;
+}
+
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
@@ -273,6 +319,6 @@ function cloneInbox(inbox: Inbox): Inbox {
       const { tags: _tags, ...rest } = word as WordEntry & { tags?: unknown };
       return cloneJson(rest) as WordEntry;
     }),
-    quotes: cloneJson(inbox.quotes),
+    quotes: cloneJson(inbox.quotes).map(sanitizeClozesForQuote),
   };
 }

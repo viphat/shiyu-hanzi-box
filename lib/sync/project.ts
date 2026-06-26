@@ -82,6 +82,16 @@ export interface BootstrapContext {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
+// Conflict resolution uses wall-time last-write-wins: every field stamp is
+// built from the entity's own domain timestamp (updatedAt / capturedAt /
+// reviewedAt) and merged via compareTimestamps (wallTime, then counter, then
+// replicaId for a deterministic tiebreak). This is the deliberate, accepted
+// model for personal multi-device sync — it always converges. We do NOT wire
+// the hybrid logical clock (lib/sync/clock.ts createClock/observe/tick) into
+// projection, so a device with a badly skewed system clock can in principle
+// win or lose a field conflict regardless of real edit order. The HLC and the
+// `clock-skew` SyncErrorCode are intentionally retained for a future
+// skew-hardening pass; today's stamps are plain wall time.
 function stamp(wallTime: number, replicaId: string, counter = 0): HybridTimestamp {
   return { wallTime, counter, replicaId };
 }

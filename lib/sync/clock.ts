@@ -1,5 +1,13 @@
 import type { HybridTimestamp } from './types';
 
+// NOTE: `compareTimestamps` and `skewMillis` are used by the merge layer for a
+// deterministic total order over stamps. The hybrid logical clock below
+// (`createClock` / `tick` / `observe`) is currently NOT wired into projection
+// or the coordinator: conflict resolution uses plain wall-time last-write-wins
+// (see lib/sync/project.ts `stamp`). The clock is intentionally retained as a
+// ready primitive for a future clock-skew-hardening pass; until then it has no
+// production callers by design.
+
 export function compareTimestamps(a: HybridTimestamp, b: HybridTimestamp): number {
   if (a.wallTime !== b.wallTime) return a.wallTime - b.wallTime;
   if (a.counter !== b.counter) return a.counter - b.counter;

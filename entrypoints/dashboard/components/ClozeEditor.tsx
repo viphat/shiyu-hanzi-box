@@ -1,8 +1,9 @@
 import { type RefObject, useState } from 'react';
-import { clozeFromRange, parseClozeMarkup, seedMarkup } from '@/lib/cloze';
+import { clozeFromRange, clozesOverlap, parseClozeMarkup, seedMarkup } from '@/lib/cloze';
 import { resolveSelectionOffsets } from '@/lib/cloze-selection';
 import { t } from '@/lib/i18n';
 import type { Cloze, QuoteEntry, UiLocale } from '@/lib/types';
+import { useClozeSuggestions } from '../hooks/useClozeSuggestions';
 
 interface ClozeEditorProps {
   quote: QuoteEntry;
@@ -15,6 +16,17 @@ interface ClozeEditorProps {
 
 export function ClozeEditor({ quote, onChange, onUpdate, locale, quoteTextRef }: ClozeEditorProps) {
   const clozes = quote.clozes ?? [];
+  const ai = useClozeSuggestions(quote);
+
+  // ---------------------------------------------------------------------------
+  // AI candidate accept handler
+  // ---------------------------------------------------------------------------
+
+  function acceptCandidate(cloze: Cloze) {
+    if (clozesOverlap([...clozes, cloze])) return;
+    onChange([...clozes, cloze].sort((a, b) => a.start - b.start));
+    ai.dismissCandidate(cloze.id);
+  }
 
   // ---------------------------------------------------------------------------
   // Manual brace-markup editor state
@@ -131,6 +143,36 @@ export function ClozeEditor({ quote, onChange, onUpdate, locale, quoteTextRef }:
         </div>
       )}
 
+      {/* AI candidate panel */}
+      {ai.candidates !== null && (
+        <div className="rounded-sm border border-cinnabar-border bg-cinnabar-light p-2">
+          {ai.candidates.length === 0 ? (
+            <p className="text-xs text-muted">{t(locale, 'cloze.aiNoSuggestions')}</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {ai.candidates.map((cand) => (
+                <div key={cand.cloze.id} className="flex items-center gap-1">
+                  <span
+                    title={cand.reason}
+                    className="rounded-sm border border-cinnabar-border px-2 py-0.5 text-xs text-cinnabar"
+                  >
+                    {quote.text.slice(cand.cloze.start, cand.cloze.end)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => acceptCandidate(cand.cloze)}
+                    className="rounded-sm border border-cinnabar-border bg-cinnabar px-2 py-0.5 text-xs text-white transition hover:bg-cinnabar/80"
+                  >
+                    {t(locale, 'cloze.accept')}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {ai.state === 'error' && <p className="text-[11px] text-cinnabar">{ai.error}</p>}
+
       {/* Actions row */}
       <div className="flex flex-wrap gap-2">
         <button
@@ -148,6 +190,31 @@ export function ClozeEditor({ quote, onChange, onUpdate, locale, quoteTextRef }:
         >
           {t(locale, 'cloze.markBlanks')}
         </button>
+        {ai.state === 'checking' || ai.state === 'disabled' ? (
+          <div className="space-y-1">
+            <button
+              type="button"
+              disabled
+              className="cursor-not-allowed rounded-sm border border-border bg-paper-input px-2 py-1 text-xs text-muted opacity-60"
+            >
+              {t(locale, 'cloze.aiSuggest')}
+            </button>
+            <p className="text-[11px] text-muted">{t(locale, 'cloze.aiConfigure')}</p>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={ai.requestSuggestions}
+            disabled={ai.state === 'loading'}
+            className="rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-1 text-xs text-cinnabar transition hover:bg-cinnabar hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {ai.state === 'loading'
+              ? t(locale, 'cloze.aiLoading')
+              : ai.state === 'error'
+                ? t(locale, 'cloze.aiRetry')
+                : t(locale, 'cloze.aiSuggest')}
+          </button>
+        )}
       </div>
     </div>
   );

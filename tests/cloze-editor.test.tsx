@@ -6,6 +6,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClozeEditor } from '../entrypoints/dashboard/components/ClozeEditor';
 import { messages } from '../lib/i18n';
 import type { Cloze, QuoteEntry } from '../lib/types';
+import { getAiSettings } from '@/lib/ai/settings';
+import { fetchClozeSuggestions } from '@/lib/ai/client';
+
+// ---------------------------------------------------------------------------
+// Module mocks for AI dependencies — preserve real isAiConfigured
+// ---------------------------------------------------------------------------
+
+vi.mock('@/lib/ai/settings', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/ai/settings')>();
+  return { ...actual, getAiSettings: vi.fn() };
+});
+vi.mock('@/lib/ai/permissions', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/ai/permissions')>();
+  return { ...actual, requestAiSettingsPermission: vi.fn(async () => true) };
+});
+vi.mock('@/lib/ai/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/ai/client')>();
+  return { ...actual, fetchClozeSuggestions: vi.fn() };
+});
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -44,6 +63,16 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
+
+  // Default: AI disabled — keeps the mount-effect in useClozeSuggestions happy
+  // without interfering with non-AI tests.
+  vi.mocked(getAiSettings).mockResolvedValue({
+    enabled: false,
+    provider: 'deepseek',
+    baseUrl: '',
+    apiKey: '',
+    model: '',
+  });
 });
 
 afterEach(async () => {
@@ -76,6 +105,14 @@ function getButton(label: string): HTMLButtonElement {
 async function click(btn: HTMLButtonElement) {
   await act(async () => {
     btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+}
+
+/** Flush pending microtasks (e.g., the mount-effect async chain in useClozeSuggestions). */
+async function flush() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
   });
 }
 
@@ -431,5 +468,82 @@ describe('ClozeEditor — manual brace-markup editor', () => {
     expect(onChange).not.toHaveBeenCalled();
     expect(onUpdate).not.toHaveBeenCalled();
     expect(container.textContent).toContain('无法识别填空');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AI candidate panel
+// ---------------------------------------------------------------------------
+
+const DISABLED_SETTINGS = {
+  enabled: false as const,
+  provider: 'deepseek' as const,
+  baseUrl: '',
+  apiKey: '',
+  model: '',
+};
+const ENABLED_SETTINGS = {
+  enabled: true as const,
+  provider: 'deepseek' as const,
+  baseUrl: 'https://api.deepseek.com',
+  apiKey: 'sk',
+  model: 'deepseek-chat',
+};
+
+describe('ClozeEditor — AI suggest button and candidate panel', () => {
+  it('disables the AI suggest button when AI is unconfigured', async () => {
+    vi.mocked(getAiSettings).mockResolvedValue({ ...DISABLED_SETTINGS });
+    const quote = makeQuote({ text: '满足人们的刚需', clozes: [] });
+    await renderClient(
+      <ClozeEditor quote={quote} onChange={vi.fn()} onUpdate={vi.fn()} locale="zh-CN" />,
+    );
+    await flush();
+
+    const btn = getButton('建议填空');
+    expect(btn.disabled).toBe(true);
+    expect(container.textContent).toContain('请在设置中配置 AI');
+  });
+
+  it('accepting an AI candidate adds a cloze', async () => {
+    vi.mocked(getAiSettings).mockResolvedValue({ ...ENABLED_SETTINGS });
+    vi.mocked(fetchClozeSuggestions).mockResolvedValue({
+      ok: true,
+      suggestions: [{ answer: '刚需', reason: 'key vocabulary' }],
+    });
+    const onChange = vi.fn();
+    const quote = makeQuote({ text: '满足人们的刚需', clozes: [] });
+    await renderClient(
+      <ClozeEditor quote={quote} onChange={onChange} onUpdate={vi.fn()} locale="zh-CN" />,
+    );
+    await flush();
+
+    // Click the enabled AI suggest button
+    await click(getButton('建议填空'));
+
+    // Accept the candidate chip
+    await click(getButton('接受'));
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const added: Cloze[] = onChange.mock.calls[0][0];
+    expect(added).toHaveLength(1);
+    expect(quote.text.slice(added[0].start, added[0].end)).toBe('刚需');
+  });
+
+  it('shows the empty state when AI returns no usable spans', async () => {
+    vi.mocked(getAiSettings).mockResolvedValue({ ...ENABLED_SETTINGS });
+    // '股票' does not appear in '满足人们的刚需' so no candidates will be produced
+    vi.mocked(fetchClozeSuggestions).mockResolvedValue({
+      ok: true,
+      suggestions: [{ answer: '股票' }],
+    });
+    const quote = makeQuote({ text: '满足人们的刚需', clozes: [] });
+    await renderClient(
+      <ClozeEditor quote={quote} onChange={vi.fn()} onUpdate={vi.fn()} locale="zh-CN" />,
+    );
+    await flush();
+
+    await click(getButton('建议填空'));
+
+    expect(container.textContent).toContain('没有可用的填空建议');
   });
 });

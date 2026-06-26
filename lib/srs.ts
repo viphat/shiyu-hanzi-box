@@ -266,6 +266,7 @@ export interface SrsQueueItem {
   kind: Entry['kind'];
   entry: Entry;
   dueAt: number;
+  clozeId?: string;
 }
 
 export interface SrsStats {
@@ -305,22 +306,40 @@ function endOfDay(time: number): number {
   return startOfNextDay(time) - 1;
 }
 
-function countNewReviewedToday(entries: Entry[], now: number): number {
+function countNewReviewedToday(inbox: Inbox, now: number): number {
   const dayStart = startOfDay(now);
   const nextDay = startOfNextDay(now);
   let count = 0;
-  for (const entry of entries) {
-    for (const log of entry.review?.reviewLog ?? []) {
-      if (
-        log.stateBefore === 'new' &&
-        log.reviewedAt >= dayStart &&
-        log.reviewedAt < nextDay
-      ) {
-        count += 1;
+  const isNewReviewToday = (log: { stateBefore: string; reviewedAt: number }) =>
+    log.stateBefore === 'new' &&
+    log.reviewedAt >= dayStart &&
+    log.reviewedAt < nextDay;
+
+  for (const word of inbox.words) {
+    if (word.status === 'archived') continue;
+    for (const log of word.review?.reviewLog ?? []) {
+      if (isNewReviewToday(log)) count += 1;
+    }
+  }
+  for (const quote of inbox.quotes) {
+    if (quote.status === 'archived') continue;
+    for (const cloze of quote.clozes ?? []) {
+      for (const log of cloze.review?.reviewLog ?? []) {
+        if (isNewReviewToday(log)) count += 1;
       }
     }
   }
   return count;
+}
+
+function itemReview(item: SrsQueueItem): ReviewState | undefined {
+  if (item.kind === 'word') {
+    return item.entry.review;
+  }
+  // quote: find the cloze's raw review (may be undefined => treated as new)
+  const quote = item.entry as QuoteEntry;
+  const cloze = (quote.clozes ?? []).find((c) => c.id === item.clozeId);
+  return cloze?.review;
 }
 
 export function buildSrsQueue(
@@ -328,36 +347,46 @@ export function buildSrsQueue(
   now: number,
   settings: SrsSettings,
 ): SrsQueueItem[] {
-  const entries: Entry[] = [...inbox.words, ...inbox.quotes].filter(
-    (entry) => entry.status !== 'archived',
-  );
-
-  const newReviewedToday = countNewReviewedToday(entries, now);
+  const newReviewedToday = countNewReviewedToday(inbox, now);
   const newCapacity = Math.max(
     0,
     settings.newCardsPerDay - newReviewedToday,
   );
 
   const items: SrsQueueItem[] = [];
-  for (const raw of entries) {
+
+  // Words: unchanged path — migrate, read entry.review
+  for (const raw of inbox.words) {
+    if (raw.status === 'archived') continue;
     const entry = migrateReviewState(raw, now);
     const review = entry.review!;
     if (review.dueAt > now) continue;
+    items.push({ kind: 'word', entry, dueAt: review.dueAt });
+  }
 
-    items.push({ kind: entry.kind, entry, dueAt: review.dueAt });
+  // Quotes: one item per cloze
+  for (const raw of inbox.quotes) {
+    if (raw.status === 'archived') continue;
+    for (const cloze of raw.clozes ?? []) {
+      const review = cloze.review ?? newReviewState(raw.createdAt);
+      if (review.dueAt > now) continue;
+      items.push({ kind: 'quote', entry: raw, clozeId: cloze.id, dueAt: review.dueAt });
+    }
   }
 
   items.sort((a, b) => {
-    const aState = a.entry.review?.cardState ?? 'new';
-    const bState = b.entry.review?.cardState ?? 'new';
+    const aReview = itemReview(a);
+    const bReview = itemReview(b);
+    const aState = aReview?.cardState ?? 'new';
+    const bState = bReview?.cardState ?? 'new';
     if (STATE_RANK[aState] !== STATE_RANK[bState]) {
       return STATE_RANK[aState] - STATE_RANK[bState];
     }
-    const aRepeated = a.entry.review?.queueRank !== undefined;
-    const bRepeated = b.entry.review?.queueRank !== undefined;
+    const aRepeated = aReview?.queueRank !== undefined;
+    const bRepeated = bReview?.queueRank !== undefined;
     if (aRepeated !== bRepeated) return aRepeated ? 1 : -1;
     if (aRepeated && bRepeated) {
-      return a.entry.review!.queueRank! - b.entry.review!.queueRank!;
+      return aReview!.queueRank! - bReview!.queueRank!;
     }
     if (a.dueAt !== b.dueAt) return a.dueAt - b.dueAt;
     if (a.entry.createdAt !== b.entry.createdAt) {
@@ -368,7 +397,8 @@ export function buildSrsQueue(
 
   let newShown = 0;
   return items.filter((item) => {
-    if (item.entry.review?.cardState !== 'new') return true;
+    const cardState = itemReview(item)?.cardState ?? 'new';
+    if (cardState !== 'new') return true;
     if (newShown >= newCapacity) return false;
     newShown += 1;
     return true;
@@ -381,21 +411,19 @@ export function getSrsStats(
   settings: SrsSettings,
   dueNowCount: number,
 ): SrsStats {
-  const entries: Entry[] = [...inbox.words, ...inbox.quotes].filter(
-    (entry) => entry.status !== 'archived',
-  );
-
   let dueLaterToday = 0;
   let dueNewCards = 0;
   const dayEnd = endOfDay(now);
 
-  const newReviewedToday = countNewReviewedToday(entries, now);
+  const newReviewedToday = countNewReviewedToday(inbox, now);
   const newCapacity = Math.max(
     0,
     settings.newCardsPerDay - newReviewedToday,
   );
 
-  for (const raw of entries) {
+  // Words: migrate and count
+  for (const raw of inbox.words) {
+    if (raw.status === 'archived') continue;
     const review = migrateReviewState(raw, now).review!;
     if (review.cardState === 'new' && review.dueAt <= dayEnd) {
       dueNewCards += 1;
@@ -405,18 +433,49 @@ export function getSrsStats(
     }
   }
 
+  // Quotes: one card per cloze
+  for (const raw of inbox.quotes) {
+    if (raw.status === 'archived') continue;
+    for (const cloze of raw.clozes ?? []) {
+      const review = cloze.review ?? newReviewState(raw.createdAt);
+      if (review.cardState === 'new' && review.dueAt <= dayEnd) {
+        dueNewCards += 1;
+      }
+      if (review.dueAt > now && review.dueAt <= dayEnd) {
+        dueLaterToday += 1;
+      }
+    }
+  }
+
   const dayStart = startOfDay(now);
   const nextDay = startOfNextDay(now);
   let reviewedToday = 0;
   let remembered = 0;
   let totalReviews = 0;
-  for (const entry of entries) {
+
+  // Words: scan entry.review.reviewLog
+  for (const entry of inbox.words) {
+    if (entry.status === 'archived') continue;
     for (const log of entry.review?.reviewLog ?? []) {
       if (log.reviewedAt >= dayStart && log.reviewedAt < nextDay) {
         reviewedToday += 1;
       }
       totalReviews += 1;
       if (log.rating !== 'again') remembered += 1;
+    }
+  }
+
+  // Quotes: scan each cloze.review.reviewLog
+  for (const quote of inbox.quotes) {
+    if (quote.status === 'archived') continue;
+    for (const cloze of quote.clozes ?? []) {
+      for (const log of cloze.review?.reviewLog ?? []) {
+        if (log.reviewedAt >= dayStart && log.reviewedAt < nextDay) {
+          reviewedToday += 1;
+        }
+        totalReviews += 1;
+        if (log.rating !== 'again') remembered += 1;
+      }
     }
   }
 
@@ -431,10 +490,17 @@ export function getSrsStats(
 
 export function getNextSrsWakeAt(inbox: Inbox, now: number): number {
   let next = startOfNextDay(now);
-  for (const raw of [...inbox.words, ...inbox.quotes]) {
+  for (const raw of inbox.words) {
     if (raw.status === 'archived') continue;
     const dueAt = migrateReviewState(raw, now).review!.dueAt;
     if (dueAt > now && dueAt < next) next = dueAt;
+  }
+  for (const raw of inbox.quotes) {
+    if (raw.status === 'archived') continue;
+    for (const cloze of raw.clozes ?? []) {
+      const dueAt = (cloze.review ?? newReviewState(raw.createdAt)).dueAt;
+      if (dueAt > now && dueAt < next) next = dueAt;
+    }
   }
   return next;
 }

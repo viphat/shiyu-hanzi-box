@@ -9,6 +9,7 @@ import {
   getNextSrsWakeAt,
   getSrsStats,
   migrateReviewState,
+  newReviewState,
   postponeReview,
   postponeReviewCloze,
   previewReview,
@@ -506,13 +507,12 @@ describe('buildSrsQueue', () => {
         ),
       ],
       quotes: [
-        migrateReviewState(
-          quote({
-            id: 'older-quote',
-            createdAt: YESTERDAY,
-            updatedAt: YESTERDAY,
-          }),
-        ),
+        quote({
+          id: 'older-quote',
+          createdAt: YESTERDAY,
+          updatedAt: YESTERDAY,
+          clozes: [{ id: 'cz-old', start: 0, end: 3 }],
+        }),
       ],
     };
 
@@ -520,6 +520,29 @@ describe('buildSrsQueue', () => {
       (item) => item.entry.id,
     );
     expect(ids).toEqual(['older-quote']);
+  });
+
+  it('expands a quote into one card per cloze', () => {
+    const inbox: Inbox = { words: [], quotes: [clozedQuote()] };
+    const due = buildSrsQueue(inbox, NOW, NO_FUZZ);
+    expect(due.filter((i) => i.kind === 'quote')).toHaveLength(2);
+    expect(due.map((i) => i.clozeId).sort()).toEqual(['cz1', 'cz2']);
+  });
+
+  it('contributes no cards for a quote with no clozes', () => {
+    const inbox: Inbox = { words: [], quotes: [quote({ clozes: [] })] };
+    expect(buildSrsQueue(inbox, NOW, NO_FUZZ)).toHaveLength(0);
+  });
+
+  it('counts each new cloze against the daily new-card cap', () => {
+    // clozedQuote() has 2 clozes (cz1, cz2), both new and due at YESTERDAY
+    // With newCardsPerDay: 1, only the first cloze should be served
+    const settings = { ...NO_FUZZ, newCardsPerDay: 1 };
+    const inbox: Inbox = { words: [], quotes: [clozedQuote()] };
+    const queue = buildSrsQueue(inbox, NOW, settings);
+    expect(queue).toHaveLength(1);
+    expect(queue[0].kind).toBe('quote');
+    expect(queue[0].clozeId).toBeDefined();
   });
 
   it('does not mutate new cards hidden by the cap', () => {

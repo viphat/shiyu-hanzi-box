@@ -28,6 +28,7 @@ import {
 import type { AiSettings, UiLocale } from '@/lib/types';
 import { useSettings } from '../dashboard/hooks/useSettings';
 import { AiSettingsPanel } from './AiSettingsPanel';
+import { FolderSync } from './FolderSync';
 import type {
   KaikkiImportProgress,
   KaikkiImportWorkerRequest,
@@ -497,6 +498,8 @@ export function SettingsApp() {
           testing={aiTesting}
           testResult={aiTestResult}
         />
+
+        <FolderSync locale={locale} />
 
         {message ? (
           <p

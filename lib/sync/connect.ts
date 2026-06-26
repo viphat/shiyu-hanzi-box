@@ -1,6 +1,6 @@
 // lib/sync/connect.ts
 import { checkVerification, defaultKdfParams, deriveKey, makeVerification } from './crypto';
-import { encryptReplica, isVaultManifest, type VaultManifest } from './vault';
+import { decryptReplica, encryptReplica, isVaultManifest, type VaultManifest } from './vault';
 import { mergeSyncState } from './merge';
 import { materialize, projectInbox } from './project';
 import { readDomainSnapshot, applyLocalMutation, syncMetadataStorage } from './mutations';
@@ -8,7 +8,6 @@ import { ensureReplicaId, mutateSyncConfig } from './local';
 import { setInbox } from '../storage';
 import { getSettings, replaceSettings } from '../settings';
 import { aiSettingsStorage } from '../ai/settings';
-import { decryptReplica } from './vault';
 import { APP_ID, VAULT_FORMAT_VERSION, type SyncReplica, type SyncState } from './types';
 import type { SyncFs } from './files';
 
@@ -36,7 +35,7 @@ export async function createVaultOnFs(
   passphrase: string,
   label: string,
   now: number,
-): Promise<{ vaultId: string }> {
+): Promise<{ vaultId: string; key: CryptoKey }> {
   if (await fs.readManifest()) throw new Error('vault-exists');
   const kdf = defaultKdfParams();
   const key = await deriveKey(passphrase, kdf);
@@ -56,7 +55,7 @@ export async function createVaultOnFs(
   const state = projectInbox(inbox, settings, ai, { replicaId, wallTime: now });
   await writeOwnReplica(fs, key, vaultId, replicaId, state, now);
   await persistConnection(vaultId, label, state);
-  return { vaultId };
+  return { vaultId, key };
 }
 
 export async function joinVaultOnFs(
@@ -64,7 +63,7 @@ export async function joinVaultOnFs(
   passphrase: string,
   label: string,
   now: number,
-): Promise<{ vaultId: string }> {
+): Promise<{ vaultId: string; key: CryptoKey }> {
   const rawManifest = await fs.readManifest();
   if (!rawManifest) throw new Error('vault-invalid');
   const manifest: unknown = JSON.parse(rawManifest);
@@ -103,7 +102,7 @@ export async function joinVaultOnFs(
   });
   await writeOwnReplica(fs, key, manifest.vaultId, replicaId, merged, now);
   await persistConnection(manifest.vaultId, label, merged);
-  return { vaultId: manifest.vaultId };
+  return { vaultId: manifest.vaultId, key };
 }
 
 async function writeOwnReplica(
@@ -152,12 +151,10 @@ export async function createVault(
   const { openSyncFs } = await import('./files');
   const { saveDirectoryHandle, rememberKey } = await import('./local');
   const fs = await openSyncFs(parent);
-  const kdf = defaultKdfParams();
-  const key = await deriveKey(passphrase, kdf);
   const result = await createVaultOnFs(fs, passphrase, label, now);
   await saveDirectoryHandle(parent);
-  await rememberKey(key);
-  return result;
+  await rememberKey(result.key);
+  return { vaultId: result.vaultId };
 }
 
 /**
@@ -173,17 +170,9 @@ export async function joinVault(
   const { saveDirectoryHandle, rememberKey } = await import('./local');
   const fs = await openSyncFs(parent);
   const result = await joinVaultOnFs(fs, passphrase, label, now);
-  // Recall the derived key from the manifest (re-derive since we can't extract it from joinVaultOnFs)
-  const rawManifest = await fs.readManifest();
-  if (rawManifest) {
-    const manifest = JSON.parse(rawManifest);
-    if (isVaultManifest(manifest)) {
-      const key = await deriveKey(passphrase, manifest.kdf);
-      await rememberKey(key);
-    }
-  }
+  await rememberKey(result.key);
   await saveDirectoryHandle(parent);
-  return result;
+  return { vaultId: result.vaultId };
 }
 
 /**

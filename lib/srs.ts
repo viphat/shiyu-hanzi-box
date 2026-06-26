@@ -365,6 +365,9 @@ export function buildSrsQueue(
   }
 
   // Quotes: one item per cloze
+  // Note: Quotes are scheduled via clozes only (Task 5 migration). Any pre-existing
+  // quote.review is inert and does not produce queue cards. This was a one-time reset
+  // of quote recognition scheduling—clozes now own the review state for quotes.
   for (const raw of inbox.quotes) {
     if (raw.status === 'archived') continue;
     for (const cloze of raw.clozes ?? []) {

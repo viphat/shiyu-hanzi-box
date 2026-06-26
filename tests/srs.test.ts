@@ -534,6 +534,27 @@ describe('buildSrsQueue', () => {
     expect(buildSrsQueue(inbox, NOW, NO_FUZZ)).toHaveLength(0);
   });
 
+  it('ignores stale quote.review when clozes is empty (legacy recognition state)', () => {
+    // A quote with a populated review (would be due under the old model) but no clozes
+    // should yield zero queue cards. The stale review is inert after Task 5's migration.
+    const staleQuote = quote({
+      clozes: [],
+      review: {
+        scheduler: 'fsrs-v1',
+        cardState: 'review',
+        dueAt: NOW - 1, // in the past
+        intervalDays: 14,
+        repetitions: 5,
+        lapses: 0,
+        stability: 14,
+        difficulty: 5,
+        lastReviewedAt: YESTERDAY,
+      },
+    });
+    const inbox: Inbox = { words: [], quotes: [staleQuote] };
+    expect(buildSrsQueue(inbox, NOW, NO_FUZZ)).toHaveLength(0);
+  });
+
   it('counts each new cloze against the daily new-card cap', () => {
     // clozedQuote() has 2 clozes (cz1, cz2), both new and due at YESTERDAY
     // With newCardsPerDay: 1, only the first cloze should be served

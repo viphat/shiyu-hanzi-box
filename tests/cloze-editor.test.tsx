@@ -444,6 +444,11 @@ describe('ClozeEditor — manual brace-markup editor', () => {
     const patch = onUpdate.mock.calls[0][0];
     expect(patch.text).toBe('满足大众的刚需');
     expect(patch.clozes).toHaveLength(1);
+    // Derived caches must be cleared when text changes
+    expect(patch.traditionalText).toBeUndefined();
+    expect(patch.pinyin).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(patch, 'traditionalText')).toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(patch, 'pinyin')).toBe(true);
   });
 
   it('manual apply shows an inline error on malformed markup and does not mutate', async () => {
@@ -527,6 +532,24 @@ describe('ClozeEditor — AI suggest button and candidate panel', () => {
     const added: Cloze[] = onChange.mock.calls[0][0];
     expect(added).toHaveLength(1);
     expect(quote.text.slice(added[0].start, added[0].end)).toBe('刚需');
+  });
+
+  it('accepting the last AI candidate closes the panel (no empty-state message)', async () => {
+    vi.mocked(getAiSettings).mockResolvedValue({ ...ENABLED_SETTINGS });
+    vi.mocked(fetchClozeSuggestions).mockResolvedValue({
+      ok: true,
+      suggestions: [{ answer: '刚需', reason: 'key vocabulary' }],
+    });
+    const quote = makeQuote({ text: '满足人们的刚需', clozes: [] });
+    await renderClient(
+      <ClozeEditor quote={quote} onChange={vi.fn()} onUpdate={vi.fn()} locale="zh-CN" />,
+    );
+    await flush();
+
+    await click(getButton('建议填空'));
+    await click(getButton('接受'));
+
+    expect(container.textContent).not.toContain('没有可用的填空建议');
   });
 
   it('shows the empty state when AI returns no usable spans', async () => {

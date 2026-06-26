@@ -51,7 +51,7 @@ export function ClozeEditor({ quote, onChange, onUpdate, locale, quoteTextRef }:
     if (result.text === quote.text) {
       onChange(result.clozes);
     } else {
-      onUpdate({ text: result.text, clozes: result.clozes });
+      onUpdate({ text: result.text, clozes: result.clozes, traditionalText: undefined, pinyin: undefined });
     }
     setMarkupError('');
     setShowMarkup(false);

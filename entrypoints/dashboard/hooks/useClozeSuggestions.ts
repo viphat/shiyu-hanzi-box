@@ -74,7 +74,11 @@ export function useClozeSuggestions(quote: QuoteEntry) {
   }
 
   function dismissCandidate(id: string) {
-    setCandidates((prev) => (prev ? prev.filter((c) => c.cloze.id !== id) : prev));
+    setCandidates((prev) => {
+      if (!prev) return prev;
+      const next = prev.filter((c) => c.cloze.id !== id);
+      return next.length ? next : null;
+    });
   }
 
   return { state, error, candidates, requestSuggestions, dismissCandidate };

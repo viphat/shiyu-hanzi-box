@@ -99,9 +99,9 @@ The central data path is:
     builder expands each non-archived quote into one card per cloze (quotes with
     no clozes contribute nothing). A non-persisted `CardId` string
     (`word:<id>` | `cloze:<quoteId>:<clozeId>`) identifies queue items for answer
-    routing. The old quote-level `EntryBase.review` is inert; a one-time
-    migration scheduled all old quotes as "archived" to reset them to parked.
-    Word review state is unchanged.
+    routing. The old quote-level `EntryBase.review` is left inert — the queue no
+    longer reads it for quotes, so quote recognition scheduling resets once with
+    no active migration or status change. Word review state is unchanged.
 12. `entrypoints/dashboard/components/ReviewQueue.tsx` renders only the first
     filtered due card. Word answers remain hidden until Reveal. For quotes with
     clozes, the blanked span (cloze) is shown, and Reveal exposes the hidden

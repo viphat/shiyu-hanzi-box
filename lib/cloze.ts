@@ -83,3 +83,77 @@ export function clozeFromRange(
 
   return candidate;
 }
+
+// ---------------------------------------------------------------------------
+// Brace-markup parser and seeder
+// ---------------------------------------------------------------------------
+
+export type ClozeMarkupResult =
+  | { ok: true; text: string; clozes: Cloze[] }
+  | { ok: false; reason: 'unbalanced' | 'empty-span' | 'overlap' | 'nested' };
+
+/**
+ * Parse brace-delimited cloze markup. `{答案}` wraps the answer span; the
+ * returned `text` is the markup with braces stripped, and each cloze's
+ * [start, end) indexes into that clean text. Use `\{` / `\}` for literal braces.
+ */
+export function parseClozeMarkup(markup: string): ClozeMarkupResult {
+  let text = '';
+  const clozes: Cloze[] = [];
+  let spanStart: number | null = null;
+  let i = 0;
+
+  while (i < markup.length) {
+    const ch = markup[i];
+
+    if (ch === '\\' && (markup[i + 1] === '{' || markup[i + 1] === '}')) {
+      text += markup[i + 1];
+      i += 2;
+      continue;
+    }
+    if (ch === '{') {
+      if (spanStart !== null) return { ok: false, reason: 'nested' };
+      spanStart = text.length;
+      i += 1;
+      continue;
+    }
+    if (ch === '}') {
+      if (spanStart === null) return { ok: false, reason: 'unbalanced' };
+      if (text.length === spanStart) return { ok: false, reason: 'empty-span' };
+      clozes.push({ id: makeId(), start: spanStart, end: text.length });
+      spanStart = null;
+      i += 1;
+      continue;
+    }
+    text += ch;
+    i += 1;
+  }
+
+  if (spanStart !== null) return { ok: false, reason: 'unbalanced' };
+  // Pairs are disjoint by construction, but guard anyway per the spec.
+  if (clozesOverlap(clozes)) return { ok: false, reason: 'overlap' };
+
+  return { ok: true, text, clozes };
+}
+
+function escapeBraces(text: string): string {
+  return text.replace(/[{}]/g, (ch) => `\\${ch}`);
+}
+
+/**
+ * Render `text` with `clozes` re-expressed as brace markup, so the manual
+ * editor can seed an editable, round-trippable copy. Literal braces in the
+ * text are escaped.
+ */
+export function seedMarkup(text: string, clozes: Cloze[]): string {
+  const sorted = [...clozes].sort((a, b) => a.start - b.start);
+  let out = '';
+  let pos = 0;
+  for (const c of sorted) {
+    out += escapeBraces(text.slice(pos, c.start));
+    out += `{${escapeBraces(text.slice(c.start, c.end))}}`;
+    pos = c.end;
+  }
+  out += escapeBraces(text.slice(pos));
+  return out;
+}

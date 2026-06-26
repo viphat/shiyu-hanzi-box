@@ -25,7 +25,7 @@ export function QuoteList({
   ).length;
 
   const visible = showParkedOnly
-    ? quotes.filter((q) => isParkedQuote(q))
+    ? quotes.filter((q) => q.status !== 'archived' && isParkedQuote(q))
     : quotes;
 
   if (quotes.length === 0) {

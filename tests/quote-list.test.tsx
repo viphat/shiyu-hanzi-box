@@ -295,4 +295,46 @@ describe('QuoteList — parked filter toggle', () => {
     await click(toggle!); // OFF
     expect(container.textContent).toContain('温故而知新');
   });
+
+  it('archived parked quote is EXCLUDED when parked filter is toggled on (spec §5)', async () => {
+    const archivedParked = makeQuote({
+      id: 'q1',
+      text: '学而时习之',
+      clozes: [],
+      status: 'archived',
+    });
+    const nonArchivedParked = makeQuote({
+      id: 'q2',
+      text: '温故而知新',
+      clozes: [],
+    });
+    const withCloze = makeQuote({
+      id: 'q3',
+      text: '知之为知之',
+      clozes: [{ id: 'c1', start: 0, end: 2, hint: 'none' }],
+    });
+    await renderClient(
+      <QuoteList
+        quotes={[archivedParked, nonArchivedParked, withCloze]}
+        words={NO_WORDS}
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        locale="en"
+      />,
+    );
+
+    // All three visible initially
+    expect(container.textContent).toContain('学而时习之'); // archived parked
+    expect(container.textContent).toContain('温故而知新'); // non-archived parked
+    expect(container.textContent).toContain('知之为知之'); // with cloze
+
+    // Click filter toggle to show only non-archived parked
+    const toggle = container.querySelector<HTMLElement>('[data-parked-filter]');
+    await click(toggle!);
+
+    // Non-archived parked visible, archived parked and with-cloze are hidden
+    expect(container.textContent).not.toContain('学而时习之'); // archived parked EXCLUDED
+    expect(container.textContent).toContain('温故而知新'); // non-archived parked visible
+    expect(container.textContent).not.toContain('知之为知之'); // with cloze hidden
+  });
 });

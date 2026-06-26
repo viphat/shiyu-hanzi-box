@@ -458,6 +458,28 @@ describe('Cloze quote review card', () => {
     expect(container.textContent).toContain(messages.en['review.good']);
   });
 
+  it('shows note on front when note does NOT contain the answer', () => {
+    // The note ('孔子语录') does not contain the answer ('学而'), so it must be visible on front
+    const entry = migrateReviewState(
+      quote({
+        text: '学而时习之',
+        note: '孔子语录',
+        clozes: [{ id: 'c1', start: 0, end: 2, hint: 'none' }],
+      }),
+      NOW,
+    );
+    const html = renderToStaticMarkup(
+      <ReviewCard
+        item={{ kind: 'quote', entry, dueAt: NOW, clozeId: 'c1' }}
+        remainingCount={1}
+        onAnswer={vi.fn()}
+        onPostpone={vi.fn()}
+        locale="en"
+      />,
+    );
+    expect(html).toContain('孔子语录');
+  });
+
   it('hides note on front when note contains the answer, shows it on reveal', async () => {
     // note contains the answer substring
     const entry = migrateReviewState(

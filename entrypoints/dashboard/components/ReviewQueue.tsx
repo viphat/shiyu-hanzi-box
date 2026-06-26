@@ -275,6 +275,7 @@ export function ReviewCard({
           isClozeQuote &&
           !revealed &&
           entry.note != null &&
+          answer.length > 0 &&
           entry.note.includes(answer);
 
         return (

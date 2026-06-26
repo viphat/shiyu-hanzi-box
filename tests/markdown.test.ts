@@ -90,6 +90,26 @@ describe('renderDay', () => {
     expect(md).toContain('interval 3 days');
     expect(md).not.toContain('stability');
   });
+
+  it('does NOT emit a Review line for a quote even when quote.review is set', () => {
+    const reviewedQuote: QuoteEntry = {
+      ...quote,
+      review: {
+        scheduler: 'fsrs-v1',
+        dueAt: Date.UTC(2026, 6, 25),
+        intervalDays: 5,
+        repetitions: 1,
+        lapses: 0,
+        cardState: 'review',
+        stability: 5,
+        difficulty: 4,
+        lastReviewedAt: Date.UTC(2026, 5, 20),
+      },
+    };
+    const md = renderDay('2026-06-20', [], [reviewedQuote]);
+    expect(md).toContain('## Quotes');
+    expect(md).not.toContain('Review:');
+  });
 });
 
 const dictEntries: DictionaryEntry[] = [

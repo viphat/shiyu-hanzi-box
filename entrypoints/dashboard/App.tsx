@@ -26,6 +26,7 @@ import type {
 } from '@/lib/types';
 import { QuoteList } from './components/QuoteList';
 import { ReviewQueue } from './components/ReviewQueue';
+import { SyncStatusBadge } from './SyncStatusBadge';
 import { Toolbar } from './components/Toolbar';
 import { WordList } from './components/WordList';
 import { useInbox } from './hooks/useInbox';
@@ -189,9 +190,12 @@ export function App() {
         <div className="mx-auto max-w-5xl px-5 py-6">
           <div className="grid gap-5 md:grid-cols-[1fr_auto] md:items-end">
             <div>
-              <p className="text-xs font-medium text-muted tracking-[2px]">
-                {t(locale, 'app.todayPrefix')} · {today}
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-muted tracking-[2px]">
+                  {t(locale, 'app.todayPrefix')} · {today}
+                </p>
+                <SyncStatusBadge locale={locale} />
+              </div>
               <div className="mt-2 flex items-center gap-3">
                 <img
                   src={iconUrl}

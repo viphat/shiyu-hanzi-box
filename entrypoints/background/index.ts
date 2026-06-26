@@ -7,12 +7,98 @@ import {
 } from './capture-handler';
 import { registerSyncMutationHandler } from './sync-mutation-handler';
 import { reconcileOnStartup } from '../../lib/sync/mutations';
-import { registerSyncAlarms } from '../../lib/sync/connect';
+import { registerSyncAlarms, SYNC_ALARM } from '../../lib/sync/connect';
+import { SYNC_NOW_MESSAGE } from '../settings/FolderSync';
+import { getSyncConfig, mutateSyncConfig, recallKey, loadDirectoryHandle } from '../../lib/sync/local';
+import { openSyncFs } from '../../lib/sync/files';
+import { runSyncPass, SyncCoordinator } from '../../lib/sync/coordinator';
+
+// Shared coordinator — single instance across alarm + message triggers.
+const coordinator = new SyncCoordinator(runAlarmSyncPass);
+
+/**
+ * Builds SyncDeps from persisted state and runs one sync pass.
+ * Gates: vaultId must be set, key must be recalled, handle must be loaded,
+ * and handle permission must be 'granted' (no user gesture available here).
+ */
+async function runAlarmSyncPass() {
+  const config = await getSyncConfig();
+
+  // Gate 1: vault must be configured
+  if (!config.vaultId) return { status: 'disabled' as const, warnings: [] };
+
+  // Gate 2: encryption key must be in IndexedDB
+  const key = await recallKey();
+  if (!key) {
+    await mutateSyncConfig((c) => ({ ...c, status: 'needs-attention', lastError: { code: 'locked' } }));
+    return { status: 'needs-attention' as const, warnings: [] };
+  }
+
+  // Gate 3: directory handle must be persisted
+  const handle = await loadDirectoryHandle();
+  if (!handle) {
+    await mutateSyncConfig((c) => ({ ...c, status: 'needs-attention', lastError: { code: 'needs-reauthorization' } }));
+    return { status: 'needs-attention' as const, warnings: [] };
+  }
+
+  // Gate 4: permission must already be granted — cannot request from alarm context
+  // Cast: FileSystemDirectoryHandle.queryPermission is available at runtime but not always typed
+  const perm = await (handle as FileSystemDirectoryHandle & {
+    queryPermission(desc: { mode: string }): Promise<string>;
+  }).queryPermission({ mode: 'readwrite' });
+  if (perm !== 'granted') {
+    await mutateSyncConfig((c) => ({ ...c, status: 'needs-attention', lastError: { code: 'needs-reauthorization' } }));
+    return { status: 'needs-attention' as const, warnings: [] };
+  }
+
+  const fs = await openSyncFs(handle);
+  const { ensureReplicaId } = await import('../../lib/sync/local');
+  const replicaId = await ensureReplicaId();
+
+  return runSyncPass({ fs, key, vaultId: config.vaultId, replicaId, now: () => Date.now() });
+}
+
+/**
+ * Wraps coordinator.trigger() in a defensive try/catch.
+ * Unexpected errors set needs-attention rather than crashing the service worker.
+ */
+async function triggerSync(reason: string) {
+  try {
+    coordinator.trigger(reason);
+    await coordinator.idle();
+  } catch {
+    // Unexpected error — use a generic but valid SyncErrorCode; never throw out of listener.
+    await mutateSyncConfig((c) => ({
+      ...c,
+      status: 'needs-attention',
+      lastError: { code: 'write-failure' },
+    })).catch(() => {/* best effort */});
+  }
+}
 
 export default defineBackground(() => {
   registerSyncMutationHandler();
   void reconcileOnStartup();
   registerSyncAlarms();
+
+  // Alarm listener: periodic sync (every 5 min via SYNC_ALARM)
+  browser.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === SYNC_ALARM) {
+      void triggerSync('alarm');
+    }
+  });
+
+  // Message listener: on-demand sync from Settings UI "Sync now" button
+  browser.runtime.onMessage.addListener((message: unknown) => {
+    if (
+      message != null &&
+      typeof message === 'object' &&
+      'type' in message &&
+      (message as { type: unknown }).type === SYNC_NOW_MESSAGE
+    ) {
+      void triggerSync('sync-now-message');
+    }
+  });
   // Context-menu items persist across service-worker restarts, and onInstalled
   // fires again on reload/update. Clear existing items first so re-registration
   // never fails with "Cannot create item with duplicate id".

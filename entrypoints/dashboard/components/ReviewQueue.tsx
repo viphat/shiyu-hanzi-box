@@ -299,6 +299,10 @@ export function ReviewCard({
       )}
 
       {entry.kind === 'quote' && isClozeCard && (
+        // No TraditionalButton here: cloze offsets index Simplified text.
+        // A Traditional conversion can change string length, causing the
+        // offsets to misalign on traditionalText. Intentionally omitted per
+        // spec §8 (no offset remapping in v1).
         <ClozeQuoteBody
           quote={entry as QuoteEntry}
           clozeId={item.clozeId!}

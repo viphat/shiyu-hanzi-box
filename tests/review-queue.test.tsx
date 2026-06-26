@@ -558,6 +558,30 @@ describe('Cloze review card', () => {
     expect(container.textContent).toContain('学而 is learning');
   });
 
+  it('does not render a Traditional (繁) toggle on the cloze review card', () => {
+    // Regression guard: cloze offsets index Simplified text. A Traditional
+    // conversion can change string length, so the offsets would not map onto
+    // traditionalText — a misaligned blank is worse than no toggle. The 繁
+    // button must NEVER appear on a cloze quote review card (no offset remapping
+    // in v1 per spec §8).
+    const cloze = makeCloze({ id: 'c1', start: 0, end: 2, hint: 'none' });
+    const entry = migrateReviewState(
+      quoteWithClozes('学而时习之', [cloze]),
+      NOW,
+    );
+    const html = renderToStaticMarkup(
+      <ReviewCard
+        item={{ kind: 'quote', entry, dueAt: NOW, clozeId: 'c1' }}
+        remainingCount={1}
+        onAnswer={vi.fn()}
+        onPostpone={vi.fn()}
+        locale="en"
+      />,
+    );
+    // TraditionalButton renders the character 繁 as its label text
+    expect(html).not.toContain('繁');
+  });
+
   it('rating call passes the clozeId to onAnswer', async () => {
     vi.useFakeTimers();
     const onAnswer = vi.fn().mockResolvedValue(undefined);

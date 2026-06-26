@@ -1,5 +1,5 @@
 // entrypoints/background/sync-mutation-handler.ts
-import { applyLocalMutation } from '../../lib/sync/mutations';
+import { applyDeletion, applyLocalMutation } from '../../lib/sync/mutations';
 import { setInbox } from '../../lib/storage';
 import { replaceSettings } from '../../lib/settings';
 import { aiSettingsStorage } from '../../lib/ai/settings';
@@ -9,11 +9,15 @@ export const SYNC_MUTATION_MESSAGE = 'shiyu:sync-mutation';
 
 export interface SyncMutationRequestMessage {
   type: typeof SYNC_MUTATION_MESSAGE;
-  kind: 'inbox' | 'settings' | 'ai';
+  kind: 'inbox' | 'settings' | 'ai' | 'delete';
   payload: unknown;
 }
 
 async function writeKind(kind: SyncMutationRequestMessage['kind'], payload: unknown) {
+  if (kind === 'delete') {
+    await applyDeletion(payload as string[]);
+    return;
+  }
   await applyLocalMutation(kind, async () => {
     if (kind === 'inbox') await setInbox(payload as Inbox);
     else if (kind === 'settings') await replaceSettings(payload as AppSettings);

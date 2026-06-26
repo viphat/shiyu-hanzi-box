@@ -31,6 +31,8 @@ import { Toolbar } from './components/Toolbar';
 import { WordList } from './components/WordList';
 import { useInbox } from './hooks/useInbox';
 import { useSettings } from './hooks/useSettings';
+import { requestSyncMutation } from '../background/sync-mutation-handler';
+import { wordKey } from '@/lib/sync/project';
 
 type Tab = 'review' | 'words' | 'quotes';
 type StatusFilter = 'all' | Status;
@@ -128,10 +130,16 @@ export function App() {
   }
 
   function deleteWord(id: string) {
-    mutate((current) => ({
-      ...current,
-      words: current.words.filter((word) => word.id !== id),
-    }));
+    mutate((current) => {
+      const word = current.words.find((w) => w.id === id);
+      if (word) {
+        void requestSyncMutation('delete', [wordKey(word.normalized)]);
+      }
+      return {
+        ...current,
+        words: current.words.filter((w) => w.id !== id),
+      };
+    });
   }
 
   function updateQuote(id: string, patch: Partial<QuoteEntry>) {
@@ -144,6 +152,7 @@ export function App() {
   }
 
   function deleteQuote(id: string) {
+    void requestSyncMutation('delete', [`quote:${id}`]);
     mutate((current) => ({
       ...current,
       quotes: current.quotes.filter((quote) => quote.id !== id),

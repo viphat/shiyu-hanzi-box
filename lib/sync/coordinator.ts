@@ -25,10 +25,16 @@ export async function runSyncPass(
 
   // Local state -> sync state.
   const { inbox, settings, ai } = await readDomainSnapshot();
+  const persisted = (await syncMetadataStorage.getValue()).state;
   let merged: SyncState = projectInbox(inbox, settings, ai, {
     replicaId: deps.replicaId,
     wallTime: deps.now(),
   });
+  // Seed from persisted state so tombstones (and prior merged data) carry forward.
+  // The fresh projection's field stamps win over older persisted ones (LWW);
+  // tombstones recorded with a later wallTime than the entity's updatedAt suppress
+  // it in materialize — this is correct and convergent.
+  if (persisted) merged = mergeSyncState(persisted, merged);
 
   // Read + merge every readable compatible replica.
   for (const name of await deps.fs.listReplicas()) {

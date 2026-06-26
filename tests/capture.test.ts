@@ -64,3 +64,23 @@ describe('saveQuote', () => {
     expect((await getInbox()).quotes).toHaveLength(0);
   });
 });
+
+describe('saveQuote autoCloze', () => {
+  it('commits matching saved words as clozes by default', async () => {
+    await saveWord('义无反顾', src);
+    const q = await saveQuote('他义无反顾地走了。', src);
+    expect(q?.clozes?.length).toBe(1);
+    expect(q!.text.slice(q!.clozes![0].start, q!.clozes![0].end)).toBe('义无反顾');
+  });
+
+  it('parks the quote when nothing matches', async () => {
+    const q = await saveQuote('他走了。', src);
+    expect(q?.clozes).toEqual([]);
+  });
+
+  it('does not auto-cloze when autoCloze is false', async () => {
+    await saveWord('义无反顾', src);
+    const q = await saveQuote('他义无反顾地走了。', src, { autoCloze: false });
+    expect(q?.clozes).toEqual([]);
+  });
+});

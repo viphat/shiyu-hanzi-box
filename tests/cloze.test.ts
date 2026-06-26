@@ -34,4 +34,14 @@ describe('suggestClozes', () => {
     expect(out).toHaveLength(1);
     expect(text.slice(out[0].start, out[0].end)).toBe('学而时习之');
   });
+
+  it('offset map is correct when normalizeText strips leading edge punctuation', () => {
+    // 「 (U+300C) and 」 (U+300D) are CJK corner brackets matched by \p{P}.
+    // normalizeWithMap strips them from the edges, shifting the map by 1 at
+    // the start. The raw indices must still point to the unbracketed characters.
+    const text = '「义无反顾」';
+    const [c] = suggestClozes(text, [word('义无反顾')]);
+    expect(c).toBeDefined();
+    expect(text.slice(c.start, c.end)).toBe('义无反顾');
+  });
 });

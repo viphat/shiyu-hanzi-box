@@ -1,4 +1,5 @@
 import { makeId } from './id';
+import { normalizeText } from './normalize';
 import type { Cloze, WordEntry } from './types';
 
 // ---------------------------------------------------------------------------
@@ -64,24 +65,20 @@ function normalizeWithMap(text: string): NormalizedView {
     indices.push(i);
   }
 
-  // Step 4: Iteratively strip leading/trailing [\s\p{P}]+ until stable.
-  // After step 2, there is no whitespace left, so we only strip \p{P} at edges.
-  // We operate on the chars/indices arrays directly.
-  let changed = true;
-  while (changed) {
-    changed = false;
-    // Strip leading punct/space
-    while (chars.length > 0 && (isWhitespace(chars[0]) || isUnicodePunct(chars[0]))) {
-      chars.shift();
-      indices.shift();
-      changed = true;
-    }
-    // Strip trailing punct/space
-    while (chars.length > 0 && (isWhitespace(chars[chars.length - 1]) || isUnicodePunct(chars[chars.length - 1]))) {
-      chars.pop();
-      indices.pop();
-      changed = true;
-    }
+  // Step 4: Strip leading/trailing [\s\p{P}]+ in a single pass.
+  // After step 2, no whitespace remains, so only \p{P} can appear at edges.
+  // A single leading-then-trailing strip is sufficient: stripping leading punct
+  // cannot expose new trailing punct (and vice versa) because whitespace — the
+  // only separator that could hide adjacent punct — has already been removed.
+  // Strip leading punct/space
+  while (chars.length > 0 && (isWhitespace(chars[0]) || isUnicodePunct(chars[0]))) {
+    chars.shift();
+    indices.shift();
+  }
+  // Strip trailing punct/space
+  while (chars.length > 0 && (isWhitespace(chars[chars.length - 1]) || isUnicodePunct(chars[chars.length - 1]))) {
+    chars.pop();
+    indices.pop();
   }
 
   return {
@@ -113,7 +110,7 @@ export function suggestClozes(text: string, savedWords: WordEntry[]): Cloze[] {
   const candidates: Candidate[] = [];
 
   for (const word of savedWords) {
-    const needle = word.normalized;
+    const needle = normalizeText(word.normalized);
     if (!needle) continue;
 
     // Search for all occurrences of needle in normalized

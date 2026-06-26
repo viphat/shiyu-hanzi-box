@@ -5,8 +5,12 @@ import {
   MENU_SAVE_WORD,
   MENU_SAVE_QUOTE,
 } from './capture-handler';
+import { registerSyncMutationHandler } from './sync-mutation-handler';
+import { reconcileOnStartup } from '../../lib/sync/mutations';
 
 export default defineBackground(() => {
+  registerSyncMutationHandler();
+  void reconcileOnStartup();
   // Context-menu items persist across service-worker restarts, and onInstalled
   // fires again on reload/update. Clear existing items first so re-registration
   // never fails with "Cannot create item with duplicate id".

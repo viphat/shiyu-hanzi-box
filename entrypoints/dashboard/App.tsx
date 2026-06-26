@@ -16,6 +16,7 @@ import {
 } from '@/lib/srs';
 import { t } from '@/lib/i18n';
 import type {
+  AiSettings,
   Entry,
   Inbox as InboxState,
   QuoteEntry,
@@ -24,6 +25,8 @@ import type {
   UiLocale,
   WordEntry,
 } from '@/lib/types';
+import { getAiSettings, aiSettingsStorage, DEFAULT_AI_SETTINGS, setAiSettings } from '@/lib/ai/settings';
+import { replaceSettings } from '@/lib/settings';
 import { QuoteList } from './components/QuoteList';
 import { ReviewQueue } from './components/ReviewQueue';
 import { SyncStatusBadge } from './SyncStatusBadge';
@@ -41,6 +44,21 @@ export function App() {
   const { inbox, loading, mutate, replace } = useInbox();
   const { settings, loading: settingsLoading } = useSettings();
   const locale = settings.uiLocale;
+  const [aiSettings, setAiSettingsState] = useState<AiSettings>(DEFAULT_AI_SETTINGS);
+
+  useEffect(() => {
+    let mounted = true;
+    void getAiSettings().then((value) => {
+      if (mounted) setAiSettingsState(value);
+    });
+    const unwatch = aiSettingsStorage.watch((next) => {
+      if (mounted) setAiSettingsState(next ?? DEFAULT_AI_SETTINGS);
+    });
+    return () => {
+      mounted = false;
+      unwatch();
+    };
+  }, []);
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<Tab>('review');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('inbox');
@@ -246,8 +264,14 @@ export function App() {
           inbox={inbox}
           query={query}
           onQuery={setQuery}
-          onRestore={replace}
+          onRestore={async (restored) => {
+            await replace(restored.inbox);
+            if (restored.settings) await replaceSettings(restored.settings);
+            if (restored.aiSettings) await setAiSettings(restored.aiSettings);
+          }}
           locale={locale}
+          settings={settings}
+          aiSettings={aiSettings}
         />
 
         <SrsStatsPanel stats={srsStats} locale={locale} />

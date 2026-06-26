@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createFullBackup, restoreFullBackup, serializeFullBackup } from '../../lib/backup';
+import { BackupParseError, createFullBackup, restoreFullBackup, serializeFullBackup } from '../../lib/backup';
 import { DEFAULT_SETTINGS } from '../../lib/settings';
 import { DEFAULT_AI_SETTINGS } from '../../lib/ai/settings';
 import { EMPTY_INBOX } from '../../lib/types';
@@ -24,5 +24,29 @@ describe('full backup envelope', () => {
     expect(out.inbox).toEqual(EMPTY_INBOX);
     expect(out.settings).toBeUndefined();
     expect(out.aiSettings).toBeUndefined();
+  });
+
+  it('throws BackupParseError on v3 payload with malformed aiSettings (apiKey not a string)', () => {
+    const raw = JSON.stringify({
+      app: 'shiyu-hanzi-box',
+      formatVersion: 3,
+      exportedAt: new Date().toISOString(),
+      inbox: EMPTY_INBOX,
+      settings: DEFAULT_SETTINGS,
+      aiSettings: { enabled: false, provider: 'deepseek', baseUrl: '', apiKey: 99, model: '' },
+    });
+    expect(() => restoreFullBackup(raw)).toThrow(BackupParseError);
+  });
+
+  it('throws BackupParseError on v3 payload with malformed settings (missing uiLocale)', () => {
+    const raw = JSON.stringify({
+      app: 'shiyu-hanzi-box',
+      formatVersion: 3,
+      exportedAt: new Date().toISOString(),
+      inbox: EMPTY_INBOX,
+      settings: { srs: {}, kaikki: {} }, // no uiLocale
+      aiSettings: DEFAULT_AI_SETTINGS,
+    });
+    expect(() => restoreFullBackup(raw)).toThrow(BackupParseError);
   });
 });

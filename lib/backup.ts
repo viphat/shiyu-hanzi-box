@@ -362,18 +362,53 @@ export function serializeFullBackup(
   return `${JSON.stringify(createFullBackup(inbox, settings, aiSettings, exportedAt), null, 2)}\n`;
 }
 
+function isAppSettings(value: unknown): value is AppSettings {
+  return (
+    isRecord(value) &&
+    isString((value as Record<string, unknown>).uiLocale) &&
+    isRecord((value as Record<string, unknown>).srs) &&
+    isRecord((value as Record<string, unknown>).kaikki)
+  );
+}
+
+function isAiSettings(value: unknown): value is AiSettings {
+  return (
+    isRecord(value) &&
+    typeof (value as Record<string, unknown>).enabled === 'boolean' &&
+    isString((value as Record<string, unknown>).provider) &&
+    isString((value as Record<string, unknown>).baseUrl) &&
+    isString((value as Record<string, unknown>).apiKey) &&
+    isString((value as Record<string, unknown>).model)
+  );
+}
+
 export function restoreFullBackup(raw: string): {
   inbox: Inbox;
   settings?: AppSettings;
   aiSettings?: AiSettings;
 } {
-  const parsed: unknown = JSON.parse(raw);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new BackupParseError('Backup file is not valid JSON.');
+  }
+
   const value = parsed as Record<string, unknown>;
   if (value && value.formatVersion === FULL_BACKUP_FORMAT_VERSION) {
+    if (!isInbox(value.inbox)) {
+      throw new BackupParseError('Invalid v3 backup: inbox is malformed.');
+    }
+    if (value.settings !== undefined && !isAppSettings(value.settings)) {
+      throw new BackupParseError('Invalid v3 backup: settings is malformed.');
+    }
+    if (value.aiSettings !== undefined && !isAiSettings(value.aiSettings)) {
+      throw new BackupParseError('Invalid v3 backup: aiSettings is malformed.');
+    }
     return {
       inbox: cloneInbox(value.inbox as Inbox),
-      settings: value.settings as AppSettings,
-      aiSettings: value.aiSettings as AiSettings,
+      settings: value.settings as AppSettings | undefined,
+      aiSettings: value.aiSettings as AiSettings | undefined,
     };
   }
   // Fallback: treat as inbox-only backup (formatVersion 2 or lower); settings/AI left undefined.

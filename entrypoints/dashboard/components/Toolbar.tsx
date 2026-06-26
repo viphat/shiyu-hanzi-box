@@ -1,11 +1,11 @@
 import { Download, FileText, Search, Settings, Upload } from 'lucide-react';
 import { useRef, useState, type ChangeEvent } from 'react';
 import { browser } from 'wxt/browser';
-import { BackupParseError, parseBackup, serializeBackup } from '@/lib/backup';
+import { BackupParseError, restoreFullBackup, serializeFullBackup } from '@/lib/backup';
 import { loadDictionary } from '@/lib/dictionary-loader';
 import { buildExportMap, exportInboxAsZip } from '@/lib/export';
 import { formatMessage, t } from '@/lib/i18n';
-import type { Inbox, UiLocale } from '@/lib/types';
+import type { AiSettings, AppSettings, Inbox, UiLocale } from '@/lib/types';
 
 export function Toolbar({
   inbox,
@@ -13,12 +13,16 @@ export function Toolbar({
   onQuery,
   onRestore,
   locale,
+  settings,
+  aiSettings,
 }: {
   inbox: Inbox;
   query: string;
   onQuery: (query: string) => void;
-  onRestore: (inbox: Inbox) => Promise<void> | void;
+  onRestore: (restored: { inbox: Inbox; settings?: AppSettings; aiSettings?: AiSettings }) => Promise<void> | void;
   locale: UiLocale;
+  settings: AppSettings;
+  aiSettings: AiSettings;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [restoring, setRestoring] = useState(false);
@@ -69,7 +73,9 @@ export function Toolbar({
   }
 
   async function downloadBackup() {
-    const json = serializeBackup(inbox);
+    const confirmed = window.confirm(t(locale, 'sync.warn.includesApiKey'));
+    if (!confirmed) return;
+    const json = serializeFullBackup(inbox, settings, aiSettings);
     const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
     await downloadBlob(blob, `shiyu-hanzi-box-backup-${todayStamp()}.json`);
     setMessage({ tone: 'success', text: t(locale, 'toolbar.backupReady') });
@@ -88,8 +94,8 @@ export function Toolbar({
     setMessage(null);
 
     try {
-      const restored = parseBackup(await file.text());
-      const count = restored.words.length + restored.quotes.length;
+      const restored = restoreFullBackup(await file.text());
+      const count = restored.inbox.words.length + restored.inbox.quotes.length;
       const confirmed = window.confirm(
         formatMessage(locale, 'toolbar.restoreConfirm', { count, name: file.name }),
       );

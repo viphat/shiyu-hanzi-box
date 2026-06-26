@@ -82,4 +82,28 @@ describe('i18n messages', () => {
       formatMessage('zh-CN', 'review.remaining', { count: 12 }),
     ).toBe('剩余 12 张');
   });
+
+  it('returns cloze and parked-quote labels in both locales', () => {
+    expect(t('en', 'cloze.addBlank')).toBe('Add a blank to review');
+    expect(t('zh-CN', 'cloze.addBlank')).toBe('添加填空以复习');
+    expect(t('en', 'cloze.parked')).toBe('Parked — no blank');
+    expect(t('zh-CN', 'cloze.parked')).toBe('待添加填空');
+    expect(t('en', 'cloze.removeBlank')).toBe('Remove blank');
+    expect(t('zh-CN', 'cloze.removeBlank')).toBe('移除填空');
+    expect(t('en', 'cloze.hintNone')).toBe('Hint: none');
+    expect(t('zh-CN', 'cloze.hintNone')).toBe('提示：无');
+    expect(t('en', 'cloze.hintPinyin')).toBe('Hint: pinyin');
+    expect(t('zh-CN', 'cloze.hintPinyin')).toBe('提示：拼音');
+    expect(t('en', 'cloze.hintLength')).toBe('Hint: length');
+    expect(t('zh-CN', 'cloze.hintLength')).toBe('提示：字数');
+    expect(t('en', 'cloze.blankAria')).toBe('hidden answer');
+    expect(t('zh-CN', 'cloze.blankAria')).toBe('隐藏的答案');
+    expect(t('en', 'review.answer')).toBe('Answer');
+    expect(t('zh-CN', 'review.answer')).toBe('答案');
+  });
+
+  it('formats cloze.parkedCount with count interpolation in both locales', () => {
+    expect(formatMessage('en', 'cloze.parkedCount', { count: 5 })).toBe('5 parked');
+    expect(formatMessage('zh-CN', 'cloze.parkedCount', { count: 5 })).toBe('5 条待填空');
+  });
 });

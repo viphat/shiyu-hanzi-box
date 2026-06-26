@@ -7,12 +7,13 @@ import type { Cloze, QuoteEntry, UiLocale } from '@/lib/types';
 interface ClozeEditorProps {
   quote: QuoteEntry;
   onChange: (clozes: Cloze[]) => void;
+  onUpdate: (patch: Partial<QuoteEntry>) => void;
   locale: UiLocale;
   /** Ref to the span that renders this quote's text (for drag-select). */
   quoteTextRef?: RefObject<HTMLElement | null>;
 }
 
-export function ClozeEditor({ quote, onChange, locale, quoteTextRef }: ClozeEditorProps) {
+export function ClozeEditor({ quote, onChange, onUpdate, locale, quoteTextRef }: ClozeEditorProps) {
   const clozes = quote.clozes ?? [];
 
   // ---------------------------------------------------------------------------

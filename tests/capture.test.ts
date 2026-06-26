@@ -63,5 +63,14 @@ describe('saveQuote', () => {
     await saveQuote('', src);
     expect((await getInbox()).quotes).toHaveLength(0);
   });
+
+  it('saves a quote parked with no clozes', async () => {
+    await saveWord('刚需', { ...src, capturedAt: 500 });
+    const quote = await saveQuote('满足人们的刚需才能持续花钱', src);
+    expect(quote).not.toBeNull();
+    const inbox = await getInbox();
+    expect(inbox.quotes).toHaveLength(1);
+    expect(inbox.quotes[0].clozes).toEqual([]);
+  });
 });
 

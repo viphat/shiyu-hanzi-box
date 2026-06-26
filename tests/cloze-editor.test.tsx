@@ -91,8 +91,8 @@ describe('ClozeEditor — existing clozes render as chips', () => {
     await renderClient(
       <ClozeEditor
         quote={quote}
-
         onChange={vi.fn()}
+        onUpdate={vi.fn()}
         locale="en"
       />,
     );
@@ -108,8 +108,8 @@ describe('ClozeEditor — existing clozes render as chips', () => {
     await renderClient(
       <ClozeEditor
         quote={quote}
-
         onChange={vi.fn()}
+        onUpdate={vi.fn()}
         locale="en"
       />,
     );
@@ -128,8 +128,8 @@ describe('ClozeEditor — removing a chip', () => {
     await renderClient(
       <ClozeEditor
         quote={quote}
-
         onChange={onChange}
+        onUpdate={vi.fn()}
         locale="en"
       />,
     );
@@ -156,8 +156,8 @@ describe('ClozeEditor — hint selector', () => {
     await renderClient(
       <ClozeEditor
         quote={quote}
-
         onChange={onChange}
+        onUpdate={vi.fn()}
         locale="en"
       />,
     );
@@ -184,8 +184,8 @@ describe('ClozeEditor — hint selector', () => {
     await renderClient(
       <ClozeEditor
         quote={quote}
-
         onChange={onChange}
+        onUpdate={vi.fn()}
         locale="en"
       />,
     );
@@ -243,8 +243,8 @@ describe('ClozeEditor — drag-select via quoteTextRef', () => {
     await renderClient(
       <ClozeEditor
         quote={quote}
-
         onChange={onChange}
+        onUpdate={vi.fn()}
         locale="en"
         quoteTextRef={{ current: span }}
       />,
@@ -274,8 +274,8 @@ describe('ClozeEditor — drag-select via quoteTextRef', () => {
     await renderClient(
       <ClozeEditor
         quote={quote}
-
         onChange={onChange}
+        onUpdate={vi.fn()}
         locale="en"
         quoteTextRef={{ current: span }}
       />,
@@ -310,8 +310,8 @@ describe('ClozeEditor — drag-select via quoteTextRef', () => {
     await renderClient(
       <ClozeEditor
         quote={quote}
-
         onChange={onChange}
+        onUpdate={vi.fn()}
         locale="en"
         quoteTextRef={{ current: span }}
       />,
@@ -336,8 +336,8 @@ describe('ClozeEditor — manual span validation (via clozeFromRange)', () => {
     await renderClient(
       <ClozeEditor
         quote={quote}
-
         onChange={vi.fn()}
+        onUpdate={vi.fn()}
         locale="en"
       />,
     );

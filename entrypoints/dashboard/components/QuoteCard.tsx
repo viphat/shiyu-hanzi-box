@@ -82,6 +82,7 @@ export function QuoteCard({
       <ClozeEditor
         quote={quote}
         onChange={(clozes: Cloze[]) => onUpdate({ clozes })}
+        onUpdate={onUpdate}
         locale={locale}
         quoteTextRef={quoteTextRef}
       />

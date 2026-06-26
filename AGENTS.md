@@ -18,9 +18,12 @@ The implementation plan is in:
 - `docs/superpowers/plans/2026-06-24-real-srs-system.md`
 - `docs/superpowers/specs/2026-06-24-single-card-review-design.md`
 - `docs/superpowers/plans/2026-06-24-single-card-review.md`
+- `docs/superpowers/specs/2026-06-25-quote-review-cloze-design.md`
+- `docs/superpowers/plans/2026-06-25-quote-review-cloze.md`
 
 Tasks 0 through 15, Traditional Chinese conversion, TTS, the real FSRS system,
-and the focused single-card review experience have landed.
+the focused single-card review experience, and cloze-deletion quote review have
+landed.
 
 ## Commands
 
@@ -51,6 +54,9 @@ npx vitest run tests/review-queue.test.tsx
 npx vitest run tests/backup.test.ts
 npx vitest run tests/markdown.test.ts
 npx vitest run tests/export.test.ts
+npx vitest run tests/cloze.test.ts
+npx vitest run tests/cloze-editor.test.tsx
+npx vitest run tests/quote-list.test.tsx
 ```
 
 Regenerate the CC-CEDICT compact asset under `public/dictionaries/`. Requires
@@ -89,9 +95,20 @@ The central data path is:
     review state, schedules ratings, builds the due queue, computes review
     stats, and preserves minute-scale learning steps.
 12. `entrypoints/dashboard/components/ReviewQueue.tsx` renders only the first
-    filtered due card. Word answers remain hidden until Reveal; quote content
-    is shown immediately. Rating/postpone updates storage and the recalculated
-    queue supplies the next card.
+    filtered due card. Word answers remain hidden until Reveal. Quote cards use
+    cloze deletion: the active blank is hidden on the front; Reveal shows the
+    full quote with the answer highlighted, the note, and a TTS button. The
+    Traditional (繁) toggle is suppressed for quote cloze cards because cloze
+    offsets index Simplified text. Rating/postpone updates storage and the
+    recalculated queue supplies the next card.
+13. `lib/cloze.ts` owns all cloze logic: type guards, overlap detection,
+    per-cloze hint types (none / pinyin / length), auto-suggestion from saved
+    words, and Anki-style `{{cN::...}}` Markdown rendering. `buildSrsQueue` in
+    `lib/srs.ts` expands each `QuoteEntry` into one queue item per cloze; quotes
+    with no clozes are skipped entirely (parked). FSRS state is stored inline on
+    each `Cloze.review`; there is no separate keyed card store. The legacy
+    `QuoteEntry.review` top-level field is ignored for scheduling — a one-time
+    reset — and does not need to be cleared from storage.
 
 Core modules:
 
@@ -99,14 +116,24 @@ Core modules:
 - `lib/normalize.ts`: pure text normalization for word dedupe.
 - `lib/id.ts`: dependency-free id helper.
 - `lib/storage.ts`: `local:inbox` storage item and serialized mutations.
-- `lib/capture.ts`: `saveWord` and `saveQuote`.
+- `lib/capture.ts`: `saveWord` and `saveQuote`. `saveQuote` runs `autoCloze`
+  (default true) to suggest clozes from already-saved words.
+- `lib/cloze.ts`: cloze type guards, overlap detection, hint types (none /
+  pinyin / length), auto-suggestion from saved words, and Anki-style
+  `{{cN::...}}` Markdown rendering. This is the only file that may define or
+  validate cloze shapes. Backup format version is 2; v1 backups still import
+  (their quotes load parked because they carry no cloze arrays); malformed
+  cloze arrays are sanitized to `[]` on import (the quote is preserved).
 - `lib/page-context.ts`: self-contained injected function.
 - `lib/pinyin.ts`: `pinyin-pro` wrapper for lazy dashboard pinyin generation.
 - `lib/traditional.ts`: `opencc-js` wrapper for lazy dashboard Simplified →
   Taiwan Traditional conversion using `cn -> twp`.
 - `lib/srs.ts`: the only `ts-fsrs` importer; scheduler construction,
   ReviewState/Card conversion, lazy migration, ratings, postpone, due queue,
-  wake time, and local review stats.
+  wake time, and local review stats. `buildSrsQueue` expands each `QuoteEntry`
+  into one item per cloze (quotes with no clozes are skipped). Cloze FSRS
+  state lives on `Cloze.review`; the legacy top-level `QuoteEntry.review`
+  field is ignored and treated as a one-time scheduling reset.
 - `lib/review.ts`: compatibility wrapper that delegates queue building to
   `lib/srs.ts`.
 - `lib/settings.ts`: `local:settings` storage plus normalized read, watch,
@@ -177,8 +204,10 @@ Core modules:
 - Keep all scheduler calls and `ts-fsrs` imports inside `lib/srs.ts`.
 - Treat the SRS queue as the review-session source of truth; do not persist a
   separate current-card index.
-- In Review, hide word insight until Reveal, but display quote text and notes
-  immediately.
+- In Review, hide word insight until Reveal. For quote cloze cards, hide the
+  active blank on the front (hint-aware) and reveal the full quote with the
+  answer highlighted on Reveal. The Traditional (繁) toggle is suppressed for
+  quote cloze cards because cloze offsets index Simplified text.
 - Keep SRS state local on each entry. Do not use it for capture dedupe.
 - Use `@/*` imports where existing WXT code does, and relative imports where the
   file already uses that style.

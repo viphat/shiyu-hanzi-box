@@ -106,4 +106,15 @@ describe('i18n messages', () => {
     expect(formatMessage('en', 'cloze.parkedCount', { count: 5 })).toBe('5 parked');
     expect(formatMessage('zh-CN', 'cloze.parkedCount', { count: 5 })).toBe('5 条待填空');
   });
+
+  it('returns new cloze authoring labels in both locales', () => {
+    expect(t('en', 'cloze.markBlanks')).toBe('Mark blanks');
+    expect(t('en', 'cloze.applyMarks')).toBe('Apply');
+    expect(t('en', 'cloze.aiSuggest')).toBe('Suggest blanks');
+    expect(t('en', 'cloze.aiNoSuggestions')).toBe('No usable blank suggestions.');
+    expect(t('zh-CN', 'cloze.markBlanks')).toBe('手动填空');
+    expect(t('zh-CN', 'cloze.applyMarks')).toBe('应用');
+    expect(t('zh-CN', 'cloze.aiSuggest')).toBe('建议填空');
+    expect(t('zh-CN', 'cloze.aiNoSuggestions')).toBe('没有可用的填空建议。');
+  });
 });

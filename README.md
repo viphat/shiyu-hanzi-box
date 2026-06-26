@@ -33,8 +33,8 @@ Implemented:
 - Focused one-card-at-a-time spaced repetition for saved words and quotes,
   with FSRS scheduling, local review analytics, and configurable retention/new
   card limits. Quotes are reviewed via cloze deletion: each blanked span is an
-  independent FSRS card. Quotes without any blank are parked and prompted in
-  the dashboard to add one before they enter the queue.
+  independent FSRS card. Quotes save parked (no blanks); add blanks manually or
+  via AI suggestions before they enter the review queue.
 - One-click Simplified to Taiwan Traditional conversion on word and quote cards,
   powered by OpenCC and cached on each entry.
 - Offline Word Insight Panel with CC-CEDICT definitions, tone chips, source
@@ -69,9 +69,11 @@ In the Review tab, one large card is shown at a time. Word cards keep pinyin,
 definitions, notes, examples, pronunciation, and AI insight behind
 **Reveal / 查看答案**. Quote cards are reviewed via cloze deletion: the active
 blank is hidden on the front; clicking **Reveal** shows the full quote with the
-answer highlighted, the note, and a TTS button. Quotes with no blanks are
-parked (not review-eligible) and surfaced in the dashboard with a filter and
-an "Add a blank to review" affordance.
+answer highlighted, the note, and a TTS button. Quotes save parked (no blanks).
+Add blanks either manually — open **手动填空 / Mark blanks**, wrap each answer
+span in `{ }`, then click **Apply** — or via AI suggestions (**建议填空**,
+requires a configured AI provider). The drag-select "Add a blank to review"
+path on individual quote cards also remains available.
 
 ### Pronunciation (TTS)
 
@@ -267,7 +269,7 @@ lib/
     prompt.ts            # prompt/message builder
     settings.ts          # local AI settings storage and presets
   capture.ts             # saveWord/saveQuote and word dedupe behavior
-  cloze.ts               # cloze validation, overlap detection, auto-suggest, hint types
+  cloze.ts               # cloze validation, overlap detection, markup parsing, hint types
   export.ts              # export map + zip generation
   backup.ts              # versioned JSON backup + restore validation
   id.ts                  # dependency-free id generation

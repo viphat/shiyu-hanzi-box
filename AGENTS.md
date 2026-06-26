@@ -102,13 +102,16 @@ The central data path is:
     offsets index Simplified text. Rating/postpone updates storage and the
     recalculated queue supplies the next card.
 13. `lib/cloze.ts` owns all cloze logic: type guards, overlap detection,
-    per-cloze hint types (none / pinyin / length), auto-suggestion from saved
-    words, and Anki-style `{{cN::...}}` Markdown rendering. `buildSrsQueue` in
-    `lib/srs.ts` expands each `QuoteEntry` into one queue item per cloze; quotes
-    with no clozes are skipped entirely (parked). FSRS state is stored inline on
-    each `Cloze.review`; there is no separate keyed card store. The legacy
-    `QuoteEntry.review` top-level field is ignored for scheduling — a one-time
-    reset — and does not need to be cleared from storage.
+    brace-markup parsing (`parseClozeMarkup` / `seedMarkup`), per-cloze hint
+    types (none / pinyin / length), and Anki-style `{{cN::...}}` Markdown
+    rendering. `buildSrsQueue` in `lib/srs.ts` expands each `QuoteEntry` into
+    one queue item per cloze; quotes with no clozes are skipped entirely
+    (parked). FSRS state is stored inline on each `Cloze.review`; there is no
+    separate keyed card store. The legacy `QuoteEntry.review` top-level field is
+    ignored for scheduling — a one-time reset — and does not need to be cleared
+    from storage. Quotes save parked on capture; blanks are added by the user
+    either manually (wrap spans in `{ }` and Apply) or via AI suggestions
+    (建议填空, requires a configured AI provider).
 
 Core modules:
 
@@ -116,13 +119,13 @@ Core modules:
 - `lib/normalize.ts`: pure text normalization for word dedupe.
 - `lib/id.ts`: dependency-free id helper.
 - `lib/storage.ts`: `local:inbox` storage item and serialized mutations.
-- `lib/capture.ts`: `saveWord` and `saveQuote`. `saveQuote` runs `autoCloze`
-  (default true) to suggest clozes from already-saved words.
-- `lib/cloze.ts`: cloze type guards, overlap detection, hint types (none /
-  pinyin / length), auto-suggestion from saved words, and Anki-style
-  `{{cN::...}}` Markdown rendering. This is the only file that may define or
-  validate cloze shapes. Backup format version is 2; v1 backups still import
-  (their quotes load parked because they carry no cloze arrays); malformed
+- `lib/capture.ts`: `saveWord` and `saveQuote`. `saveQuote` saves quotes with
+  no cloze blanks (parked); blanks are added later by the user.
+- `lib/cloze.ts`: cloze type guards, overlap detection, brace-markup parsing
+  (`parseClozeMarkup` / `seedMarkup`), hint types (none / pinyin / length), and
+  Anki-style `{{cN::...}}` Markdown rendering. This is the only file that may
+  define or validate cloze shapes. Backup format version is 2; v1 backups still
+  import (their quotes load parked because they carry no cloze arrays); malformed
   cloze arrays are sanitized to `[]` on import (the quote is preserved).
 - `lib/page-context.ts`: self-contained injected function.
 - `lib/pinyin.ts`: `pinyin-pro` wrapper for lazy dashboard pinyin generation.

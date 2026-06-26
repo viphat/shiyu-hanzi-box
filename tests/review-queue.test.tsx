@@ -532,4 +532,43 @@ describe('Cloze quote review card', () => {
     });
     expect(onAnswer).toHaveBeenCalledWith('quote', 'q1', 'good', 'c1');
   });
+
+  it('does not render Traditional toggle (繁) on cloze review card', () => {
+    const entry = clozedQuote();
+    const html = renderToStaticMarkup(
+      <ReviewCard
+        item={{ kind: 'quote', entry, dueAt: NOW, clozeId: 'c1' }}
+        remainingCount={1}
+        onAnswer={vi.fn()}
+        onPostpone={vi.fn()}
+        locale="en"
+      />,
+    );
+    // The Traditional character should not appear
+    expect(html).not.toContain('繁');
+    // The traditional.generate label should not appear
+    expect(html).not.toContain('traditional.generate');
+  });
+
+  it('does not render Traditional toggle after reveal on cloze review card', async () => {
+    const entry = clozedQuote();
+    await renderClient(
+      <ReviewCard
+        item={{ kind: 'quote', entry, dueAt: NOW, clozeId: 'c1' }}
+        remainingCount={1}
+        onAnswer={vi.fn()}
+        onPostpone={vi.fn()}
+        locale="en"
+      />,
+    );
+    // Before reveal: Traditional toggle should not be present
+    expect(container.textContent).not.toContain('繁');
+    expect(container.innerHTML).not.toContain('traditional.generate');
+
+    await click(button(messages.en['review.reveal']));
+
+    // After reveal: Traditional toggle should still not be present
+    expect(container.textContent).not.toContain('繁');
+    expect(container.innerHTML).not.toContain('traditional.generate');
+  });
 });

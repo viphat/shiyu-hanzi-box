@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { t } from '@/lib/i18n';
-import type { Cloze, QuoteEntry, UiLocale, WordEntry } from '@/lib/types';
+import type { Cloze, QuoteEntry, UiLocale } from '@/lib/types';
 import { ClozeEditor } from './ClozeEditor';
 import { TraditionalButton } from './TraditionalButton';
 
@@ -9,14 +9,12 @@ export function QuoteCard({
   onUpdate,
   onDelete,
   locale,
-  savedWords,
   showParkedMarker = false,
 }: {
   quote: QuoteEntry;
   onUpdate: (patch: Partial<QuoteEntry>) => void;
   onDelete: () => void;
   locale: UiLocale;
-  savedWords: WordEntry[];
   showParkedMarker?: boolean;
 }) {
   const [note, setNote] = useState(quote.note);
@@ -83,7 +81,6 @@ export function QuoteCard({
       />
       <ClozeEditor
         quote={quote}
-        savedWords={savedWords}
         onChange={(clozes: Cloze[]) => onUpdate({ clozes })}
         locale={locale}
         quoteTextRef={quoteTextRef}

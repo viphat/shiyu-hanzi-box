@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClozeEditor } from '../entrypoints/dashboard/components/ClozeEditor';
 import { messages } from '../lib/i18n';
-import type { Cloze, QuoteEntry, WordEntry } from '../lib/types';
+import type { Cloze, QuoteEntry } from '../lib/types';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -27,20 +27,6 @@ function makeQuote(overrides: Partial<QuoteEntry> = {}): QuoteEntry {
     sourceDomain: 'example.com',
     surrounding: '学而时习之，不亦说乎',
     ...overrides,
-  };
-}
-
-function makeWord(text: string, id?: string): WordEntry {
-  return {
-    id: id ?? `w-${text}`,
-    kind: 'word',
-    text,
-    normalized: text,
-    note: '',
-    status: 'inbox',
-    createdAt: 0,
-    updatedAt: 0,
-    occurrences: [],
   };
 }
 
@@ -105,7 +91,7 @@ describe('ClozeEditor — existing clozes render as chips', () => {
     await renderClient(
       <ClozeEditor
         quote={quote}
-        savedWords={[]}
+
         onChange={vi.fn()}
         locale="en"
       />,
@@ -122,7 +108,7 @@ describe('ClozeEditor — existing clozes render as chips', () => {
     await renderClient(
       <ClozeEditor
         quote={quote}
-        savedWords={[]}
+
         onChange={vi.fn()}
         locale="en"
       />,
@@ -142,7 +128,7 @@ describe('ClozeEditor — removing a chip', () => {
     await renderClient(
       <ClozeEditor
         quote={quote}
-        savedWords={[]}
+
         onChange={onChange}
         locale="en"
       />,
@@ -170,7 +156,7 @@ describe('ClozeEditor — hint selector', () => {
     await renderClient(
       <ClozeEditor
         quote={quote}
-        savedWords={[]}
+
         onChange={onChange}
         locale="en"
       />,
@@ -198,7 +184,7 @@ describe('ClozeEditor — hint selector', () => {
     await renderClient(
       <ClozeEditor
         quote={quote}
-        savedWords={[]}
+
         onChange={onChange}
         locale="en"
       />,
@@ -213,89 +199,6 @@ describe('ClozeEditor — hint selector', () => {
     expect(onChange).toHaveBeenCalledOnce();
     const result: Cloze[] = onChange.mock.calls[0][0];
     expect(result[0].hint).toBeUndefined();
-  });
-});
-
-describe('ClozeEditor — suggest blanks', () => {
-  it('shows the suggest button', async () => {
-    const quote = makeQuote({ clozes: [] });
-
-    await renderClient(
-      <ClozeEditor
-        quote={quote}
-        savedWords={[makeWord('学而')]}
-        onChange={vi.fn()}
-        locale="en"
-      />,
-    );
-
-    expect(queryButton(messages.en['cloze.suggestBlanks'])).not.toBeNull();
-  });
-
-  it('clicking suggest shows suggestions not already present', async () => {
-    const quote = makeQuote({ clozes: [] });
-    const savedWords = [makeWord('学而', 'w-xueer')];
-
-    await renderClient(
-      <ClozeEditor
-        quote={quote}
-        savedWords={savedWords}
-        onChange={vi.fn()}
-        locale="en"
-      />,
-    );
-
-    await click(getButton(messages.en['cloze.suggestBlanks']));
-
-    // Should show suggestion text and an accept button
-    expect(container.textContent).toContain('学而');
-    expect(queryButton(messages.en['cloze.accept'])).not.toBeNull();
-  });
-
-  it('filters out suggestions already in clozes', async () => {
-    // '学而' is already a cloze (0-2)
-    const existing = makeCloze({ id: 'c1', start: 0, end: 2 });
-    const quote = makeQuote({ clozes: [existing] });
-    const savedWords = [makeWord('学而', 'w-xueer')];
-
-    await renderClient(
-      <ClozeEditor
-        quote={quote}
-        savedWords={savedWords}
-        onChange={vi.fn()}
-        locale="en"
-      />,
-    );
-
-    await click(getButton(messages.en['cloze.suggestBlanks']));
-
-    // No new suggestion accept button should appear (already present)
-    expect(queryButton(messages.en['cloze.accept'])).toBeNull();
-  });
-
-  it('accepting a suggestion calls onChange with appended cloze containing wordId', async () => {
-    const quote = makeQuote({ clozes: [] });
-    const savedWords = [makeWord('学而', 'w-xueer')];
-    const onChange = vi.fn();
-
-    await renderClient(
-      <ClozeEditor
-        quote={quote}
-        savedWords={savedWords}
-        onChange={onChange}
-        locale="en"
-      />,
-    );
-
-    await click(getButton(messages.en['cloze.suggestBlanks']));
-    await click(getButton(messages.en['cloze.accept']));
-
-    expect(onChange).toHaveBeenCalledOnce();
-    const result: Cloze[] = onChange.mock.calls[0][0];
-    expect(result).toHaveLength(1);
-    expect(result[0].wordId).toBe('w-xueer');
-    expect(result[0].start).toBe(0);
-    expect(result[0].end).toBe(2);
   });
 });
 
@@ -340,7 +243,7 @@ describe('ClozeEditor — drag-select via quoteTextRef', () => {
     await renderClient(
       <ClozeEditor
         quote={quote}
-        savedWords={[]}
+
         onChange={onChange}
         locale="en"
         quoteTextRef={{ current: span }}
@@ -371,7 +274,7 @@ describe('ClozeEditor — drag-select via quoteTextRef', () => {
     await renderClient(
       <ClozeEditor
         quote={quote}
-        savedWords={[]}
+
         onChange={onChange}
         locale="en"
         quoteTextRef={{ current: span }}
@@ -407,7 +310,7 @@ describe('ClozeEditor — drag-select via quoteTextRef', () => {
     await renderClient(
       <ClozeEditor
         quote={quote}
-        savedWords={[]}
+
         onChange={onChange}
         locale="en"
         quoteTextRef={{ current: span }}
@@ -433,7 +336,7 @@ describe('ClozeEditor — manual span validation (via clozeFromRange)', () => {
     await renderClient(
       <ClozeEditor
         quote={quote}
-        savedWords={[]}
+
         onChange={vi.fn()}
         locale="en"
       />,

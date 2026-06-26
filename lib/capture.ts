@@ -1,8 +1,7 @@
 import { makeId } from './id';
 import { normalizeText } from './normalize';
 import { mutateInbox } from './storage';
-import { suggestClozes } from './cloze';
-import type { Occurrence, WordEntry, QuoteEntry } from './types';
+import type { Cloze, Occurrence, WordEntry, QuoteEntry } from './types';
 
 export interface SourceInfo {
   sourceTitle: string;
@@ -68,7 +67,6 @@ export async function saveWord(text: string, src: SourceInfo): Promise<WordEntry
 export async function saveQuote(
   text: string,
   src: SourceInfo,
-  opts: { autoCloze?: boolean } = {},
 ): Promise<QuoteEntry | null> {
   const trimmed = text.trim();
   if (trimmed.length === 0) return null;
@@ -76,9 +74,7 @@ export async function saveQuote(
   const now = src.capturedAt;
   let result: QuoteEntry | null = null;
   await mutateInbox((inbox) => {
-    const clozes = opts.autoCloze !== false
-      ? suggestClozes(trimmed, inbox.words)
-      : [];
+    const clozes: Cloze[] = [];
     const quote: QuoteEntry = {
       id: makeId(),
       kind: 'quote',

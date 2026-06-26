@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QuoteList } from '../entrypoints/dashboard/components/QuoteList';
 import { messages } from '../lib/i18n';
-import type { Cloze, QuoteEntry, WordEntry } from '../lib/types';
+import type { Cloze, QuoteEntry } from '../lib/types';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -33,8 +33,6 @@ function makeQuote(overrides: Partial<QuoteEntry> = {}): QuoteEntry {
 function makeCloze(overrides: Partial<Cloze> = {}): Cloze {
   return { id: 'c1', start: 0, end: 2, ...overrides };
 }
-
-const savedWords: WordEntry[] = [];
 
 let container: HTMLDivElement;
 let root: Root;
@@ -93,7 +91,6 @@ describe('QuoteList — parked count badge', () => {
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         locale="en"
-        savedWords={savedWords}
       />,
     );
 
@@ -114,7 +111,6 @@ describe('QuoteList — parked count badge', () => {
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         locale="en"
-        savedWords={savedWords}
       />,
     );
 
@@ -133,7 +129,6 @@ describe('QuoteList — parked count badge', () => {
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         locale="en"
-        savedWords={savedWords}
       />,
     );
 
@@ -154,7 +149,6 @@ describe('QuoteList — parked filter toggle', () => {
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         locale="en"
-        savedWords={savedWords}
       />,
     );
 
@@ -173,7 +167,6 @@ describe('QuoteList — parked filter toggle', () => {
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         locale="en"
-        savedWords={savedWords}
       />,
     );
 
@@ -203,7 +196,6 @@ describe('QuoteList — parked filter toggle', () => {
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         locale="en"
-        savedWords={savedWords}
       />,
     );
 
@@ -238,7 +230,6 @@ describe('QuoteList — empty parked-filter state', () => {
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         locale="en"
-        savedWords={savedWords}
       />,
     );
 
@@ -254,7 +245,6 @@ describe('QuoteList — empty parked-filter state', () => {
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         locale="en"
-        savedWords={savedWords}
       />,
     );
 
@@ -279,7 +269,6 @@ describe('QuoteList — empty parked-filter state', () => {
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         locale="en"
-        savedWords={savedWords}
       />,
     );
 
@@ -293,7 +282,6 @@ describe('QuoteList — empty parked-filter state', () => {
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         locale="en"
-        savedWords={savedWords}
       />,
     );
 
@@ -319,7 +307,6 @@ describe('QuoteCard — parked visual marker', () => {
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         locale="en"
-        savedWords={savedWords}
       />,
     );
 
@@ -335,7 +322,6 @@ describe('QuoteCard — parked visual marker', () => {
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         locale="en"
-        savedWords={savedWords}
       />,
     );
 

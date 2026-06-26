@@ -1,21 +1,19 @@
-import { type RefObject, useState } from 'react';
-import { clozeFromRange, clozesOverlap, suggestClozes } from '@/lib/cloze';
+import { type RefObject } from 'react';
+import { clozeFromRange, clozesOverlap } from '@/lib/cloze';
 import { resolveSelectionOffsets } from '@/lib/cloze-selection';
 import { t } from '@/lib/i18n';
-import type { Cloze, QuoteEntry, UiLocale, WordEntry } from '@/lib/types';
+import type { Cloze, QuoteEntry, UiLocale } from '@/lib/types';
 
 interface ClozeEditorProps {
   quote: QuoteEntry;
-  savedWords: WordEntry[];
   onChange: (clozes: Cloze[]) => void;
   locale: UiLocale;
   /** Ref to the span that renders this quote's text (for drag-select). */
   quoteTextRef?: RefObject<HTMLElement | null>;
 }
 
-export function ClozeEditor({ quote, savedWords, onChange, locale, quoteTextRef }: ClozeEditorProps) {
+export function ClozeEditor({ quote, onChange, locale, quoteTextRef }: ClozeEditorProps) {
   const clozes = quote.clozes ?? [];
-  const [suggestions, setSuggestions] = useState<Cloze[] | null>(null);
 
   // ---------------------------------------------------------------------------
   // Chips: existing clozes
@@ -29,29 +27,6 @@ export function ClozeEditor({ quote, savedWords, onChange, locale, quoteTextRef 
     // When the user picks "none" store undefined (unset = none convention).
     const normalised: Cloze['hint'] = hint === 'none' ? undefined : hint;
     onChange(clozes.map((c) => (c.id === id ? { ...c, hint: normalised } : c)));
-  }
-
-  // ---------------------------------------------------------------------------
-  // Suggest blanks
-  // ---------------------------------------------------------------------------
-
-  function handleSuggest() {
-    const all = suggestClozes(quote.text, savedWords);
-    // Filter to spans not already present (match on [start, end))
-    const filtered = all.filter(
-      (s) => !clozes.some((c) => c.start === s.start && c.end === s.end),
-    );
-    setSuggestions(filtered);
-  }
-
-  function acceptSuggestion(suggestion: Cloze) {
-    // Double-check it still doesn't overlap with current clozes
-    if (clozesOverlap([...clozes, suggestion])) return;
-    const next = [...clozes, suggestion].sort((a, b) => a.start - b.start);
-    onChange(next);
-    setSuggestions((prev) =>
-      prev ? prev.filter((s) => s.id !== suggestion.id) : null,
-    );
   }
 
   // ---------------------------------------------------------------------------
@@ -105,41 +80,8 @@ export function ClozeEditor({ quote, savedWords, onChange, locale, quoteTextRef 
         </div>
       )}
 
-      {/* Suggestions panel */}
-      {suggestions !== null && (
-        <div className="rounded-sm border border-cinnabar-border bg-cinnabar-light p-2">
-          {suggestions.length === 0 ? (
-            <p className="text-xs text-muted">{t(locale, 'cloze.noSuggestions')}</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {suggestions.map((s) => (
-                <div key={s.id} className="flex items-center gap-1">
-                  <span className="rounded-sm border border-cinnabar-border px-2 py-0.5 text-xs text-cinnabar">
-                    {quote.text.slice(s.start, s.end)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => acceptSuggestion(s)}
-                    className="rounded-sm border border-cinnabar-border bg-cinnabar px-2 py-0.5 text-xs text-white transition hover:bg-cinnabar/80"
-                  >
-                    {t(locale, 'cloze.accept')}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Actions row */}
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={handleSuggest}
-          className="rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-1 text-xs text-cinnabar transition hover:bg-cinnabar hover:text-white"
-        >
-          {t(locale, 'cloze.suggestBlanks')}
-        </button>
         <button
           type="button"
           title={t(locale, 'cloze.addBlank')}

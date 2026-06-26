@@ -37,6 +37,16 @@ export interface ReviewState {
   reviewLog?: ReviewLogEntry[];
 }
 
+/** A blanked span in a quote. One cloze = one FSRS card. */
+export interface Cloze {
+  id: string;          // makeId(); stable for the life of the span
+  start: number;       // inclusive char index into the Simplified Quote.text
+  end: number;         // exclusive
+  hint?: 'none' | 'pinyin' | 'length'; // blank presentation; default 'none'
+  wordId?: string;     // set when accepted from a saved word
+  review?: ReviewState; // per-cloze FSRS state; absent => new
+}
+
 /** Captured once per save. Words aggregate many of these. */
 export interface Occurrence {
   sourceTitle: string;
@@ -67,16 +77,6 @@ export interface WordEntry extends EntryBase {
   occurrences: Occurrence[];
   /** Opt-in AI-generated insight, persisted after explicit user request. */
   aiInsight?: AiInsight;
-}
-
-/** A blanked span in a quote. One cloze = one FSRS card. */
-export interface Cloze {
-  id: string;          // makeId(); stable for the life of the span
-  start: number;       // inclusive char index into the Simplified Quote.text
-  end: number;         // exclusive
-  hint?: 'none' | 'pinyin' | 'length'; // blank presentation; default 'none'
-  wordId?: string;     // set when accepted from a saved word
-  review?: ReviewState; // per-cloze FSRS state; absent => new
 }
 
 export interface QuoteEntry extends EntryBase {

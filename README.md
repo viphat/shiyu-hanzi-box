@@ -32,7 +32,9 @@ Implemented:
   backup/restore controls.
 - Focused one-card-at-a-time spaced repetition for saved words and quotes,
   with FSRS scheduling, local review analytics, and configurable retention/new
-  card limits.
+  card limits. Quotes are reviewed via cloze deletion: each blanked span is an
+  independent FSRS card. Quotes without any blank are parked and prompted in
+  the dashboard to add one before they enter the queue.
 - One-click Simplified to Taiwan Traditional conversion on word and quote cards,
   powered by OpenCC and cached on each entry.
 - Offline Word Insight Panel with CC-CEDICT definitions, tone chips, source
@@ -65,7 +67,11 @@ Expanding a saved word in the dashboard shows:
 
 In the Review tab, one large card is shown at a time. Word cards keep pinyin,
 definitions, notes, examples, pronunciation, and AI insight behind
-**Reveal / 查看答案**. Quote cards show their saved text and note immediately.
+**Reveal / 查看答案**. Quote cards are reviewed via cloze deletion: the active
+blank is hidden on the front; clicking **Reveal** shows the full quote with the
+answer highlighted, the note, and a TTS button. Quotes with no blanks are
+parked (not review-eligible) and surfaced in the dashboard with a filter and
+an "Add a blank to review" affordance.
 
 ### Pronunciation (TTS)
 
@@ -140,11 +146,12 @@ retention.
 
 - For a **word**, the saved word is the prompt. Click **Reveal** to see pinyin,
   definitions, notes, examples, pronunciation, and AI insight.
-- For a **quote**, review uses cloze deletion: a blanked span (cloze) is the
-  prompt, and the hidden text is the answer. Click **Reveal** to see the blanked
-  span. A quote becomes reviewable only when it has at least one cloze. Each
-  cloze is an independent FSRS card. Quotes with no clozes (parked quotes) show
-  an "Add a blank to review" affordance in the dashboard.
+- For a **quote**, the active cloze blank is hidden on the front (with an
+  optional hint: none, pinyin, or character count). Click **Reveal** to see
+  the full quote with the answer highlighted, the note, and a pronunciation
+  button. Each blank in a quote is an independent FSRS card; a quote with N
+  blanks contributes N cards to the queue, interleaved with word cards. Quotes
+  with no blanks are parked and do not enter the queue.
 
 Rate the card:
 
@@ -260,6 +267,7 @@ lib/
     prompt.ts            # prompt/message builder
     settings.ts          # local AI settings storage and presets
   capture.ts             # saveWord/saveQuote and word dedupe behavior
+  cloze.ts               # cloze validation, overlap detection, auto-suggest, hint types
   export.ts              # export map + zip generation
   backup.ts              # versioned JSON backup + restore validation
   id.ts                  # dependency-free id generation

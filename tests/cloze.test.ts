@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { clozesOverlap, normalizeClozes, suggestClozes } from '../lib/cloze';
-import type { Cloze, WordEntry } from '../lib/types';
+import { clozeFromRange, countParkedQuotes, isParkedQuote, suggestClozes } from '../lib/cloze';
+import type { Cloze, QuoteEntry, WordEntry } from '../lib/types';
+
+function makeQuote(overrides: Partial<QuoteEntry> = {}): QuoteEntry {
+  return {
+    id: 'q1', kind: 'quote', text: '学而时习之', tags: [], note: '',
+    status: 'inbox', createdAt: 0, updatedAt: 0, category: 'classic',
+    sourceTitle: '', sourceUrl: '', sourceDomain: '', surrounding: '',
+    ...overrides,
+  };
+}
 
 function word(text: string, overrides: Partial<WordEntry> = {}): WordEntry {
   return {
@@ -34,81 +43,134 @@ describe('suggestClozes', () => {
     expect(out).toHaveLength(1);
     expect(text.slice(out[0].start, out[0].end)).toBe('学而时习之');
   });
-});
 
-// ---------------------------------------------------------------------------
-// clozesOverlap
-// ---------------------------------------------------------------------------
-
-describe('clozesOverlap', () => {
-  it('returns true for overlapping spans', () => {
-    expect(clozesOverlap({ start: 0, end: 3 }, { start: 2, end: 5 })).toBe(true);
-    expect(clozesOverlap({ start: 2, end: 5 }, { start: 0, end: 3 })).toBe(true);
+  it('assigns a wordId when word is provided', () => {
+    const text = '学而时习之';
+    const [c] = suggestClozes(text, [word('学而', { id: 'w-xueer' })]);
+    expect(c.wordId).toBe('w-xueer');
   });
 
-  it('returns true when one span contains the other', () => {
-    expect(clozesOverlap({ start: 0, end: 5 }, { start: 1, end: 3 })).toBe(true);
-    expect(clozesOverlap({ start: 1, end: 3 }, { start: 0, end: 5 })).toBe(true);
-  });
-
-  it('returns false for adjacent spans (touching but not overlapping)', () => {
-    expect(clozesOverlap({ start: 0, end: 2 }, { start: 2, end: 4 })).toBe(false);
-    expect(clozesOverlap({ start: 2, end: 4 }, { start: 0, end: 2 })).toBe(false);
-  });
-
-  it('returns false for non-overlapping spans with gap', () => {
-    expect(clozesOverlap({ start: 0, end: 2 }, { start: 3, end: 5 })).toBe(false);
-    expect(clozesOverlap({ start: 3, end: 5 }, { start: 0, end: 2 })).toBe(false);
-  });
-
-  it('returns true for identical spans', () => {
-    expect(clozesOverlap({ start: 1, end: 3 }, { start: 1, end: 3 })).toBe(true);
+  it('offset map is correct when normalizeText strips leading edge punctuation', () => {
+    // 「 (U+300C) and 」 (U+300D) are CJK corner brackets matched by \p{P}.
+    // normalizeWithMap strips them from the edges, shifting the map by 1 at
+    // the start. The raw indices must still point to the unbracketed characters.
+    const text = '「义无反顾」';
+    const [c] = suggestClozes(text, [word('义无反顾')]);
+    expect(c).toBeDefined();
+    expect(text.slice(c.start, c.end)).toBe('义无反顾');
   });
 });
 
 // ---------------------------------------------------------------------------
-// normalizeClozes
+// clozeFromRange
 // ---------------------------------------------------------------------------
 
-describe('normalizeClozes', () => {
-  function cloze(id: string, start: number, end: number): Cloze {
-    return { id, start, end, hint: 'none' };
-  }
+describe('clozeFromRange', () => {
+  const text = '学而时习之';
 
-  it('drops spans with start < 0', () => {
-    const result = normalizeClozes([cloze('c1', -1, 2)], 5);
-    expect(result).toHaveLength(0);
+  it('returns a cloze for a valid non-overlapping range', () => {
+    const result = clozeFromRange(text, 0, 2, []);
+    expect(result).not.toBeNull();
+    expect(result!.start).toBe(0);
+    expect(result!.end).toBe(2);
+    expect(result!.hint).toBe('none');
+    expect(result!.id).toBeTruthy();
   });
 
-  it('drops spans with end > textLength', () => {
-    const result = normalizeClozes([cloze('c1', 2, 6)], 5);
-    expect(result).toHaveLength(0);
+  it('normalises reverse selection (end < start)', () => {
+    const result = clozeFromRange(text, 3, 1, []);
+    expect(result).not.toBeNull();
+    expect(result!.start).toBe(1);
+    expect(result!.end).toBe(3);
   });
 
-  it('drops spans with start >= end (empty or inverted)', () => {
-    expect(normalizeClozes([cloze('c1', 2, 2)], 5)).toHaveLength(0);
-    expect(normalizeClozes([cloze('c1', 3, 1)], 5)).toHaveLength(0);
+  it('returns null for empty range (start === end)', () => {
+    expect(clozeFromRange(text, 2, 2, [])).toBeNull();
   });
 
-  it('keeps valid spans', () => {
-    const result = normalizeClozes([cloze('c1', 0, 2), cloze('c2', 3, 5)], 5);
-    expect(result).toHaveLength(2);
+  it('returns null for out-of-range end', () => {
+    expect(clozeFromRange(text, 0, 99, [])).toBeNull();
   });
 
-  it('sorts spans by start position', () => {
-    const result = normalizeClozes([cloze('c2', 3, 5), cloze('c1', 0, 2)], 5);
-    expect(result[0].id).toBe('c1');
-    expect(result[1].id).toBe('c2');
+  it('returns null for negative start', () => {
+    expect(clozeFromRange(text, -1, 2, [])).toBeNull();
   });
 
-  it('drops overlapping spans (keeps the earlier one)', () => {
-    // c1 at 0-3, c2 at 2-5 — they overlap; c1 is earlier so c2 is dropped
-    const result = normalizeClozes([cloze('c1', 0, 3), cloze('c2', 2, 5)], 5);
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('c1');
+  it('returns null when overlapping an existing cloze', () => {
+    const existing: Cloze[] = [{ id: 'e1', start: 1, end: 3, hint: 'none' }];
+    expect(clozeFromRange(text, 2, 4, existing)).toBeNull();
   });
 
-  it('returns empty for empty input', () => {
-    expect(normalizeClozes([], 10)).toHaveLength(0);
+  it('accepts an adjacent non-overlapping range', () => {
+    const existing: Cloze[] = [{ id: 'e1', start: 0, end: 2, hint: 'none' }];
+    const result = clozeFromRange(text, 2, 4, existing);
+    expect(result).not.toBeNull();
+  });
+
+  it('accepts a full-text span covering the whole quote (spec §9)', () => {
+    // A cloze that spans the entire quote text is explicitly allowed.
+    const result = clozeFromRange(text, 0, text.length, []);
+    expect(result).not.toBeNull();
+    expect(result!.start).toBe(0);
+    expect(result!.end).toBe(text.length);
+  });
+
+  it('returns null for a whitespace-only selection', () => {
+    // '学 而' -> the single space at index 1 is unreviewable as a blank.
+    expect(clozeFromRange('学 而', 1, 2, [])).toBeNull();
+  });
+
+  it('returns null for a punctuation-only selection', () => {
+    // '学，而' -> the fullwidth comma at index 1 carries no reviewable content.
+    expect(clozeFromRange('学，而', 1, 2, [])).toBeNull();
+  });
+
+  it('accepts a span that includes at least one meaningful char', () => {
+    // '学，' contains 学, so the punctuation riding along is fine.
+    const result = clozeFromRange('学，而', 0, 2, []);
+    expect(result).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isParkedQuote / countParkedQuotes
+// ---------------------------------------------------------------------------
+
+describe('isParkedQuote', () => {
+  it('returns true when clozes is absent', () => {
+    expect(isParkedQuote(makeQuote())).toBe(true);
+  });
+
+  it('returns true when clozes is an empty array', () => {
+    expect(isParkedQuote(makeQuote({ clozes: [] }))).toBe(true);
+  });
+
+  it('returns false when clozes has at least one entry', () => {
+    const cloze: Cloze = { id: 'c1', start: 0, end: 2 };
+    expect(isParkedQuote(makeQuote({ clozes: [cloze] }))).toBe(false);
+  });
+
+  it('returns false for archived quotes even without clozes (not actionably parked)', () => {
+    expect(isParkedQuote(makeQuote({ status: 'archived' }))).toBe(false);
+  });
+
+  it('returns true for reviewed quotes with no clozes (still actionably parked)', () => {
+    expect(isParkedQuote(makeQuote({ status: 'reviewed' }))).toBe(true);
+  });
+});
+
+describe('countParkedQuotes', () => {
+  it('returns 0 for empty array', () => {
+    expect(countParkedQuotes([])).toBe(0);
+  });
+
+  it('counts non-archived quotes with no clozes', () => {
+    const quotes = [
+      makeQuote({ id: 'q1' }),                          // parked (no clozes)
+      makeQuote({ id: 'q2', clozes: [] }),              // parked (empty)
+      makeQuote({ id: 'q3', clozes: [{ id: 'c1', start: 0, end: 2 }] }), // NOT parked
+      makeQuote({ id: 'q4', status: 'archived' }),      // archived → not counted
+    ];
+    expect(countParkedQuotes(quotes)).toBe(2);
   });
 });

@@ -73,10 +73,12 @@ export async function saveQuote(
   const trimmed = text.trim();
   if (trimmed.length === 0) return null;
 
-  let saved: QuoteEntry | null = null;
   const now = src.capturedAt;
+  let result: QuoteEntry | null = null;
   await mutateInbox((inbox) => {
-    const clozes = opts.autoCloze !== false ? suggestClozes(trimmed, inbox.words) : [];
+    const clozes = opts.autoCloze !== false
+      ? suggestClozes(trimmed, inbox.words)
+      : [];
     const quote: QuoteEntry = {
       id: makeId(),
       kind: 'quote',
@@ -94,8 +96,8 @@ export async function saveQuote(
       pinyin: undefined,
       clozes,
     };
-    saved = quote;
+    result = quote;
     return { ...inbox, quotes: [quote, ...inbox.quotes] };
   });
-  return saved;
+  return result;
 }

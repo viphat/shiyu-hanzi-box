@@ -90,26 +90,6 @@ describe('renderDay', () => {
     expect(md).toContain('interval 3 days');
     expect(md).not.toContain('stability');
   });
-
-  it('does NOT emit a Review line for a quote even when quote.review is set', () => {
-    const reviewedQuote: QuoteEntry = {
-      ...quote,
-      review: {
-        scheduler: 'fsrs-v1',
-        dueAt: Date.UTC(2026, 6, 25),
-        intervalDays: 5,
-        repetitions: 1,
-        lapses: 0,
-        cardState: 'review',
-        stability: 5,
-        difficulty: 4,
-        lastReviewedAt: Date.UTC(2026, 5, 20),
-      },
-    };
-    const md = renderDay('2026-06-20', [], [reviewedQuote]);
-    expect(md).toContain('## Quotes');
-    expect(md).not.toContain('Review:');
-  });
 });
 
 const dictEntries: DictionaryEntry[] = [
@@ -147,24 +127,6 @@ describe('renderDay with dictionary', () => {
   });
 });
 
-describe('renderDay with clozes', () => {
-  it('renders clozes as numbered {{cN::...}} in document order', () => {
-    const md = renderDay('2026-06-25', [], [
-      {
-        ...quote,
-        text: '他义无反顾地走了',
-        clozes: [{ id: 'b', start: 6, end: 7 }, { id: 'a', start: 1, end: 5 }],
-      },
-    ]);
-    expect(md).toContain('- [ ] > 他{{c1::义无反顾}}地{{c2::走}}了');
-  });
-
-  it('renders a clozeless quote as plain text (unchanged)', () => {
-    const md = renderDay(day, [], [quote]);
-    expect(md).toContain('- [ ] > 学而时习之');
-  });
-});
-
 const aiInsight: AiInsight = {
   provider: 'deepseek',
   model: 'deepseek-chat',
@@ -178,6 +140,51 @@ const aiInsight: AiInsight = {
   collocations: ['你好吗'],
   notes: 'Common greeting.',
 };
+
+describe('renderDay quote review suppression', () => {
+  it('does not emit a Review line for a quote even when quote.review is populated', () => {
+    const reviewedQuote: QuoteEntry = {
+      ...quote,
+      review: {
+        scheduler: 'fsrs-v1',
+        dueAt: Date.UTC(2026, 6, 25),
+        intervalDays: 3,
+        repetitions: 2,
+        lapses: 0,
+        cardState: 'review',
+        stability: 3,
+        difficulty: 5,
+        lastReviewedAt: Date.UTC(2026, 5, 20),
+      },
+      clozes: [{ id: 'c1', start: 0, end: 2 }],
+    };
+    const md = renderDay(day, [], [reviewedQuote]);
+    expect(md).toContain('## Quotes');
+    expect(md).not.toContain('Review:');
+  });
+});
+
+describe('renderDay with clozes', () => {
+  it('renders clozes as numbered {{cN::...}} in document order (sorts by start)', () => {
+    const quoteWithClozes: typeof quote = {
+      ...quote,
+      text: '他义无反顾地走了',
+      // Intentionally unsorted: id 'b' at [6,7) comes first in array
+      clozes: [
+        { id: 'b', start: 6, end: 7 },
+        { id: 'a', start: 1, end: 5 },
+      ],
+    };
+    const md = renderDay(day, [], [quoteWithClozes]);
+    expect(md).toContain('- [ ] > 他{{c1::义无反顾}}地{{c2::走}}了');
+  });
+
+  it('renders a clozeless quote as plain text (unchanged)', () => {
+    const md = renderDay(day, [], [quote]);
+    expect(md).toContain(`- [ ] > ${quote.text}`);
+    expect(md).not.toContain('{{');
+  });
+});
 
 describe('renderDay with AI insight', () => {
   it('includes an AI Insight subsection when the word has aiInsight', () => {

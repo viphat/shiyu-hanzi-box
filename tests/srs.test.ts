@@ -9,7 +9,6 @@ import {
   getNextSrsWakeAt,
   getSrsStats,
   migrateReviewState,
-  newReviewState,
   postponeReview,
   postponeReviewCloze,
   previewReview,
@@ -507,11 +506,12 @@ describe('buildSrsQueue', () => {
         ),
       ],
       quotes: [
+        // Use a clozed quote so it produces cards; older createdAt should win the cap slot
         quote({
           id: 'older-quote',
           createdAt: YESTERDAY,
           updatedAt: YESTERDAY,
-          clozes: [{ id: 'cz-old', start: 0, end: 3 }],
+          clozes: [{ id: 'cz-old', start: 0, end: 1, hint: 'none' }],
         }),
       ],
     };
@@ -520,50 +520,6 @@ describe('buildSrsQueue', () => {
       (item) => item.entry.id,
     );
     expect(ids).toEqual(['older-quote']);
-  });
-
-  it('expands a quote into one card per cloze', () => {
-    const inbox: Inbox = { words: [], quotes: [clozedQuote()] };
-    const due = buildSrsQueue(inbox, NOW, NO_FUZZ);
-    expect(due.filter((i) => i.kind === 'quote')).toHaveLength(2);
-    expect(due.map((i) => i.clozeId).sort()).toEqual(['cz1', 'cz2']);
-  });
-
-  it('contributes no cards for a quote with no clozes', () => {
-    const inbox: Inbox = { words: [], quotes: [quote({ clozes: [] })] };
-    expect(buildSrsQueue(inbox, NOW, NO_FUZZ)).toHaveLength(0);
-  });
-
-  it('ignores stale quote.review when clozes is empty (legacy recognition state)', () => {
-    // A quote with a populated review (would be due under the old model) but no clozes
-    // should yield zero queue cards. The stale review is inert after Task 5's migration.
-    const staleQuote = quote({
-      clozes: [],
-      review: {
-        scheduler: 'fsrs-v1',
-        cardState: 'review',
-        dueAt: NOW - 1, // in the past
-        intervalDays: 14,
-        repetitions: 5,
-        lapses: 0,
-        stability: 14,
-        difficulty: 5,
-        lastReviewedAt: YESTERDAY,
-      },
-    });
-    const inbox: Inbox = { words: [], quotes: [staleQuote] };
-    expect(buildSrsQueue(inbox, NOW, NO_FUZZ)).toHaveLength(0);
-  });
-
-  it('counts each new cloze against the daily new-card cap', () => {
-    // clozedQuote() has 2 clozes (cz1, cz2), both new and due at YESTERDAY
-    // With newCardsPerDay: 1, only the first cloze should be served
-    const settings = { ...NO_FUZZ, newCardsPerDay: 1 };
-    const inbox: Inbox = { words: [], quotes: [clozedQuote()] };
-    const queue = buildSrsQueue(inbox, NOW, settings);
-    expect(queue).toHaveLength(1);
-    expect(queue[0].kind).toBe('quote');
-    expect(queue[0].clozeId).toBeDefined();
   });
 
   it('does not mutate new cards hidden by the cap', () => {
@@ -766,7 +722,8 @@ describe('getSrsStats', () => {
 
 function clozedQuote(): QuoteEntry {
   return quote({
-    id: 'q1', text: '他义无反顾地走了',
+    id: 'q1',
+    text: '他义无反顾地走了',
     clozes: [
       { id: 'cz1', start: 1, end: 5, hint: 'none' }, // 义无反顾
       { id: 'cz2', start: 6, end: 7, hint: 'none' }, // 走
@@ -775,12 +732,14 @@ function clozedQuote(): QuoteEntry {
 }
 
 describe('cardId', () => {
-  it('derives a stable word card id from entryId', () => {
+  it('produces word:<entryId> for a word source', () => {
     expect(cardId({ kind: 'word', entryId: 'word-1' })).toBe('word:word-1');
   });
 
-  it('derives a stable cloze card id from quoteId and clozeId', () => {
-    expect(cardId({ kind: 'cloze', quoteId: 'q1', clozeId: 'cz1' })).toBe('cloze:q1:cz1');
+  it('produces cloze:<quoteId>:<clozeId> for a cloze source', () => {
+    expect(cardId({ kind: 'cloze', quoteId: 'q1', clozeId: 'cz1' })).toBe(
+      'cloze:q1:cz1',
+    );
   });
 });
 
@@ -794,20 +753,20 @@ describe('answerReviewCloze', () => {
     expect(c2.review).toBeUndefined(); // untouched
   });
 
-  it('sets status to reviewed and updates updatedAt', () => {
+  it('sets quote status to reviewed and updatedAt to now', () => {
     const q = clozedQuote();
     const next = answerReviewCloze(q, 'cz1', 'good', NOW, NO_FUZZ);
     expect(next.status).toBe('reviewed');
     expect(next.updatedAt).toBe(NOW);
   });
 
-  it('preserves archived status', () => {
+  it('does not change status of archived quotes', () => {
     const q = { ...clozedQuote(), status: 'archived' as const };
     const next = answerReviewCloze(q, 'cz1', 'good', NOW, NO_FUZZ);
     expect(next.status).toBe('archived');
   });
 
-  it('appends a review log entry on the rated cloze', () => {
+  it('appends a review log entry to the rated cloze', () => {
     const q = clozedQuote();
     const next = answerReviewCloze(q, 'cz1', 'good', NOW, NO_FUZZ);
     const c1 = next.clozes!.find((c) => c.id === 'cz1')!;
@@ -817,23 +776,29 @@ describe('answerReviewCloze', () => {
 });
 
 describe('previewReviewCloze', () => {
-  it('returns a preview for all four ratings on the target cloze', () => {
+  it('returns a preview for each of the four ratings on a cloze', () => {
     const q = clozedQuote();
     const preview = previewReviewCloze(q, 'cz1', NOW, NO_FUZZ);
-    expect(Object.keys(preview).sort()).toEqual(['again', 'easy', 'good', 'hard']);
+    expect(Object.keys(preview).sort()).toEqual([
+      'again',
+      'easy',
+      'good',
+      'hard',
+    ]);
     expect(preview.good.dueAt).toBeGreaterThan(preview.again.dueAt);
   });
 });
 
 describe('postponeReviewCloze', () => {
-  it('updates dueAt on the target cloze only', () => {
+  it('changes only the due date on the targeted cloze, not its sibling', () => {
     const q = clozedQuote();
-    const newDue = NOW + 5 * DAY_MS;
+    const newDue = NOW + 3 * 24 * 60 * 60 * 1000;
     const next = postponeReviewCloze(q, 'cz1', NOW, newDue);
     const c1 = next.clozes!.find((c) => c.id === 'cz1')!;
     const c2 = next.clozes!.find((c) => c.id === 'cz2')!;
     expect(c1.review?.dueAt).toBe(newDue);
-    expect(c2.review).toBeUndefined(); // untouched
+    expect(c2.review).toBeUndefined(); // sibling untouched
+    expect(next.updatedAt).toBe(NOW);
   });
 });
 
@@ -863,5 +828,159 @@ describe('getNextSrsWakeAt', () => {
     };
 
     expect(getNextSrsWakeAt(inbox, NOW)).toBe(dueAt);
+  });
+});
+
+describe('quote cloze expansion', () => {
+  it('expands a quote into one card per cloze', () => {
+    const inbox: Inbox = { words: [], quotes: [clozedQuote()] };
+    const due = buildSrsQueue(inbox, NOW, NO_FUZZ);
+    expect(due.filter((i) => i.kind === 'quote')).toHaveLength(2);
+    expect(due.map((i) => i.clozeId).sort()).toEqual(['cz1', 'cz2']);
+  });
+
+  it('contributes no cards for a quote with no clozes', () => {
+    const inbox: Inbox = { words: [], quotes: [quote({ clozes: [] })] };
+    expect(buildSrsQueue(inbox, NOW, NO_FUZZ)).toHaveLength(0);
+  });
+
+  it('contributes no cards for a quote with absent clozes field', () => {
+    const inbox: Inbox = { words: [], quotes: [quote()] };
+    expect(buildSrsQueue(inbox, NOW, NO_FUZZ)).toHaveLength(0);
+  });
+
+  it('counts each new cloze against the daily new-card cap', () => {
+    const settings = { ...NO_FUZZ, newCardsPerDay: 1 };
+    const inbox: Inbox = { words: [], quotes: [clozedQuote()] };
+    // clozedQuote has 2 new clozes; cap=1 => only 1 card shown
+    const due = buildSrsQueue(inbox, NOW, settings);
+    expect(due).toHaveLength(1);
+    expect(due[0].kind).toBe('quote');
+    expect(due[0].clozeId).toBeDefined();
+  });
+
+  it('does not count a quote with no clozes in getSrsStats', () => {
+    const inbox: Inbox = {
+      words: [],
+      quotes: [quote({ clozes: [] }), quote({ id: 'quote-2', clozes: [] })],
+    };
+    const stats = getSrsStats(inbox, NOW, NO_FUZZ, 0);
+    expect(stats.newAvailableToday).toBe(0);
+    expect(stats.dueLaterToday).toBe(0);
+  });
+
+  it('counts each cloze as a separate new card in getSrsStats', () => {
+    const inbox: Inbox = { words: [], quotes: [clozedQuote()] };
+    const dueNow = buildSrsQueue(inbox, NOW, NO_FUZZ).length;
+    const stats = getSrsStats(inbox, NOW, NO_FUZZ, dueNow);
+    // clozedQuote has 2 new clozes, both due now (new cards have dueAt = createdAt = YESTERDAY <= NOW)
+    expect(dueNow).toBe(2);
+  });
+
+  it('counts new-reviewed-today from cloze review logs', () => {
+    const startOfToday = new Date(
+      new Date(NOW).getFullYear(),
+      new Date(NOW).getMonth(),
+      new Date(NOW).getDate(),
+    ).getTime();
+    // A quote where cz1 was reviewed today (state new -> learning)
+    const reviewedQuote: QuoteEntry = {
+      ...clozedQuote(),
+      clozes: [
+        {
+          id: 'cz1',
+          start: 1,
+          end: 5,
+          hint: 'none',
+          review: {
+            scheduler: 'fsrs-v1',
+            cardState: 'learning',
+            dueAt: NOW + 60_000,
+            intervalDays: 0,
+            repetitions: 1,
+            lapses: 0,
+            learningSteps: 1,
+            reviewLog: [
+              {
+                reviewedAt: startOfToday + 60_000,
+                rating: 'good',
+                elapsedDays: 0,
+                scheduledDays: 0,
+                stateBefore: 'new',
+                stateAfter: 'learning',
+              },
+            ],
+          },
+        },
+        { id: 'cz2', start: 6, end: 7, hint: 'none' },
+      ],
+    };
+    const settings = { ...NO_FUZZ, newCardsPerDay: 2 };
+    const inbox: Inbox = { words: [], quotes: [reviewedQuote] };
+    // cz1 was already reviewed today from 'new', so newReviewedToday=1
+    // newCapacity = 2 - 1 = 1, so only cz2 (still new) can appear
+    const due = buildSrsQueue(inbox, NOW, settings);
+    // cz1 is learning (dueAt future), cz2 is new (dueAt <= NOW)
+    expect(due.map((i) => i.clozeId)).toEqual(['cz2']);
+  });
+
+  it('stable sort tiebreak: two clozes of same quote have deterministic order', () => {
+    const inbox: Inbox = { words: [], quotes: [clozedQuote()] };
+    const due1 = buildSrsQueue(inbox, NOW, NO_FUZZ);
+    const due2 = buildSrsQueue(inbox, NOW, NO_FUZZ);
+    expect(due1.map((i) => i.clozeId)).toEqual(due2.map((i) => i.clozeId));
+  });
+
+  it('legacy quote.review is ignored: a stale review with clozes:[] yields zero queue cards', () => {
+    // Regression guard: a pre-existing QuoteEntry.review (from the old recognition-only
+    // model) that would have been due must NOT produce any card in buildSrsQueue.
+    // Quotes are scheduled ONLY through their per-cloze cloze.review.
+    const staleReview = {
+      scheduler: 'fsrs-v1' as const,
+      cardState: 'review' as const,
+      dueAt: YESTERDAY, // overdue — would be due if the queue read quote.review
+      intervalDays: 14,
+      repetitions: 5,
+      lapses: 0,
+      stability: 14,
+      difficulty: 5,
+      lastReviewedAt: YESTERDAY - 14 * DAY_MS,
+    };
+    const quoteWithStaleReview: QuoteEntry = quote({
+      id: 'legacy-quote',
+      review: staleReview,
+      clozes: [], // no clozes — the recognition-only model never created clozes
+    });
+    const inbox: Inbox = { words: [], quotes: [quoteWithStaleReview] };
+    const queue = buildSrsQueue(inbox, NOW, NO_FUZZ);
+    expect(queue).toHaveLength(0);
+
+    const stats = getSrsStats(inbox, NOW, NO_FUZZ, 0);
+    expect(stats.newAvailableToday).toBe(0);
+    expect(stats.dueLaterToday).toBe(0);
+  });
+
+  it('word.review is still used for scheduling (word path untouched by cloze change)', () => {
+    // Confirm that the word scheduling path continues to read entry.review directly,
+    // as opposed to the quote path which reads cloze.review.
+    const wordWithInlineReview = word({
+      id: 'word-scheduled',
+      review: {
+        scheduler: 'fsrs-v1',
+        cardState: 'review',
+        dueAt: YESTERDAY, // overdue
+        intervalDays: 3,
+        repetitions: 2,
+        lapses: 0,
+        stability: 3,
+        difficulty: 5,
+        lastReviewedAt: YESTERDAY - 3 * DAY_MS,
+      },
+    });
+    const inbox: Inbox = { words: [wordWithInlineReview], quotes: [] };
+    const queue = buildSrsQueue(inbox, NOW, NO_FUZZ);
+    expect(queue).toHaveLength(1);
+    expect(queue[0].entry.id).toBe('word-scheduled');
+    expect(queue[0].kind).toBe('word');
   });
 });

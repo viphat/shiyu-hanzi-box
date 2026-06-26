@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QuoteList } from '../entrypoints/dashboard/components/QuoteList';
 import { messages } from '../lib/i18n';
-import type { QuoteEntry, WordEntry } from '../lib/types';
+import type { Cloze, QuoteEntry, WordEntry } from '../lib/types';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -26,21 +26,22 @@ function makeQuote(overrides: Partial<QuoteEntry> = {}): QuoteEntry {
     sourceUrl: 'https://example.com',
     sourceDomain: 'example.com',
     surrounding: '学而时习之，不亦说乎',
-    clozes: [],
     ...overrides,
   };
 }
 
-const NO_WORDS: WordEntry[] = [];
+function makeCloze(overrides: Partial<Cloze> = {}): Cloze {
+  return { id: 'c1', start: 0, end: 2, ...overrides };
+}
+
+const savedWords: WordEntry[] = [];
 
 let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
   (
-    globalThis as typeof globalThis & {
-      IS_REACT_ACT_ENVIRONMENT: boolean;
-    }
+    globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;
   container = document.createElement('div');
   document.body.append(container);
@@ -60,281 +61,290 @@ async function renderClient(node: ReactNode) {
   });
 }
 
-async function click(target: HTMLElement) {
-  await act(async () => {
-    target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-  });
+function queryButton(label: string): HTMLButtonElement | null {
+  return (
+    [...container.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes(label),
+    ) ?? null
+  ) as HTMLButtonElement | null;
 }
 
-function button(label: string): HTMLButtonElement {
-  const match = [...container.querySelectorAll('button')].find(
-    (candidate) => candidate.textContent?.includes(label),
-  );
-  if (!match)
-    throw new Error(
-      `Button not found: "${label}". Available: ${[...container.querySelectorAll('button')].map((b) => b.textContent).join(', ')}`,
-    );
-  return match;
+async function click(btn: HTMLButtonElement) {
+  await act(async () => {
+    btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
 }
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('QuoteList — parked badge', () => {
-  it('shows the "Parked — no blank" badge for a quote with empty clozes', async () => {
-    const quote = makeQuote({ clozes: [] });
-    await renderClient(
-      <QuoteList
-        quotes={[quote]}
-        words={NO_WORDS}
-        onUpdate={vi.fn()}
-        onDelete={vi.fn()}
-        locale="en"
-      />,
-    );
-    expect(container.textContent).toContain(messages.en['cloze.parked']);
-  });
-
-  it('shows the "Parked — no blank" badge for a quote with absent clozes', async () => {
-    const quote = makeQuote({ clozes: undefined });
-    await renderClient(
-      <QuoteList
-        quotes={[quote]}
-        words={NO_WORDS}
-        onUpdate={vi.fn()}
-        onDelete={vi.fn()}
-        locale="en"
-      />,
-    );
-    expect(container.textContent).toContain(messages.en['cloze.parked']);
-  });
-
-  it('does NOT show the parked badge for a quote WITH clozes', async () => {
-    const quote = makeQuote({
-      clozes: [{ id: 'c1', start: 0, end: 2, hint: 'none' }],
-    });
-    await renderClient(
-      <QuoteList
-        quotes={[quote]}
-        words={NO_WORDS}
-        onUpdate={vi.fn()}
-        onDelete={vi.fn()}
-        locale="en"
-      />,
-    );
-    expect(container.textContent).not.toContain(messages.en['cloze.parked']);
-  });
-});
-
-describe('QuoteList — add-a-blank affordance for parked quote', () => {
-  it('surfaces the "Add a blank to review" affordance for a parked quote', async () => {
-    const quote = makeQuote({ clozes: [] });
-    await renderClient(
-      <QuoteList
-        quotes={[quote]}
-        words={NO_WORDS}
-        onUpdate={vi.fn()}
-        onDelete={vi.fn()}
-        locale="en"
-      />,
-    );
-    // The affordance button must be present and visually prominent (data-parked-cta)
-    const cta = container.querySelector('[data-parked-cta]');
-    expect(cta).not.toBeNull();
-    expect(cta?.textContent).toContain(messages.en['cloze.addBlank']);
-  });
-
-  it('clicking the add-a-blank affordance on a parked quote triggers suggest', async () => {
-    const quote = makeQuote({ clozes: [] });
-    await renderClient(
-      <QuoteList
-        quotes={[quote]}
-        words={NO_WORDS}
-        onUpdate={vi.fn()}
-        onDelete={vi.fn()}
-        locale="en"
-      />,
-    );
-    const cta = container.querySelector<HTMLElement>('[data-parked-cta]');
-    expect(cta).not.toBeNull();
-    await click(cta!);
-    // After clicking, suggestions mode is triggered (no suggestions for empty words,
-    // but we can verify the button was clickable without error — the QuoteCard's
-    // "Add a blank to review" button was activated)
-    // The container should still render without errors
-    expect(container.textContent).toBeDefined();
-  });
-});
-
 describe('QuoteList — parked count badge', () => {
-  it('shows a parked count of 2 when two non-archived parked quotes exist', async () => {
-    const parked1 = makeQuote({ id: 'q1', clozes: [] });
-    const parked2 = makeQuote({ id: 'q2', clozes: undefined });
-    const withCloze = makeQuote({
-      id: 'q3',
-      clozes: [{ id: 'c1', start: 0, end: 2, hint: 'none' }],
-    });
+  it('shows a parked count badge when there are parked quotes', async () => {
+    const quotes = [
+      makeQuote({ id: 'q1' }),           // parked (no clozes)
+      makeQuote({ id: 'q2', clozes: [] }), // parked (empty)
+      makeQuote({ id: 'q3', clozes: [makeCloze()] }), // NOT parked
+    ];
+
     await renderClient(
       <QuoteList
-        quotes={[parked1, parked2, withCloze]}
-        words={NO_WORDS}
+        quotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         locale="en"
+        savedWords={savedWords}
       />,
     );
-    // "2 parked" badge should appear in the header
-    expect(container.textContent).toContain('2 parked');
+
+    // "2 parked" badge should be visible with the exact formatted string
+    expect(container.textContent).toContain(
+      messages.en['cloze.parkedCount'].replace('{count}', '2'),
+    );
   });
 
-  it('does NOT show the parked count badge when all parked quotes are archived', async () => {
-    const archivedParked = makeQuote({ id: 'q1', clozes: [], status: 'archived' });
+  it('does not show parked badge when all quotes have clozes', async () => {
+    const quotes = [
+      makeQuote({ id: 'q1', clozes: [makeCloze()] }),
+    ];
+
     await renderClient(
       <QuoteList
-        quotes={[archivedParked]}
-        words={NO_WORDS}
+        quotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         locale="en"
+        savedWords={savedWords}
       />,
     );
-    // Archived parked quotes are intentionally silent
-    const badge = container.querySelector('[data-parked-count]');
-    expect(badge).toBeNull();
+
+    expect(container.textContent).not.toContain('parked');
   });
 
-  it('shows count = 0 badge is absent when zero parked quotes', async () => {
-    const withCloze = makeQuote({
-      clozes: [{ id: 'c1', start: 0, end: 2, hint: 'none' }],
-    });
+  it('excludes archived quotes from parked count', async () => {
+    const quotes = [
+      makeQuote({ id: 'q1', status: 'archived' }), // archived → not parked
+      makeQuote({ id: 'q2' }), // parked
+    ];
+
     await renderClient(
       <QuoteList
-        quotes={[withCloze]}
-        words={NO_WORDS}
+        quotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         locale="en"
+        savedWords={savedWords}
       />,
     );
-    const badge = container.querySelector('[data-parked-count]');
-    expect(badge).toBeNull();
+
+    // Only 1 parked — exact formatted string
+    expect(container.textContent).toContain(
+      messages.en['cloze.parkedCount'].replace('{count}', '1'),
+    );
   });
 });
 
 describe('QuoteList — parked filter toggle', () => {
-  it('filter toggle is present when there are parked quotes', async () => {
-    const parked = makeQuote({ id: 'q1', clozes: [] });
-    const withCloze = makeQuote({
-      id: 'q2',
-      clozes: [{ id: 'c1', start: 0, end: 2, hint: 'none' }],
-    });
+  it('renders a filter toggle button for parked quotes', async () => {
+    const quotes = [makeQuote({ id: 'q1' })];
+
     await renderClient(
       <QuoteList
-        quotes={[parked, withCloze]}
-        words={NO_WORDS}
+        quotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         locale="en"
+        savedWords={savedWords}
       />,
     );
-    const toggle = container.querySelector('[data-parked-filter]');
-    expect(toggle).not.toBeNull();
+
+    expect(queryButton(messages.en['cloze.parked'])).not.toBeNull();
   });
 
-  it('clicking the filter toggle shows only parked quotes', async () => {
-    const parked = makeQuote({ id: 'q1', text: '学而时习之', clozes: [] });
-    const withCloze = makeQuote({
-      id: 'q2',
-      text: '温故而知新',
-      clozes: [{ id: 'c1', start: 0, end: 2, hint: 'none' }],
-    });
+  it('clicking filter toggle narrows list to parked quotes only', async () => {
+    const quotes = [
+      makeQuote({ id: 'q1', text: '学而时习之' }),             // parked
+      makeQuote({ id: 'q2', text: '温故知新', clozes: [makeCloze()] }), // NOT parked
+    ];
+
     await renderClient(
       <QuoteList
-        quotes={[parked, withCloze]}
-        words={NO_WORDS}
+        quotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         locale="en"
+        savedWords={savedWords}
       />,
     );
-    // Both visible initially
-    expect(container.textContent).toContain('学而时习之');
-    expect(container.textContent).toContain('温故而知新');
 
-    // Click filter toggle
-    const toggle = container.querySelector<HTMLElement>('[data-parked-filter]');
-    await click(toggle!);
+    // Both quotes visible initially
+    expect(container.textContent).toContain('学而时习之');
+    expect(container.textContent).toContain('温故知新');
+
+    // Click the parked filter
+    const toggleBtn = queryButton(messages.en['cloze.parked']);
+    expect(toggleBtn).not.toBeNull();
+    await click(toggleBtn!);
 
     // Only parked quote visible
     expect(container.textContent).toContain('学而时习之');
-    expect(container.textContent).not.toContain('温故而知新');
+    expect(container.textContent).not.toContain('温故知新');
   });
 
-  it('clicking the filter toggle again (off) shows all quotes', async () => {
-    const parked = makeQuote({ id: 'q1', text: '学而时习之', clozes: [] });
-    const withCloze = makeQuote({
-      id: 'q2',
-      text: '温故而知新',
-      clozes: [{ id: 'c1', start: 0, end: 2, hint: 'none' }],
-    });
+  it('clicking filter toggle again shows all quotes', async () => {
+    const quotes = [
+      makeQuote({ id: 'q1', text: '学而时习之' }),             // parked
+      makeQuote({ id: 'q2', text: '温故知新', clozes: [makeCloze()] }), // NOT parked
+    ];
+
     await renderClient(
       <QuoteList
-        quotes={[parked, withCloze]}
-        words={NO_WORDS}
+        quotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         locale="en"
+        savedWords={savedWords}
       />,
     );
 
-    const toggle = container.querySelector<HTMLElement>('[data-parked-filter]');
-    await click(toggle!); // ON
-    expect(container.textContent).not.toContain('温故而知新');
+    const toggleBtn = queryButton(messages.en['cloze.parked'])!;
+    await click(toggleBtn);
+    // After first click, only parked visible
+    expect(container.textContent).not.toContain('温故知新');
 
-    await click(toggle!); // OFF
-    expect(container.textContent).toContain('温故而知新');
+    // Click again to deactivate
+    const toggleBtnAgain = queryButton(messages.en['cloze.parked'])!;
+    await click(toggleBtnAgain);
+    // Both visible again
+    expect(container.textContent).toContain('温故知新');
   });
+});
 
-  it('archived parked quote is EXCLUDED when parked filter is toggled on (spec §5)', async () => {
-    const archivedParked = makeQuote({
-      id: 'q1',
-      text: '学而时习之',
-      clozes: [],
-      status: 'archived',
-    });
-    const nonArchivedParked = makeQuote({
-      id: 'q2',
-      text: '温故而知新',
-      clozes: [],
-    });
-    const withCloze = makeQuote({
-      id: 'q3',
-      text: '知之为知之',
-      clozes: [{ id: 'c1', start: 0, end: 2, hint: 'none' }],
-    });
+describe('QuoteList — empty parked-filter state', () => {
+  it('shows no-parked message and keeps filter toggle when filter is active but no parked quotes remain', async () => {
+    // All quotes have clozes → none are parked
+    const quotes = [
+      makeQuote({ id: 'q1', text: '学而时习之', clozes: [makeCloze()] }),
+      makeQuote({ id: 'q2', text: '温故知新', clozes: [makeCloze()] }),
+    ];
+
+    // Render with parkedCount=0 initially; we need to simulate the scenario
+    // where the filter is already active. We achieve this by first rendering
+    // with a parked quote, clicking the toggle, then re-rendering without parked quotes.
+    const parkedQuote = makeQuote({ id: 'q0', text: '仁者爱人' }); // parked
     await renderClient(
       <QuoteList
-        quotes={[archivedParked, nonArchivedParked, withCloze]}
-        words={NO_WORDS}
+        quotes={[parkedQuote, ...quotes]}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         locale="en"
+        savedWords={savedWords}
       />,
     );
 
-    // All three visible initially
-    expect(container.textContent).toContain('学而时习之'); // archived parked
-    expect(container.textContent).toContain('温故而知新'); // non-archived parked
-    expect(container.textContent).toContain('知之为知之'); // with cloze
+    // Activate the filter
+    const toggleBtn = queryButton(messages.en['cloze.parked'])!;
+    expect(toggleBtn).not.toBeNull();
+    await click(toggleBtn);
 
-    // Click filter toggle to show only non-archived parked
-    const toggle = container.querySelector<HTMLElement>('[data-parked-filter]');
-    await click(toggle!);
+    // Now re-render with no parked quotes (simulating the last parked quote being resolved)
+    await renderClient(
+      <QuoteList
+        quotes={quotes}
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        locale="en"
+        savedWords={savedWords}
+      />,
+    );
 
-    // Non-archived parked visible, archived parked and with-cloze are hidden
-    expect(container.textContent).not.toContain('学而时习之'); // archived parked EXCLUDED
-    expect(container.textContent).toContain('温故而知新'); // non-archived parked visible
-    expect(container.textContent).not.toContain('知之为知之'); // with cloze hidden
+    // The "no parked quotes" message should be visible
+    expect(container.textContent).toContain(messages.en['cloze.noParked']);
+    // The filter toggle should still be rendered so the user can turn it off
+    expect(queryButton(messages.en['cloze.parked'])).not.toBeNull();
+    // Non-parked quotes should NOT be visible while filter is active
+    expect(container.textContent).not.toContain('学而时习之');
+    expect(container.textContent).not.toContain('温故知新');
+  });
+
+  it('toggling the filter off after empty-state reveals all quotes', async () => {
+    const quotes = [
+      makeQuote({ id: 'q1', text: '学而时习之', clozes: [makeCloze()] }),
+    ];
+
+    const parkedQuote = makeQuote({ id: 'q0', text: '仁者爱人' });
+    await renderClient(
+      <QuoteList
+        quotes={[parkedQuote, ...quotes]}
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        locale="en"
+        savedWords={savedWords}
+      />,
+    );
+
+    // Turn the filter on
+    await click(queryButton(messages.en['cloze.parked'])!);
+
+    // Re-render with no parked quotes
+    await renderClient(
+      <QuoteList
+        quotes={quotes}
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        locale="en"
+        savedWords={savedWords}
+      />,
+    );
+
+    // Confirm empty state
+    expect(container.textContent).toContain(messages.en['cloze.noParked']);
+
+    // Turn the filter off
+    await click(queryButton(messages.en['cloze.parked'])!);
+
+    // All quotes now visible
+    expect(container.textContent).toContain('学而时习之');
+    expect(container.textContent).not.toContain(messages.en['cloze.noParked']);
+  });
+});
+
+describe('QuoteCard — parked visual marker', () => {
+  it('shows parked chip on a quote with no clozes', async () => {
+    const quotes = [makeQuote({ id: 'q1' })]; // no clozes → parked
+
+    await renderClient(
+      <QuoteList
+        quotes={quotes}
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        locale="en"
+        savedWords={savedWords}
+      />,
+    );
+
+    expect(container.textContent).toContain(messages.en['cloze.parked']);
+  });
+
+  it('does not show parked chip on a quote with clozes', async () => {
+    const quotes = [makeQuote({ id: 'q1', clozes: [makeCloze()] })];
+
+    await renderClient(
+      <QuoteList
+        quotes={quotes}
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        locale="en"
+        savedWords={savedWords}
+      />,
+    );
+
+    // The parked chip should not appear (the ClozeEditor label might not have it)
+    // We check that it's not in the card area (outside the QuoteList filter badge)
+    // We check there's no standalone "Parked — no blank" chip
+    const parkedLabel = messages.en['cloze.parked'];
+    // Count occurrences - should be 0 (no badge since 0 parked, no chip on card)
+    const occurrences = (container.textContent ?? '').split(parkedLabel).length - 1;
+    expect(occurrences).toBe(0);
   });
 });

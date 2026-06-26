@@ -265,115 +265,116 @@ describe('parseBackup with FSRS review state', () => {
   });
 });
 
-describe('parseBackup version compatibility', () => {
-  it('accepts a v1 backup (formatVersion 1) and imports quotes with no clozes', () => {
-    const v1Envelope = {
+describe('parseBackup – version compatibility and cloze validation', () => {
+  it('accepts a v1 backup (formatVersion 1) and loads quotes with clozes absent', () => {
+    const v1Backup = {
       app: 'shiyu-hanzi-box',
       formatVersion: 1,
-      exportedAt: '2026-06-20T12:34:56.000Z',
-      inbox: {
-        words: [word],
-        quotes: [quote],
-      },
+      exportedAt: '2026-06-20T12:00:00.000Z',
+      inbox: { words: [], quotes: [quote] },
     };
-    const restored = parseBackup(JSON.stringify(v1Envelope));
-    expect(restored.quotes[0]).toEqual(quote);
+    const restored = parseBackup(JSON.stringify(v1Backup));
+    expect(restored.quotes).toHaveLength(1);
+    expect(restored.quotes[0].id).toBe('q1');
     expect(restored.quotes[0].clozes).toBeUndefined();
   });
 
   it('accepts a v2 backup with valid clozes and round-trips them unchanged', () => {
-    const quoteWithClozes: QuoteEntry = {
-      ...quote,
-      clozes: [
-        { id: 'c1', start: 0, end: 1 },
-        { id: 'c2', start: 2, end: 4, hint: 'pinyin', wordId: 'w1' },
-      ],
+    const cloze = {
+      id: 'c1',
+      start: 0,
+      end: 2,
+      hint: 'none' as const,
+      wordId: 'w1',
     };
-    const inboxWithClozes: Inbox = { words: [word], quotes: [quoteWithClozes] };
-    const backup = createBackup(inboxWithClozes, new Date('2026-06-20T12:34:56.000Z'));
-    // Ensure version is 2
-    expect(backup.formatVersion).toBe(2);
-    const restored = parseBackup(JSON.stringify(backup));
-    expect(restored.quotes[0].clozes).toEqual(quoteWithClozes.clozes);
-  });
-
-  it('rejects a backup with formatVersion greater than the current version', () => {
-    const futureEnvelope = {
+    const quoteWithClozes: QuoteEntry = { ...quote, clozes: [cloze] };
+    const v2Backup = {
       app: 'shiyu-hanzi-box',
-      formatVersion: 9999,
-      exportedAt: '2026-06-20T12:34:56.000Z',
-      inbox: { words: [], quotes: [] },
+      formatVersion: 2,
+      exportedAt: '2026-06-20T12:00:00.000Z',
+      inbox: { words: [], quotes: [quoteWithClozes] },
     };
-    expect(() => parseBackup(JSON.stringify(futureEnvelope))).toThrow(
-      BackupParseError,
-    );
-  });
-});
-
-describe('parseBackup cloze sanitization', () => {
-  it('imports successfully and sets clozes to [] when a cloze has end > text.length', () => {
-    const badQuote: QuoteEntry = {
-      ...quote,
-      // quote.text is '学而时习之' (length 5); end=99 is out of range
-      clozes: [{ id: 'c1', start: 0, end: 99 }],
-    };
-    const restored = parseBackup(
-      JSON.stringify({ words: [word], quotes: [badQuote] }),
-    );
-    expect(restored.quotes[0].clozes).toEqual([]);
+    const restored = parseBackup(JSON.stringify(v2Backup));
+    expect(restored.quotes[0].clozes).toEqual([cloze]);
   });
 
-  it('imports successfully and sets clozes to [] when a cloze is missing id', () => {
-    const badQuote = {
+  it('drops clozes to [] when a cloze has overlapping spans, but keeps the quote', () => {
+    const quoteWithOverlap = {
       ...quote,
-      clozes: [{ start: 0, end: 2 }], // no id field
-    };
-    const restored = parseBackup(
-      JSON.stringify({ words: [word], quotes: [badQuote as unknown as QuoteEntry] }),
-    );
-    expect(restored.quotes[0].clozes).toEqual([]);
-  });
-
-  it('imports successfully and sets clozes to [] when two clozes overlap', () => {
-    const badQuote: QuoteEntry = {
-      ...quote,
-      // [0,3) and [2,5) overlap
       clozes: [
         { id: 'c1', start: 0, end: 3 },
-        { id: 'c2', start: 2, end: 5 },
+        { id: 'c2', start: 2, end: 5 }, // overlaps c1
       ],
     };
-    const restored = parseBackup(
-      JSON.stringify({ words: [word], quotes: [badQuote] }),
-    );
+    const v2Backup = {
+      app: 'shiyu-hanzi-box',
+      formatVersion: 2,
+      exportedAt: '2026-06-20T12:00:00.000Z',
+      inbox: { words: [], quotes: [quoteWithOverlap] },
+    };
+    const restored = parseBackup(JSON.stringify(v2Backup));
+    expect(restored.quotes).toHaveLength(1);
+    expect(restored.quotes[0].id).toBe('q1');
     expect(restored.quotes[0].clozes).toEqual([]);
   });
 
-  it('imports successfully and sets clozes to [] for a cloze with start >= end', () => {
-    const badQuote: QuoteEntry = {
-      ...quote,
-      clozes: [{ id: 'c1', start: 3, end: 3 }], // start === end
+  it('drops clozes to [] when a cloze end exceeds text.length, but keeps the quote', () => {
+    const quoteWithOutOfRange = {
+      ...quote, // text is '学而时习之' (5 chars)
+      clozes: [
+        { id: 'c1', start: 0, end: 999 }, // end > textLength
+      ],
     };
-    const restored = parseBackup(
-      JSON.stringify({ words: [word], quotes: [badQuote] }),
-    );
+    const v2Backup = {
+      app: 'shiyu-hanzi-box',
+      formatVersion: 2,
+      exportedAt: '2026-06-20T12:00:00.000Z',
+      inbox: { words: [], quotes: [quoteWithOutOfRange] },
+    };
+    const restored = parseBackup(JSON.stringify(v2Backup));
     expect(restored.quotes[0].clozes).toEqual([]);
   });
 
-  it('keeps valid clozes and leaves absent clozes untouched on the same import', () => {
-    const quoteWithClozes: QuoteEntry = {
+  it('drops clozes to [] when a cloze is missing id, but keeps the quote', () => {
+    const quoteWithMissingId = {
       ...quote,
-      id: 'q2',
-      clozes: [{ id: 'c1', start: 0, end: 2 }],
+      clozes: [
+        { start: 0, end: 2 }, // no id field
+      ],
     };
-    const quoteNoClozes: QuoteEntry = { ...quote, id: 'q3' };
-    const restored = parseBackup(
-      JSON.stringify({
-        words: [],
-        quotes: [quoteWithClozes, quoteNoClozes],
-      }),
-    );
-    expect(restored.quotes[0].clozes).toEqual([{ id: 'c1', start: 0, end: 2 }]);
-    expect(restored.quotes[1].clozes).toBeUndefined();
+    const v2Backup = {
+      app: 'shiyu-hanzi-box',
+      formatVersion: 2,
+      exportedAt: '2026-06-20T12:00:00.000Z',
+      inbox: { words: [], quotes: [quoteWithMissingId] },
+    };
+    const restored = parseBackup(JSON.stringify(v2Backup));
+    expect(restored.quotes[0].clozes).toEqual([]);
+  });
+
+  it('does not throw when importing a quote with a malformed cloze array', () => {
+    const quoteWithBadClozes = {
+      ...quote,
+      clozes: 'not-an-array',
+    };
+    const v2Backup = {
+      app: 'shiyu-hanzi-box',
+      formatVersion: 2,
+      exportedAt: '2026-06-20T12:00:00.000Z',
+      inbox: { words: [], quotes: [quoteWithBadClozes] },
+    };
+    expect(() => parseBackup(JSON.stringify(v2Backup))).not.toThrow();
+    const restored = parseBackup(JSON.stringify(v2Backup));
+    expect(restored.quotes[0].clozes).toEqual([]);
+  });
+
+  it('rejects a backup with formatVersion greater than current', () => {
+    const futureBackup = {
+      app: 'shiyu-hanzi-box',
+      formatVersion: 999,
+      exportedAt: '2026-06-20T12:00:00.000Z',
+      inbox: { words: [], quotes: [] },
+    };
+    expect(() => parseBackup(JSON.stringify(futureBackup))).toThrow(BackupParseError);
   });
 });

@@ -930,4 +930,57 @@ describe('quote cloze expansion', () => {
     const due2 = buildSrsQueue(inbox, NOW, NO_FUZZ);
     expect(due1.map((i) => i.clozeId)).toEqual(due2.map((i) => i.clozeId));
   });
+
+  it('legacy quote.review is ignored: a stale review with clozes:[] yields zero queue cards', () => {
+    // Regression guard: a pre-existing QuoteEntry.review (from the old recognition-only
+    // model) that would have been due must NOT produce any card in buildSrsQueue.
+    // Quotes are scheduled ONLY through their per-cloze cloze.review.
+    const staleReview = {
+      scheduler: 'fsrs-v1' as const,
+      cardState: 'review' as const,
+      dueAt: YESTERDAY, // overdue — would be due if the queue read quote.review
+      intervalDays: 14,
+      repetitions: 5,
+      lapses: 0,
+      stability: 14,
+      difficulty: 5,
+      lastReviewedAt: YESTERDAY - 14 * DAY_MS,
+    };
+    const quoteWithStaleReview: QuoteEntry = quote({
+      id: 'legacy-quote',
+      review: staleReview,
+      clozes: [], // no clozes — the recognition-only model never created clozes
+    });
+    const inbox: Inbox = { words: [], quotes: [quoteWithStaleReview] };
+    const queue = buildSrsQueue(inbox, NOW, NO_FUZZ);
+    expect(queue).toHaveLength(0);
+
+    const stats = getSrsStats(inbox, NOW, NO_FUZZ, 0);
+    expect(stats.newAvailableToday).toBe(0);
+    expect(stats.dueLaterToday).toBe(0);
+  });
+
+  it('word.review is still used for scheduling (word path untouched by cloze change)', () => {
+    // Confirm that the word scheduling path continues to read entry.review directly,
+    // as opposed to the quote path which reads cloze.review.
+    const wordWithInlineReview = word({
+      id: 'word-scheduled',
+      review: {
+        scheduler: 'fsrs-v1',
+        cardState: 'review',
+        dueAt: YESTERDAY, // overdue
+        intervalDays: 3,
+        repetitions: 2,
+        lapses: 0,
+        stability: 3,
+        difficulty: 5,
+        lastReviewedAt: YESTERDAY - 3 * DAY_MS,
+      },
+    });
+    const inbox: Inbox = { words: [wordWithInlineReview], quotes: [] };
+    const queue = buildSrsQueue(inbox, NOW, NO_FUZZ);
+    expect(queue).toHaveLength(1);
+    expect(queue[0].entry.id).toBe('word-scheduled');
+    expect(queue[0].kind).toBe('word');
+  });
 });

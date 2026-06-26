@@ -473,7 +473,12 @@ export function buildSrsQueue(
       if (review.dueAt > now) continue;
       items.push({ kind: 'word', entry, dueAt: review.dueAt });
     } else {
-      // Quote: expand into one item per cloze; no clozes => skip entirely
+      // Quote: expand into one item per cloze; no clozes => skip entirely.
+      // NOTE: QuoteEntry.review (the top-level field) is intentionally ignored here.
+      // In the legacy recognition-only model, quotes were scheduled via entry.review.
+      // Since Task 5, quotes schedule ONLY through their per-cloze cloze.review.
+      // Any pre-existing quote.review is a one-time scheduling reset — it will never
+      // produce a queue card and does not need to be cleared from storage.
       const quote = entry as QuoteEntry;
       for (const cloze of quote.clozes ?? []) {
         const effectiveReview = cloze.review ?? newReviewState(entry.createdAt);

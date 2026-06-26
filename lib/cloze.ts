@@ -1,6 +1,6 @@
 import { makeId } from './id';
 import { normalizeText } from './normalize';
-import type { Cloze, WordEntry } from './types';
+import type { Cloze, QuoteEntry, WordEntry } from './types';
 
 // ---------------------------------------------------------------------------
 // Internal: normalizeWithMap
@@ -172,6 +172,23 @@ export function clozesOverlap(clozes: Cloze[]): boolean {
     if (sorted[i].start < sorted[i - 1].end) return true;
   }
   return false;
+}
+
+/**
+ * Returns true if the quote is "parked" — i.e., it has no cloze blanks and is
+ * not archived. Parked quotes are not review-eligible (spec §5).
+ * Archived quotes are excluded because they are intentionally inactive.
+ */
+export function isParkedQuote(quote: QuoteEntry): boolean {
+  if (quote.status === 'archived') return false;
+  return !quote.clozes?.length;
+}
+
+/**
+ * Returns the count of non-archived parked quotes in an array.
+ */
+export function countParkedQuotes(quotes: QuoteEntry[]): number {
+  return quotes.filter(isParkedQuote).length;
 }
 
 /**

@@ -1,5 +1,7 @@
+import { useState } from 'react';
+import { countParkedQuotes, isParkedQuote } from '@/lib/cloze';
+import { formatMessage, t } from '@/lib/i18n';
 import type { QuoteEntry, UiLocale, WordEntry } from '@/lib/types';
-import { t } from '@/lib/i18n';
 import { QuoteCard } from './QuoteCard';
 
 export function QuoteList({
@@ -15,6 +17,11 @@ export function QuoteList({
   locale: UiLocale;
   savedWords: WordEntry[];
 }) {
+  const [showParkedOnly, setShowParkedOnly] = useState(false);
+
+  const parkedCount = countParkedQuotes(quotes);
+  const visibleQuotes = showParkedOnly ? quotes.filter(isParkedQuote) : quotes;
+
   if (quotes.length === 0) {
     return (
       <div className="rounded-sm border border-dashed border-border bg-paper-light py-12 text-center">
@@ -28,17 +35,37 @@ export function QuoteList({
   }
 
   return (
-    <div className="grid gap-3">
-      {quotes.map((quote) => (
-        <QuoteCard
-          key={quote.id}
-          quote={quote}
-          onUpdate={(patch) => onUpdate(quote.id, patch)}
-          onDelete={() => onDelete(quote.id)}
-          locale={locale}
-          savedWords={savedWords}
-        />
-      ))}
+    <div className="space-y-3">
+      {parkedCount > 0 && (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowParkedOnly((v) => !v)}
+            className={`inline-flex items-center gap-1.5 rounded-sm border px-3 py-1.5 text-xs font-medium transition ${
+              showParkedOnly
+                ? 'border-cinnabar-border bg-cinnabar text-white'
+                : 'border-cinnabar-border bg-cinnabar-light text-cinnabar hover:bg-cinnabar hover:text-white'
+            }`}
+          >
+            {t(locale, 'cloze.parked')}
+          </button>
+          <span className="text-xs text-muted">
+            {formatMessage(locale, 'cloze.parkedCount', { count: parkedCount })}
+          </span>
+        </div>
+      )}
+      <div className="grid gap-3">
+        {visibleQuotes.map((quote) => (
+          <QuoteCard
+            key={quote.id}
+            quote={quote}
+            onUpdate={(patch) => onUpdate(quote.id, patch)}
+            onDelete={() => onDelete(quote.id)}
+            locale={locale}
+            savedWords={savedWords}
+            showParkedMarker={isParkedQuote(quote)}
+          />
+        ))}
+      </div>
     </div>
   );
 }

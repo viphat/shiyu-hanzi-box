@@ -10,12 +10,14 @@ export function QuoteCard({
   onDelete,
   locale,
   savedWords,
+  showParkedMarker = false,
 }: {
   quote: QuoteEntry;
   onUpdate: (patch: Partial<QuoteEntry>) => void;
   onDelete: () => void;
   locale: UiLocale;
   savedWords: WordEntry[];
+  showParkedMarker?: boolean;
 }) {
   const [note, setNote] = useState(quote.note);
   const [showTraditional, setShowTraditional] = useState(false);
@@ -33,6 +35,14 @@ export function QuoteCard({
       </blockquote>
       {showTraditional && quote.traditionalText && (
         <p className="mt-2 pl-5 text-sm italic text-cinnabar">{quote.traditionalText}</p>
+      )}
+      {showParkedMarker && (
+        <div className="mt-2 flex items-center gap-2">
+          <span className="inline-flex items-center rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-0.5 text-[11px] font-semibold text-cinnabar tracking-[1px]">
+            {t(locale, 'cloze.parked')}
+          </span>
+          <span className="text-xs text-muted">{t(locale, 'cloze.addBlank')}</span>
+        </div>
       )}
       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">
         <input

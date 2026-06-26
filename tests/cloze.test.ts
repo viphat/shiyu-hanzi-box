@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { clozeFromRange, suggestClozes } from '../lib/cloze';
-import type { Cloze, WordEntry } from '../lib/types';
+import { clozeFromRange, countParkedQuotes, isParkedQuote, suggestClozes } from '../lib/cloze';
+import type { Cloze, QuoteEntry, WordEntry } from '../lib/types';
+
+function makeQuote(overrides: Partial<QuoteEntry> = {}): QuoteEntry {
+  return {
+    id: 'q1', kind: 'quote', text: '学而时习之', tags: [], note: '',
+    status: 'inbox', createdAt: 0, updatedAt: 0, category: 'classic',
+    sourceTitle: '', sourceUrl: '', sourceDomain: '', surrounding: '',
+    ...overrides,
+  };
+}
 
 function word(text: string, overrides: Partial<WordEntry> = {}): WordEntry {
   return {
@@ -104,5 +113,48 @@ describe('clozeFromRange', () => {
     expect(result).not.toBeNull();
     expect(result!.start).toBe(0);
     expect(result!.end).toBe(text.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isParkedQuote / countParkedQuotes
+// ---------------------------------------------------------------------------
+
+describe('isParkedQuote', () => {
+  it('returns true when clozes is absent', () => {
+    expect(isParkedQuote(makeQuote())).toBe(true);
+  });
+
+  it('returns true when clozes is an empty array', () => {
+    expect(isParkedQuote(makeQuote({ clozes: [] }))).toBe(true);
+  });
+
+  it('returns false when clozes has at least one entry', () => {
+    const cloze: Cloze = { id: 'c1', start: 0, end: 2 };
+    expect(isParkedQuote(makeQuote({ clozes: [cloze] }))).toBe(false);
+  });
+
+  it('returns false for archived quotes even without clozes (not actionably parked)', () => {
+    expect(isParkedQuote(makeQuote({ status: 'archived' }))).toBe(false);
+  });
+
+  it('returns true for reviewed quotes with no clozes (still actionably parked)', () => {
+    expect(isParkedQuote(makeQuote({ status: 'reviewed' }))).toBe(true);
+  });
+});
+
+describe('countParkedQuotes', () => {
+  it('returns 0 for empty array', () => {
+    expect(countParkedQuotes([])).toBe(0);
+  });
+
+  it('counts non-archived quotes with no clozes', () => {
+    const quotes = [
+      makeQuote({ id: 'q1' }),                          // parked (no clozes)
+      makeQuote({ id: 'q2', clozes: [] }),              // parked (empty)
+      makeQuote({ id: 'q3', clozes: [{ id: 'c1', start: 0, end: 2 }] }), // NOT parked
+      makeQuote({ id: 'q4', status: 'archived' }),      // archived → not counted
+    ];
+    expect(countParkedQuotes(quotes)).toBe(2);
   });
 });

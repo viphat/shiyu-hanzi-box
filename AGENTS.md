@@ -18,9 +18,12 @@ The implementation plan is in:
 - `docs/superpowers/plans/2026-06-24-real-srs-system.md`
 - `docs/superpowers/specs/2026-06-24-single-card-review-design.md`
 - `docs/superpowers/plans/2026-06-24-single-card-review.md`
+- `docs/superpowers/specs/2026-06-25-quote-review-cloze-design.md`
+- `docs/superpowers/plans/2026-06-25-quote-review-cloze.md`
 
 Tasks 0 through 15, Traditional Chinese conversion, TTS, the real FSRS system,
-and the focused single-card review experience have landed.
+the focused single-card review experience, and cloze-deletion quote review have
+landed.
 
 ## Commands
 
@@ -45,11 +48,15 @@ npx vitest run tests/pinyin.test.ts
 npx vitest run tests/traditional.test.ts
 npx vitest run tests/types-srs.test.ts
 npx vitest run tests/settings.test.ts
+npx vitest run tests/cloze.test.ts
 npx vitest run tests/srs.test.ts
 npx vitest run tests/review.test.ts
 npx vitest run tests/review-queue.test.tsx
+npx vitest run tests/quote-card.test.tsx
+npx vitest run tests/quote-list.test.tsx
 npx vitest run tests/backup.test.ts
 npx vitest run tests/markdown.test.ts
+npx vitest run tests/i18n.test.ts
 npx vitest run tests/export.test.ts
 ```
 
@@ -87,11 +94,19 @@ The central data path is:
     persisted on `EntryBase.traditionalText`.
 11. `lib/srs.ts` is the only importer of `ts-fsrs`. It lazily migrates legacy
     review state, schedules ratings, builds the due queue, computes review
-    stats, and preserves minute-scale learning steps.
+    stats, and preserves minute-scale learning steps. For quotes, FSRS state is
+    **inline per cloze** (each `Cloze` carries its own `Cloze.review`). The queue
+    builder expands each non-archived quote into one card per cloze (quotes with
+    no clozes contribute nothing). A non-persisted `CardId` string
+    (`word:<id>` | `cloze:<quoteId>:<clozeId>`) identifies queue items for answer
+    routing. The old quote-level `EntryBase.review` is inert; a one-time
+    migration scheduled all old quotes as "archived" to reset them to parked.
+    Word review state is unchanged.
 12. `entrypoints/dashboard/components/ReviewQueue.tsx` renders only the first
-    filtered due card. Word answers remain hidden until Reveal; quote content
-    is shown immediately. Rating/postpone updates storage and the recalculated
-    queue supplies the next card.
+    filtered due card. Word answers remain hidden until Reveal. For quotes with
+    clozes, the blanked span (cloze) is shown, and Reveal exposes the hidden
+    text. Rating/postpone updates storage and the recalculated queue supplies
+    the next card.
 
 Core modules:
 
@@ -106,7 +121,10 @@ Core modules:
   Taiwan Traditional conversion using `cn -> twp`.
 - `lib/srs.ts`: the only `ts-fsrs` importer; scheduler construction,
   ReviewState/Card conversion, lazy migration, ratings, postpone, due queue,
-  wake time, and local review stats.
+  wake time, and local review stats. Expands each non-archived quote into one
+  queue item per cloze span.
+- `lib/cloze.ts`: `suggestClozes` (from saved words), normalization with offset
+  back-projection, and span invariant helpers (`normalizeClozes`, `clozesOverlap`).
 - `lib/review.ts`: compatibility wrapper that delegates queue building to
   `lib/srs.ts`.
 - `lib/settings.ts`: `local:settings` storage plus normalized read, watch,

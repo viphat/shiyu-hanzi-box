@@ -140,8 +140,11 @@ retention.
 
 - For a **word**, the saved word is the prompt. Click **Reveal** to see pinyin,
   definitions, notes, examples, pronunciation, and AI insight.
-- For a **quote**, the saved quote and note are visible immediately because the
-  current quote model has no separate answer side.
+- For a **quote**, review uses cloze deletion: a blanked span (cloze) is the
+  prompt, and the hidden text is the answer. Click **Reveal** to see the blanked
+  span. A quote becomes reviewable only when it has at least one cloze. Each
+  cloze is an independent FSRS card. Quotes with no clozes (parked quotes) show
+  an "Add a blank to review" affordance in the dashboard.
 
 Rate the card:
 

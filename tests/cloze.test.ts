@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { suggestClozes } from '../lib/cloze';
-import type { WordEntry } from '../lib/types';
+import { clozesOverlap, normalizeClozes, suggestClozes } from '../lib/cloze';
+import type { Cloze, WordEntry } from '../lib/types';
 
 function word(text: string, overrides: Partial<WordEntry> = {}): WordEntry {
   return {
@@ -33,5 +33,82 @@ describe('suggestClozes', () => {
     const out = suggestClozes(text, [word('学'), word('学而时习之')]);
     expect(out).toHaveLength(1);
     expect(text.slice(out[0].start, out[0].end)).toBe('学而时习之');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// clozesOverlap
+// ---------------------------------------------------------------------------
+
+describe('clozesOverlap', () => {
+  it('returns true for overlapping spans', () => {
+    expect(clozesOverlap({ start: 0, end: 3 }, { start: 2, end: 5 })).toBe(true);
+    expect(clozesOverlap({ start: 2, end: 5 }, { start: 0, end: 3 })).toBe(true);
+  });
+
+  it('returns true when one span contains the other', () => {
+    expect(clozesOverlap({ start: 0, end: 5 }, { start: 1, end: 3 })).toBe(true);
+    expect(clozesOverlap({ start: 1, end: 3 }, { start: 0, end: 5 })).toBe(true);
+  });
+
+  it('returns false for adjacent spans (touching but not overlapping)', () => {
+    expect(clozesOverlap({ start: 0, end: 2 }, { start: 2, end: 4 })).toBe(false);
+    expect(clozesOverlap({ start: 2, end: 4 }, { start: 0, end: 2 })).toBe(false);
+  });
+
+  it('returns false for non-overlapping spans with gap', () => {
+    expect(clozesOverlap({ start: 0, end: 2 }, { start: 3, end: 5 })).toBe(false);
+    expect(clozesOverlap({ start: 3, end: 5 }, { start: 0, end: 2 })).toBe(false);
+  });
+
+  it('returns true for identical spans', () => {
+    expect(clozesOverlap({ start: 1, end: 3 }, { start: 1, end: 3 })).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// normalizeClozes
+// ---------------------------------------------------------------------------
+
+describe('normalizeClozes', () => {
+  function cloze(id: string, start: number, end: number): Cloze {
+    return { id, start, end, hint: 'none' };
+  }
+
+  it('drops spans with start < 0', () => {
+    const result = normalizeClozes([cloze('c1', -1, 2)], 5);
+    expect(result).toHaveLength(0);
+  });
+
+  it('drops spans with end > textLength', () => {
+    const result = normalizeClozes([cloze('c1', 2, 6)], 5);
+    expect(result).toHaveLength(0);
+  });
+
+  it('drops spans with start >= end (empty or inverted)', () => {
+    expect(normalizeClozes([cloze('c1', 2, 2)], 5)).toHaveLength(0);
+    expect(normalizeClozes([cloze('c1', 3, 1)], 5)).toHaveLength(0);
+  });
+
+  it('keeps valid spans', () => {
+    const result = normalizeClozes([cloze('c1', 0, 2), cloze('c2', 3, 5)], 5);
+    expect(result).toHaveLength(2);
+  });
+
+  it('sorts spans by start position', () => {
+    const result = normalizeClozes([cloze('c2', 3, 5), cloze('c1', 0, 2)], 5);
+    expect(result[0].id).toBe('c1');
+    expect(result[1].id).toBe('c2');
+  });
+
+  it('drops overlapping spans (keeps the earlier one)', () => {
+    // c1 at 0-3, c2 at 2-5 — they overlap; c1 is earlier so c2 is dropped
+    const result = normalizeClozes([cloze('c1', 0, 3), cloze('c2', 2, 5)], 5);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('c1');
+  });
+
+  it('returns empty for empty input', () => {
+    expect(normalizeClozes([], 10)).toHaveLength(0);
   });
 });

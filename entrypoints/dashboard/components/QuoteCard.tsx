@@ -1,21 +1,59 @@
 import { useState } from 'react';
+import { clozesOverlap, normalizeClozes, suggestClozes } from '@/lib/cloze';
 import { t } from '@/lib/i18n';
-import type { QuoteEntry, UiLocale } from '@/lib/types';
+import type { Cloze, QuoteEntry, UiLocale, WordEntry } from '@/lib/types';
 import { TraditionalButton } from './TraditionalButton';
 
 export function QuoteCard({
   quote,
+  words,
   onUpdate,
   onDelete,
   locale,
 }: {
   quote: QuoteEntry;
+  words: WordEntry[];
   onUpdate: (patch: Partial<QuoteEntry>) => void;
   onDelete: () => void;
   locale: UiLocale;
 }) {
   const [note, setNote] = useState(quote.note);
   const [showTraditional, setShowTraditional] = useState(false);
+  const [suggestions, setSuggestions] = useState<Cloze[] | null>(null);
+
+  const existingClozes: Cloze[] = quote.clozes ?? [];
+
+  function handleSuggest() {
+    const all = suggestClozes(quote.text, words);
+    // Filter out suggestions that overlap any existing cloze
+    const filtered = all.filter(
+      (s) => !existingClozes.some((c) => clozesOverlap(c, s)),
+    );
+    setSuggestions(filtered);
+  }
+
+  function handleAcceptSuggestion(suggestion: Cloze) {
+    // Reject if overlaps any existing cloze
+    if (existingClozes.some((c) => clozesOverlap(c, suggestion))) {
+      return;
+    }
+    const next = normalizeClozes([...existingClozes, suggestion], quote.text.length);
+    onUpdate({ clozes: next });
+    // Remove accepted suggestion from the list
+    setSuggestions((prev) =>
+      prev ? prev.filter((s) => s.id !== suggestion.id) : null,
+    );
+  }
+
+  function handleRemoveCloze(id: string) {
+    const next = existingClozes.filter((c) => c.id !== id);
+    onUpdate({ clozes: next });
+  }
+
+  function handleChangeHint(id: string, hint: Cloze['hint']) {
+    const next = existingClozes.map((c) => (c.id === id ? { ...c, hint } : c));
+    onUpdate({ clozes: next });
+  }
 
   return (
     <div className="rounded-sm border border-border bg-paper-light p-4 shadow-sm transition hover:border-border-hover hover:shadow-md">
@@ -56,6 +94,70 @@ export function QuoteCard({
           locale={locale}
         />
       </div>
+
+      {/* Cloze editor section */}
+      <div className="mt-3 space-y-2">
+        {/* Existing cloze chips */}
+        {existingClozes.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {existingClozes.map((cloze) => (
+              <span
+                key={cloze.id}
+                data-cloze-id={cloze.id}
+                className="inline-flex items-center gap-1 rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-0.5 text-xs text-cinnabar"
+              >
+                <span>{quote.text.slice(cloze.start, cloze.end)}</span>
+                <select
+                  data-cloze-hint={cloze.id}
+                  value={cloze.hint ?? 'none'}
+                  onChange={(e) => handleChangeHint(cloze.id, e.target.value as Cloze['hint'])}
+                  className="bg-transparent text-xs outline-none"
+                >
+                  <option value="none">{t(locale, 'cloze.hintNone')}</option>
+                  <option value="pinyin">{t(locale, 'cloze.hintPinyin')}</option>
+                  <option value="length">{t(locale, 'cloze.hintLength')}</option>
+                </select>
+                <button
+                  data-action="remove-cloze"
+                  data-cloze-id={cloze.id}
+                  onClick={() => handleRemoveCloze(cloze.id)}
+                  title={t(locale, 'cloze.removeBlank')}
+                  className="ml-0.5 text-cinnabar/60 hover:text-cinnabar"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Suggest blanks button */}
+        <div className="flex flex-wrap items-start gap-2">
+          <button
+            onClick={handleSuggest}
+            className="rounded-sm border border-border bg-paper-input px-2 py-1 text-xs text-muted transition hover:border-cinnabar-border hover:bg-cinnabar-light hover:text-cinnabar"
+          >
+            {t(locale, 'cloze.addBlank')}
+          </button>
+
+          {/* Suggestions */}
+          {suggestions !== null && suggestions.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {suggestions.map((s) => (
+                <button
+                  key={s.id}
+                  data-action="accept-suggestion"
+                  onClick={() => handleAcceptSuggestion(s)}
+                  className="rounded-sm border border-border bg-paper-input px-2 py-0.5 text-xs text-ink-secondary transition hover:border-cinnabar-border hover:bg-cinnabar-light hover:text-cinnabar"
+                >
+                  {quote.text.slice(s.start, s.end)}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
       <textarea
         value={note}
         onChange={(event) => setNote(event.target.value)}

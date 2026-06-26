@@ -1,6 +1,37 @@
 import { makeId } from './id';
 import type { Cloze, WordEntry } from './types';
 
+/**
+ * Returns true iff [a.start, a.end) and [b.start, b.end) intersect.
+ */
+export function clozesOverlap(
+  a: { start: number; end: number },
+  b: { start: number; end: number },
+): boolean {
+  return a.start < b.end && a.end > b.start;
+}
+
+/**
+ * Drop invalid spans (start<0, end>textLength, start>=end), sort by start,
+ * then drop any span that overlaps an already-kept span (keep the earlier one).
+ * Returns a valid, sorted, non-overlapping array.
+ */
+export function normalizeClozes(clozes: Cloze[], textLength: number): Cloze[] {
+  const valid = clozes.filter(
+    (c) => c.start >= 0 && c.end <= textLength && c.start < c.end,
+  );
+  valid.sort((a, b) => a.start - b.start);
+
+  const kept: Cloze[] = [];
+  for (const c of valid) {
+    const overlaps = kept.some((k) => clozesOverlap(k, c));
+    if (!overlaps) {
+      kept.push(c);
+    }
+  }
+  return kept;
+}
+
 interface NormalizedView {
   normalized: string;
   map: number[]; // map[i] = raw index in source text of normalized char i

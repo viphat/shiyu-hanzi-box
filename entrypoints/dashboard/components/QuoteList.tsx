@@ -1,15 +1,17 @@
-import type { QuoteEntry } from '@/lib/types';
+import type { QuoteEntry, WordEntry } from '@/lib/types';
 import type { UiLocale } from '@/lib/types';
 import { t } from '@/lib/i18n';
 import { QuoteCard } from './QuoteCard';
 
 export function QuoteList({
   quotes,
+  words,
   onUpdate,
   onDelete,
   locale,
 }: {
   quotes: QuoteEntry[];
+  words: WordEntry[];
   onUpdate: (id: string, patch: Partial<QuoteEntry>) => void;
   onDelete: (id: string) => void;
   locale: UiLocale;
@@ -32,6 +34,7 @@ export function QuoteList({
         <QuoteCard
           key={quote.id}
           quote={quote}
+          words={words}
           onUpdate={(patch) => onUpdate(quote.id, patch)}
           onDelete={() => onDelete(quote.id)}
           locale={locale}

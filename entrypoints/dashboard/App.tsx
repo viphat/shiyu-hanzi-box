@@ -312,6 +312,7 @@ export function App() {
           ) : (
             <QuoteList
               quotes={matches.quotes}
+              words={inbox.words}
               onUpdate={updateQuote}
               onDelete={deleteQuote}
               locale={locale}

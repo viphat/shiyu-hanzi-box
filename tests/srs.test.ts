@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
   answerReview,
+  answerReviewCloze,
   buildSrsQueue,
+  cardId,
   DEFAULT_SRS_SETTINGS,
   createSrsScheduler,
   getNextSrsWakeAt,
   getSrsStats,
   migrateReviewState,
   postponeReview,
+  postponeReviewCloze,
   previewReview,
+  previewReviewCloze,
   RATING_TO_GRADE,
   toFsrsCard,
 } from '../lib/srs';
@@ -713,6 +717,79 @@ describe('getSrsStats', () => {
         buildSrsQueue(atThreshold, NOW, NO_FUZZ).length,
       ).retention,
     ).toBe(0.9);
+  });
+});
+
+function clozedQuote(): QuoteEntry {
+  return quote({
+    id: 'q1', text: '他义无反顾地走了',
+    clozes: [
+      { id: 'cz1', start: 1, end: 5, hint: 'none' }, // 义无反顾
+      { id: 'cz2', start: 6, end: 7, hint: 'none' }, // 走
+    ],
+  });
+}
+
+describe('cardId', () => {
+  it('derives a stable word card id from entryId', () => {
+    expect(cardId({ kind: 'word', entryId: 'word-1' })).toBe('word:word-1');
+  });
+
+  it('derives a stable cloze card id from quoteId and clozeId', () => {
+    expect(cardId({ kind: 'cloze', quoteId: 'q1', clozeId: 'cz1' })).toBe('cloze:q1:cz1');
+  });
+});
+
+describe('answerReviewCloze', () => {
+  it('rates one cloze without affecting its sibling', () => {
+    const q = clozedQuote();
+    const next = answerReviewCloze(q, 'cz1', 'good', NOW, NO_FUZZ);
+    const c1 = next.clozes!.find((c) => c.id === 'cz1')!;
+    const c2 = next.clozes!.find((c) => c.id === 'cz2')!;
+    expect(c1.review?.repetitions).toBe(1);
+    expect(c2.review).toBeUndefined(); // untouched
+  });
+
+  it('sets status to reviewed and updates updatedAt', () => {
+    const q = clozedQuote();
+    const next = answerReviewCloze(q, 'cz1', 'good', NOW, NO_FUZZ);
+    expect(next.status).toBe('reviewed');
+    expect(next.updatedAt).toBe(NOW);
+  });
+
+  it('preserves archived status', () => {
+    const q = { ...clozedQuote(), status: 'archived' as const };
+    const next = answerReviewCloze(q, 'cz1', 'good', NOW, NO_FUZZ);
+    expect(next.status).toBe('archived');
+  });
+
+  it('appends a review log entry on the rated cloze', () => {
+    const q = clozedQuote();
+    const next = answerReviewCloze(q, 'cz1', 'good', NOW, NO_FUZZ);
+    const c1 = next.clozes!.find((c) => c.id === 'cz1')!;
+    expect(c1.review?.reviewLog).toHaveLength(1);
+    expect(c1.review?.reviewLog![0].rating).toBe('good');
+  });
+});
+
+describe('previewReviewCloze', () => {
+  it('returns a preview for all four ratings on the target cloze', () => {
+    const q = clozedQuote();
+    const preview = previewReviewCloze(q, 'cz1', NOW, NO_FUZZ);
+    expect(Object.keys(preview).sort()).toEqual(['again', 'easy', 'good', 'hard']);
+    expect(preview.good.dueAt).toBeGreaterThan(preview.again.dueAt);
+  });
+});
+
+describe('postponeReviewCloze', () => {
+  it('updates dueAt on the target cloze only', () => {
+    const q = clozedQuote();
+    const newDue = NOW + 5 * DAY_MS;
+    const next = postponeReviewCloze(q, 'cz1', NOW, newDue);
+    const c1 = next.clozes!.find((c) => c.id === 'cz1')!;
+    const c2 = next.clozes!.find((c) => c.id === 'cz2')!;
+    expect(c1.review?.dueAt).toBe(newDue);
+    expect(c2.review).toBeUndefined(); // untouched
   });
 });
 

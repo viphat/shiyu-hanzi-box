@@ -13,7 +13,7 @@ import type { SyncReplica } from '../../lib/sync/types';
 
 async function deps() {
   const key = await deriveKey('pw', defaultKdfParams());
-  return { fs: new MemoryFs(), key, vaultId: 'V1', replicaId: 'R-SELF', now: () => 1000 };
+  return { fs: new MemoryFs(), key, vaultId: 'V1', replicaId: '01J0AZ5K2YJ3M4N5P6Q7R8S9TW', now: () => 1000 };
 }
 
 describe('runSyncPass', () => {

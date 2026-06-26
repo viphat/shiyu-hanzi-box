@@ -6,7 +6,7 @@ import { setInbox } from '../storage';
 import { replaceSettings, getSettings } from '../settings';
 import { aiSettingsStorage } from '../ai/settings';
 import { applyLocalMutation, readDomainSnapshot, syncMetadataStorage } from './mutations';
-import { getSyncConfig, makeReplicaId, mutateSyncConfig } from './local';
+import { getSyncConfig, mutateSyncConfig } from './local';
 import type { SyncError, SyncReplica, SyncState, SyncStatus } from './types';
 import type { SyncFs } from './files';
 
@@ -74,7 +74,7 @@ export async function runSyncPass(
     writtenAt: { wallTime: deps.now(), counter: 0, replicaId: deps.replicaId },
     state: merged,
   };
-  const ownFilename = `${makeReplicaId(deps.now(), crypto.getRandomValues(new Uint8Array(10)))}.shiyu`;
+  const ownFilename = `${deps.replicaId}.shiyu`;
   try {
     await deps.fs.writeFile(ownFilename, await encryptReplica(deps.key, replica));
   } catch {
@@ -85,7 +85,7 @@ export async function runSyncPass(
   // If a new local mutation came in during the pass, stay pending.
   const revisionFinal = (await getSyncConfig()).localRevision;
   const stillPending = revisionFinal !== revisionAfterOwnWrite || warnings.length > 0;
-  const status: SyncStatus = warnings.length > 0 ? 'pending' : stillPending ? 'pending' : 'synced';
+  const status: SyncStatus = stillPending ? 'pending' : 'synced';
   await mutateSyncConfig((c) => ({
     ...c,
     pending: stillPending,

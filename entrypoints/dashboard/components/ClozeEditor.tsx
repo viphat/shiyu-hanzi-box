@@ -1,5 +1,5 @@
 import { type RefObject } from 'react';
-import { clozeFromRange, clozesOverlap } from '@/lib/cloze';
+import { clozeFromRange } from '@/lib/cloze';
 import { resolveSelectionOffsets } from '@/lib/cloze-selection';
 import { t } from '@/lib/i18n';
 import type { Cloze, QuoteEntry, UiLocale } from '@/lib/types';

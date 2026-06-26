@@ -88,8 +88,6 @@ export function renderDay(
       lines.push(`  - _category:_ ${esc(quote.category)}${tags}`);
       if (quote.note) lines.push(`  - ${esc(quote.note)}`);
       lines.push(`  - [${esc(quote.sourceTitle || quote.sourceDomain)}](${quote.sourceUrl})`);
-      const rLine = reviewLine(quote.review);
-      if (rLine) lines.push(`  - ${rLine}`);
       lines.push('');
     }
   }

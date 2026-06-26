@@ -141,6 +141,29 @@ const aiInsight: AiInsight = {
   notes: 'Common greeting.',
 };
 
+describe('renderDay quote review suppression', () => {
+  it('does not emit a Review line for a quote even when quote.review is populated', () => {
+    const reviewedQuote: QuoteEntry = {
+      ...quote,
+      review: {
+        scheduler: 'fsrs-v1',
+        dueAt: Date.UTC(2026, 6, 25),
+        intervalDays: 3,
+        repetitions: 2,
+        lapses: 0,
+        cardState: 'review',
+        stability: 3,
+        difficulty: 5,
+        lastReviewedAt: Date.UTC(2026, 5, 20),
+      },
+      clozes: [{ id: 'c1', start: 0, end: 2 }],
+    };
+    const md = renderDay(day, [], [reviewedQuote]);
+    expect(md).toContain('## Quotes');
+    expect(md).not.toContain('Review:');
+  });
+});
+
 describe('renderDay with clozes', () => {
   it('renders clozes as numbered {{cN::...}} in document order (sorts by start)', () => {
     const quoteWithClozes: typeof quote = {

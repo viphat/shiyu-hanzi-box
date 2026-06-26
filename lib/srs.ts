@@ -311,6 +311,7 @@ export function answerReviewCloze(
   };
 }
 
+// Parity with previewReview (word path); both are currently unwired in the UI and intended for future preview-interval display.
 export function previewReviewCloze(
   quote: QuoteEntry,
   clozeId: string,

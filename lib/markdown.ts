@@ -1,8 +1,25 @@
 import { lookupExact } from './dictionary';
-import type { DictionaryIndex, QuoteEntry, WordEntry } from './types';
+import type { Cloze, DictionaryIndex, QuoteEntry, WordEntry } from './types';
 
 function esc(value: string): string {
   return value.replace(/\|/g, '\\|');
+}
+
+function renderQuoteBody(quote: QuoteEntry): string {
+  if (!quote.clozes?.length) {
+    return esc(quote.text);
+  }
+  const sorted = [...quote.clozes].sort((a: Cloze, b: Cloze) => a.start - b.start);
+  let result = '';
+  let cursor = 0;
+  for (let i = 0; i < sorted.length; i++) {
+    const cloze = sorted[i];
+    result += esc(quote.text.slice(cursor, cloze.start));
+    result += `{{c${i + 1}::${esc(quote.text.slice(cloze.start, cloze.end))}}}`;
+    cursor = cloze.end;
+  }
+  result += esc(quote.text.slice(cursor));
+  return result;
 }
 
 function reviewLine(review: WordEntry['review']): string | null {
@@ -67,7 +84,7 @@ export function renderDay(
     lines.push('## Quotes', '');
     for (const quote of quotes) {
       const tags = quote.tags.length > 0 ? ` ${quote.tags.map((tag) => `#${tag}`).join(' ')}` : '';
-      lines.push(`- [ ] > ${esc(quote.text)}`);
+      lines.push(`- [ ] > ${renderQuoteBody(quote)}`);
       lines.push(`  - _category:_ ${esc(quote.category)}${tags}`);
       if (quote.note) lines.push(`  - ${esc(quote.note)}`);
       lines.push(`  - [${esc(quote.sourceTitle || quote.sourceDomain)}](${quote.sourceUrl})`);

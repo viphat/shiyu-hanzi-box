@@ -141,6 +141,28 @@ const aiInsight: AiInsight = {
   notes: 'Common greeting.',
 };
 
+describe('renderDay with clozes', () => {
+  it('renders clozes as numbered {{cN::...}} in document order (sorts by start)', () => {
+    const quoteWithClozes: typeof quote = {
+      ...quote,
+      text: '他义无反顾地走了',
+      // Intentionally unsorted: id 'b' at [6,7) comes first in array
+      clozes: [
+        { id: 'b', start: 6, end: 7 },
+        { id: 'a', start: 1, end: 5 },
+      ],
+    };
+    const md = renderDay(day, [], [quoteWithClozes]);
+    expect(md).toContain('- [ ] > 他{{c1::义无反顾}}地{{c2::走}}了');
+  });
+
+  it('renders a clozeless quote as plain text (unchanged)', () => {
+    const md = renderDay(day, [], [quote]);
+    expect(md).toContain(`- [ ] > ${quote.text}`);
+    expect(md).not.toContain('{{');
+  });
+});
+
 describe('renderDay with AI insight', () => {
   it('includes an AI Insight subsection when the word has aiInsight', () => {
     const md = renderDay(day, [{ ...word, aiInsight }], []);

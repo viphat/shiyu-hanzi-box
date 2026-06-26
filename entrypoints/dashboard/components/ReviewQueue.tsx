@@ -6,9 +6,11 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { formatMessage, t } from '@/lib/i18n';
+import { toPinyin } from '@/lib/pinyin';
 import type { SrsQueueItem } from '@/lib/srs';
-import type { Entry, ReviewRating, UiLocale } from '@/lib/types';
+import type { Cloze, Entry, QuoteEntry, ReviewRating, UiLocale } from '@/lib/types';
 import { ReviewInsightReveal } from './ReviewInsightReveal';
+import { SpeakButton } from './SpeakButton';
 
 const RATINGS: Array<{
   rating: ReviewRating;
@@ -54,11 +56,13 @@ type AnswerHandler = (
   kind: Entry['kind'],
   id: string,
   rating: ReviewRating,
+  clozeId?: string,
 ) => void | Promise<void>;
 
 type PostponeHandler = (
   kind: Entry['kind'],
   id: string,
+  clozeId?: string,
 ) => void | Promise<void>;
 
 const REVIEW_TRANSITION_MS = 160;
@@ -119,7 +123,8 @@ function ActiveReviewCard({
   const [exiting, setExiting] = useState(false);
   const previousActiveKey = useRef<string | null>(null);
   const activeItem = items[0];
-  const activeKey = `${activeItem.kind}:${activeItem.entry.id}`;
+  // Include clozeId in the key so switching between two clozes of the same quote remounts
+  const activeKey = `${activeItem.kind}:${activeItem.entry.id}:${activeItem.clozeId ?? ''}`;
   const focusOnMount =
     previousActiveKey.current !== null &&
     previousActiveKey.current !== activeKey;
@@ -150,12 +155,16 @@ function ActiveReviewCard({
         remainingCount={items.length}
         onAnswer={(rating) =>
           runAction(() =>
-            onAnswer(activeItem.kind, activeItem.entry.id, rating),
+            activeItem.clozeId
+              ? onAnswer(activeItem.kind, activeItem.entry.id, rating, activeItem.clozeId)
+              : onAnswer(activeItem.kind, activeItem.entry.id, rating),
           )
         }
         onPostpone={() =>
           runAction(() =>
-            onPostpone(activeItem.kind, activeItem.entry.id),
+            activeItem.clozeId
+              ? onPostpone(activeItem.kind, activeItem.entry.id, activeItem.clozeId)
+              : onPostpone(activeItem.kind, activeItem.entry.id),
           )
         }
         locale={locale}
@@ -192,10 +201,16 @@ export function ReviewCard({
 }) {
   const cardRef = useRef<HTMLElement>(null);
   const { entry } = item;
+
+  // A cloze card: quote with an active clozeId
+  const isClozeCard = entry.kind === 'quote' && item.clozeId != null;
+
+  // For word cards and plain quote cards (no clozeId) the old behavior applies.
+  // For cloze cards, start hidden like words.
   const [revealed, setRevealed] = useState(
-    entry.kind === 'quote' || initiallyRevealed,
+    isClozeCard ? initiallyRevealed : (entry.kind === 'quote' || initiallyRevealed),
   );
-  const answerVisible = entry.kind === 'quote' || revealed;
+  const answerVisible = isClozeCard ? revealed : (entry.kind === 'quote' || revealed);
   const source = getSourceLabel(entry);
 
   useEffect(() => {
@@ -255,7 +270,7 @@ export function ReviewCard({
         </div>
       )}
 
-      {entry.kind === 'quote' && (
+      {entry.kind === 'quote' && !isClozeCard && (
         <div className="flex flex-1 flex-col justify-center py-8">
           <blockquote
             tabIndex={-1}
@@ -283,6 +298,15 @@ export function ReviewCard({
         </div>
       )}
 
+      {entry.kind === 'quote' && isClozeCard && (
+        <ClozeQuoteBody
+          quote={entry as QuoteEntry}
+          clozeId={item.clozeId!}
+          revealed={revealed}
+          locale={locale}
+        />
+      )}
+
       {answerVisible && entry.kind === 'word' && (
         <div className="mb-6 border-t border-border pt-4">
           <ReviewInsightReveal
@@ -294,7 +318,7 @@ export function ReviewCard({
       )}
 
       <div className="mt-auto flex flex-wrap justify-end gap-2 border-t border-border pt-5">
-        {entry.kind === 'word' && !revealed ? (
+        {!answerVisible ? (
           <>
             <button
               type="button"
@@ -335,6 +359,167 @@ export function ReviewCard({
         )}
       </div>
     </article>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Cloze body renderer
+// ---------------------------------------------------------------------------
+
+function ClozeQuoteBody({
+  quote,
+  clozeId,
+  revealed,
+  locale,
+}: {
+  quote: QuoteEntry;
+  clozeId: string;
+  revealed: boolean;
+  locale: UiLocale;
+}) {
+  const activeCloze = (quote.clozes ?? []).find((c) => c.id === clozeId);
+  const text = quote.text;
+
+  if (!activeCloze) {
+    // Fallback: render the full text
+    return (
+      <div className="flex flex-1 flex-col justify-center py-8">
+        <blockquote
+          tabIndex={-1}
+          className="relative border-l-[3px] border-cinnabar-fade py-3 pl-7 pr-5 text-2xl leading-[2] text-ink tracking-[2px] sm:text-3xl"
+        >
+          <span aria-hidden="true" className="absolute left-2 top-1 text-2xl text-cinnabar/40">「</span>
+          <span>{text}</span>
+          <span aria-hidden="true" className="absolute bottom-0 right-1 text-2xl text-cinnabar/40">」</span>
+        </blockquote>
+        {quote.note && (
+          <p className="mt-5 rounded-sm border border-border bg-paper-input px-4 py-3 text-sm leading-7 text-ink-secondary">
+            {quote.note}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  const { start, end } = activeCloze;
+  const answer = text.slice(start, end);
+  const before = text.slice(0, start);
+  const after = text.slice(end);
+
+  // Other clozes: render their text as-is (only active one is blanked)
+  // We'll render the quote with segments: before | [other clozes that fall before] | blank | after
+  // Since clozes don't overlap, the simplest approach is to render the full text
+  // split at the active cloze boundaries. Other clozes appear in "before" or "after" as plain text.
+
+  // Note visibility: always hide on the front (revealed=false) for cloze cards;
+  // if the note does not contain the answer at all, still hide it on front to
+  // keep the card clean. Show it after reveal unconditionally.
+  const showNote = revealed;
+
+  if (revealed) {
+    return (
+      <div className="flex flex-1 flex-col justify-center py-8">
+        <blockquote
+          tabIndex={-1}
+          className="relative border-l-[3px] border-cinnabar-fade py-3 pl-7 pr-5 text-2xl leading-[2] text-ink tracking-[2px] sm:text-3xl"
+        >
+          <span aria-hidden="true" className="absolute left-2 top-1 text-2xl text-cinnabar/40">「</span>
+          <span>
+            {before}
+            <span className="rounded-sm bg-cinnabar/15 px-0.5 text-cinnabar font-medium">
+              {answer}
+            </span>
+            {after}
+          </span>
+          <span aria-hidden="true" className="absolute bottom-0 right-1 text-2xl text-cinnabar/40">」</span>
+        </blockquote>
+        <div className="mt-3 flex items-center gap-2">
+          <SpeakButton text={text} locale={locale} />
+        </div>
+        {quote.note && showNote && (
+          <p className="mt-5 rounded-sm border border-border bg-paper-input px-4 py-3 text-sm leading-7 text-ink-secondary">
+            {quote.note}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-1 flex-col justify-center py-8">
+      <blockquote
+        tabIndex={-1}
+        className="relative border-l-[3px] border-cinnabar-fade py-3 pl-7 pr-5 text-2xl leading-[2] text-ink tracking-[2px] sm:text-3xl"
+      >
+        <span aria-hidden="true" className="absolute left-2 top-1 text-2xl text-cinnabar/40">「</span>
+        <span>
+          {before}
+          <ClozeBlank cloze={activeCloze} answer={answer} locale={locale} />
+          {after}
+        </span>
+        <span aria-hidden="true" className="absolute bottom-0 right-1 text-2xl text-cinnabar/40">」</span>
+      </blockquote>
+      {quote.note && showNote && (
+        <p className="mt-5 rounded-sm border border-border bg-paper-input px-4 py-3 text-sm leading-7 text-ink-secondary">
+          {quote.note}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ClozeBlank({
+  cloze,
+  answer,
+  locale,
+}: {
+  cloze: Cloze;
+  answer: string;
+  locale: UiLocale;
+}) {
+  const hint = cloze.hint ?? 'none';
+  const ariaLabel = t(locale, 'cloze.blankAria');
+
+  if (hint === 'length') {
+    return (
+      <span
+        aria-label={ariaLabel}
+        className="inline-flex items-center gap-0.5 align-middle"
+      >
+        {Array.from(answer).map((_, i) => (
+          <span
+            key={i}
+            data-cloze-box
+            className="inline-block h-6 w-6 rounded-sm border-2 border-cinnabar/40 bg-cinnabar/5"
+          />
+        ))}
+      </span>
+    );
+  }
+
+  if (hint === 'pinyin') {
+    const py = toPinyin(answer);
+    return (
+      <span className="inline-flex flex-col items-center align-middle">
+        <span className="text-xs text-muted leading-none pb-0.5">{py}</span>
+        <span
+          aria-label={ariaLabel}
+          className="text-cinnabar/60 font-medium tracking-widest"
+        >
+          ____
+        </span>
+      </span>
+    );
+  }
+
+  // hint === 'none' (default)
+  return (
+    <span
+      aria-label={ariaLabel}
+      className="text-cinnabar/60 font-medium tracking-widest"
+    >
+      ____
+    </span>
   );
 }
 

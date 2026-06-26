@@ -17,7 +17,7 @@ import {
 } from '../entrypoints/dashboard/components/ReviewQueue';
 import { messages } from '../lib/i18n';
 import { migrateReviewState } from '../lib/srs';
-import type { QuoteEntry, WordEntry } from '../lib/types';
+import type { Cloze, QuoteEntry, WordEntry } from '../lib/types';
 
 const NOW = new Date('2026-06-24T10:00:00').getTime();
 
@@ -317,5 +317,261 @@ describe('ReviewQueue advancement', () => {
       await vi.advanceTimersByTimeAsync(180);
     });
     expect(onAnswer).toHaveBeenCalledWith('quote', 'q1', 'easy');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cloze review tests
+// ---------------------------------------------------------------------------
+
+function makeCloze(overrides: Partial<Cloze> = {}): Cloze {
+  return {
+    id: 'c1',
+    start: 0,
+    end: 2,
+    hint: 'none',
+    ...overrides,
+  };
+}
+
+function quoteWithClozes(
+  text: string,
+  clozes: Cloze[],
+  noteOverride = 'a note',
+): QuoteEntry {
+  return {
+    id: 'q1',
+    kind: 'quote',
+    text,
+    tags: [],
+    note: noteOverride,
+    status: 'inbox',
+    createdAt: 1,
+    updatedAt: 1,
+    category: 'classic',
+    sourceTitle: 'Analects',
+    sourceUrl: 'https://example.com',
+    sourceDomain: 'example.com',
+    surrounding: text,
+    clozes,
+  };
+}
+
+describe('Cloze review card', () => {
+  it('blanks only the active span; other cloze text remains visible', () => {
+    // text: 学而时习之 (5 chars)
+    // cloze1: 学而 (0-2), cloze2: 时习 (2-4)
+    const cloze1 = makeCloze({ id: 'c1', start: 0, end: 2, hint: 'none' });
+    const cloze2 = makeCloze({ id: 'c2', start: 2, end: 4, hint: 'none' });
+    const entry = migrateReviewState(
+      quoteWithClozes('学而时习之', [cloze1, cloze2]),
+      NOW,
+    );
+    const html = renderToStaticMarkup(
+      <ReviewCard
+        item={{ kind: 'quote', entry, dueAt: NOW, clozeId: 'c1' }}
+        remainingCount={1}
+        onAnswer={vi.fn()}
+        onPostpone={vi.fn()}
+        locale="en"
+      />,
+    );
+
+    // Active span (学而) should be hidden as blank
+    expect(html).not.toContain('学而');
+    // Non-active span (时习) and trailing char (之) should still appear
+    expect(html).toContain('时习');
+    expect(html).toContain('之');
+    // Blank placeholder should be present
+    expect(html).toContain('____');
+  });
+
+  it('hint:none renders fixed ____ blank', () => {
+    const cloze = makeCloze({ id: 'c1', start: 0, end: 2, hint: 'none' });
+    const entry = migrateReviewState(
+      quoteWithClozes('学而时习之', [cloze]),
+      NOW,
+    );
+    const html = renderToStaticMarkup(
+      <ReviewCard
+        item={{ kind: 'quote', entry, dueAt: NOW, clozeId: 'c1' }}
+        remainingCount={1}
+        onAnswer={vi.fn()}
+        onPostpone={vi.fn()}
+        locale="en"
+      />,
+    );
+    expect(html).toContain('____');
+  });
+
+  it('hint:length renders one box per hidden character', () => {
+    // answer span is 3 chars: 时习之 (start=2, end=5)
+    const cloze = makeCloze({ id: 'c1', start: 2, end: 5, hint: 'length' });
+    const entry = migrateReviewState(
+      quoteWithClozes('学而时习之', [cloze]),
+      NOW,
+    );
+    const html = renderToStaticMarkup(
+      <ReviewCard
+        item={{ kind: 'quote', entry, dueAt: NOW, clozeId: 'c1' }}
+        remainingCount={1}
+        onAnswer={vi.fn()}
+        onPostpone={vi.fn()}
+        locale="en"
+      />,
+    );
+    // Should render 3 boxes (one per char)
+    const matches = html.match(/data-cloze-box/g);
+    expect(matches?.length).toBe(3);
+  });
+
+  it('hint:pinyin shows pinyin above the blank', () => {
+    // answer: 学 (start=0, end=1)
+    const cloze = makeCloze({ id: 'c1', start: 0, end: 1, hint: 'pinyin' });
+    const entry = migrateReviewState(
+      quoteWithClozes('学而时习之', [cloze]),
+      NOW,
+    );
+    const html = renderToStaticMarkup(
+      <ReviewCard
+        item={{ kind: 'quote', entry, dueAt: NOW, clozeId: 'c1' }}
+        remainingCount={1}
+        onAnswer={vi.fn()}
+        onPostpone={vi.fn()}
+        locale="en"
+      />,
+    );
+    // 学 has pinyin "xué" or "xue2" — check for "xue" as a substring
+    expect(html.toLowerCase()).toMatch(/xu[eé]/);
+  });
+
+  it('ratings are hidden before Reveal on a cloze card', () => {
+    const cloze = makeCloze({ id: 'c1', start: 0, end: 2, hint: 'none' });
+    const entry = migrateReviewState(
+      quoteWithClozes('学而时习之', [cloze]),
+      NOW,
+    );
+    const html = renderToStaticMarkup(
+      <ReviewCard
+        item={{ kind: 'quote', entry, dueAt: NOW, clozeId: 'c1' }}
+        remainingCount={1}
+        onAnswer={vi.fn()}
+        onPostpone={vi.fn()}
+        locale="en"
+      />,
+    );
+    expect(html).toContain(messages.en['review.reveal']);
+    expect(html).not.toContain(messages.en['review.again']);
+    expect(html).not.toContain(messages.en['review.good']);
+  });
+
+  it('reveal shows the answer highlighted and the note, then rating buttons', async () => {
+    const cloze = makeCloze({ id: 'c1', start: 0, end: 2, hint: 'none' });
+    const entry = migrateReviewState(
+      quoteWithClozes('学而时习之', [cloze], 'my note'),
+      NOW,
+    );
+
+    await renderClient(
+      <ReviewCard
+        item={{ kind: 'quote', entry, dueAt: NOW, clozeId: 'c1' }}
+        remainingCount={1}
+        onAnswer={vi.fn()}
+        onPostpone={vi.fn()}
+        locale="en"
+      />,
+    );
+
+    // Before reveal: answer absent, note absent, no ratings
+    expect(container.textContent).not.toContain('学而');
+    expect(container.textContent).not.toContain('my note');
+    expect(container.textContent).not.toContain(messages.en['review.again']);
+
+    await click(button(messages.en['review.reveal']));
+
+    // After reveal: answer highlighted (full text present), note present, ratings visible
+    expect(container.textContent).toContain('学而时习之');
+    expect(container.textContent).toContain('my note');
+    expect(container.textContent).toContain(messages.en['review.again']);
+    expect(container.textContent).toContain(messages.en['review.good']);
+  });
+
+  it('hides the note on the front when the note contains the answer substring', () => {
+    // note contains the answer "学而"
+    const cloze = makeCloze({ id: 'c1', start: 0, end: 2, hint: 'none' });
+    const entry = migrateReviewState(
+      quoteWithClozes('学而时习之', [cloze], '学而 is learning'),
+      NOW,
+    );
+    const html = renderToStaticMarkup(
+      <ReviewCard
+        item={{ kind: 'quote', entry, dueAt: NOW, clozeId: 'c1' }}
+        remainingCount={1}
+        onAnswer={vi.fn()}
+        onPostpone={vi.fn()}
+        locale="en"
+      />,
+    );
+    // Note should be hidden when it contains the answer
+    expect(html).not.toContain('学而 is learning');
+  });
+
+  it('shows the note after reveal even when it contains the answer', async () => {
+    const cloze = makeCloze({ id: 'c1', start: 0, end: 2, hint: 'none' });
+    const entry = migrateReviewState(
+      quoteWithClozes('学而时习之', [cloze], '学而 is learning'),
+      NOW,
+    );
+
+    await renderClient(
+      <ReviewCard
+        item={{ kind: 'quote', entry, dueAt: NOW, clozeId: 'c1' }}
+        remainingCount={1}
+        onAnswer={vi.fn()}
+        onPostpone={vi.fn()}
+        locale="en"
+      />,
+    );
+
+    await click(button(messages.en['review.reveal']));
+    expect(container.textContent).toContain('学而 is learning');
+  });
+
+  it('rating call passes the clozeId to onAnswer', async () => {
+    vi.useFakeTimers();
+    const onAnswer = vi.fn().mockResolvedValue(undefined);
+    const cloze = makeCloze({ id: 'c1', start: 0, end: 2, hint: 'none' });
+    const entry = migrateReviewState(
+      quoteWithClozes('学而时习之', [cloze]),
+      NOW,
+    );
+
+    function Harness() {
+      const [items, setItems] = useState([
+        { kind: 'quote' as const, entry, dueAt: NOW, clozeId: 'c1' },
+      ]);
+      return (
+        <ReviewQueue
+          items={items}
+          onAnswer={async (kind, id, rating, clozeId) => {
+            onAnswer(kind, id, rating, clozeId);
+            setItems([]);
+          }}
+          onPostpone={vi.fn().mockResolvedValue(undefined)}
+          locale="en"
+        />
+      );
+    }
+
+    await renderClient(<Harness />);
+    // Reveal first
+    await click(button(messages.en['review.reveal']));
+    // Then rate
+    await click(button(messages.en['review.good']));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(180);
+    });
+
+    expect(onAnswer).toHaveBeenCalledWith('quote', 'q1', 'good', 'c1');
   });
 });

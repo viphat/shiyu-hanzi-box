@@ -45,7 +45,7 @@ function makeWord(text: string, id?: string): WordEntry {
 }
 
 function makeCloze(overrides: Partial<Cloze> = {}): Cloze {
-  return { id: 'c1', start: 0, end: 2, hint: 'none', ...overrides };
+  return { id: 'c1', start: 0, end: 2, ...overrides };
 }
 
 let container: HTMLDivElement;
@@ -148,16 +148,12 @@ describe('ClozeEditor — removing a chip', () => {
       />,
     );
 
-    // Click first remove button (for c1)
-    const removeButtons = container.querySelectorAll(
-      `[title="${messages.en['cloze.removeBlank']}"], button`,
+    // Click the remove button scoped to c1's chip via data-cloze-id attribute.
+    const removeBtn = container.querySelector<HTMLButtonElement>(
+      `button[data-cloze-id="c1"]`,
     );
-    // Find the remove button associated with first chip (c1)
-    const allButtons = [...container.querySelectorAll('button')].filter((b) =>
-      b.textContent?.includes(messages.en['cloze.removeBlank']) ||
-      b.getAttribute('title') === messages.en['cloze.removeBlank'],
-    );
-    await click(allButtons[0] as HTMLButtonElement);
+    if (!removeBtn) throw new Error('Remove button for c1 not found');
+    await click(removeBtn);
 
     expect(onChange).toHaveBeenCalledOnce();
     const result: Cloze[] = onChange.mock.calls[0][0];
@@ -167,7 +163,7 @@ describe('ClozeEditor — removing a chip', () => {
 
 describe('ClozeEditor — hint selector', () => {
   it('renders hint options and calls onChange with updated hint', async () => {
-    const cloze = makeCloze({ id: 'c1', start: 0, end: 2, hint: 'none' });
+    const cloze = makeCloze({ id: 'c1', start: 0, end: 2 });
     const quote = makeQuote({ clozes: [cloze] });
     const onChange = vi.fn();
 
@@ -192,6 +188,31 @@ describe('ClozeEditor — hint selector', () => {
     expect(onChange).toHaveBeenCalledOnce();
     const result: Cloze[] = onChange.mock.calls[0][0];
     expect(result[0].hint).toBe('pinyin');
+  });
+
+  it('stores undefined (not "none") when user picks the none option', async () => {
+    const cloze = makeCloze({ id: 'c1', start: 0, end: 2, hint: 'pinyin' });
+    const quote = makeQuote({ clozes: [cloze] });
+    const onChange = vi.fn();
+
+    await renderClient(
+      <ClozeEditor
+        quote={quote}
+        savedWords={[]}
+        onChange={onChange}
+        locale="en"
+      />,
+    );
+
+    const select = container.querySelector('select') as HTMLSelectElement;
+    await act(async () => {
+      select.value = 'none';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(onChange).toHaveBeenCalledOnce();
+    const result: Cloze[] = onChange.mock.calls[0][0];
+    expect(result[0].hint).toBeUndefined();
   });
 });
 

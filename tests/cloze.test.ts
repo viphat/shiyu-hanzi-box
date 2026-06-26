@@ -97,4 +97,12 @@ describe('clozeFromRange', () => {
     const result = clozeFromRange(text, 2, 4, existing);
     expect(result).not.toBeNull();
   });
+
+  it('accepts a full-text span covering the whole quote (spec §9)', () => {
+    // A cloze that spans the entire quote text is explicitly allowed.
+    const result = clozeFromRange(text, 0, text.length, []);
+    expect(result).not.toBeNull();
+    expect(result!.start).toBe(0);
+    expect(result!.end).toBe(text.length);
+  });
 });

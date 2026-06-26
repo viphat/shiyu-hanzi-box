@@ -23,7 +23,9 @@ export function ClozeEditor({ quote, savedWords, onChange, locale }: ClozeEditor
   }
 
   function changeHint(id: string, hint: Cloze['hint']) {
-    onChange(clozes.map((c) => (c.id === id ? { ...c, hint } : c)));
+    // When the user picks "none" store undefined (unset = none convention).
+    const normalised: Cloze['hint'] = hint === 'none' ? undefined : hint;
+    onChange(clozes.map((c) => (c.id === id ? { ...c, hint: normalised } : c)));
   }
 
   // ---------------------------------------------------------------------------
@@ -86,10 +88,16 @@ export function ClozeEditor({ quote, savedWords, onChange, locale }: ClozeEditor
     const startOffset = offsetInQuoteText(anchorNode, sel.anchorOffset);
     const endOffset = offsetInQuoteText(focusNode, sel.focusOffset);
 
-    if (startOffset === null || endOffset === null) return;
+    if (startOffset === null || endOffset === null) {
+      sel.removeAllRanges();
+      return;
+    }
 
     const cloze = clozeFromRange(quote.text, startOffset, endOffset, clozes);
-    if (!cloze) return;
+    if (!cloze) {
+      sel.removeAllRanges();
+      return;
+    }
 
     const next = [...clozes, cloze].sort((a, b) => a.start - b.start);
     onChange(next);
@@ -200,6 +208,7 @@ function ClozeChip({
       <button
         type="button"
         title={t(locale, 'cloze.removeBlank')}
+        data-cloze-id={cloze.id}
         onClick={onRemove}
         className="ml-1 rounded-sm px-1 text-xs text-muted transition hover:text-cinnabar"
       >

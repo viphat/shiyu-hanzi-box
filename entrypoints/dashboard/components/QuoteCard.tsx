@@ -10,12 +10,14 @@ export function QuoteCard({
   onUpdate,
   onDelete,
   locale,
+  highlightParked = false,
 }: {
   quote: QuoteEntry;
   words: WordEntry[];
   onUpdate: (patch: Partial<QuoteEntry>) => void;
   onDelete: () => void;
   locale: UiLocale;
+  highlightParked?: boolean;
 }) {
   const [note, setNote] = useState(quote.note);
   const [showTraditional, setShowTraditional] = useState(false);
@@ -56,7 +58,22 @@ export function QuoteCard({
   }
 
   return (
-    <div className="rounded-sm border border-border bg-paper-light p-4 shadow-sm transition hover:border-border-hover hover:shadow-md">
+    <div
+      className={`rounded-sm border bg-paper-light p-4 shadow-sm transition hover:shadow-md ${
+        highlightParked
+          ? 'border-amber-300 hover:border-amber-400'
+          : 'border-border hover:border-border-hover'
+      }`}
+    >
+      {/* Parked badge — shown when the quote has no clozes and is not archived */}
+      {highlightParked && (
+        <div className="mb-2 flex items-center gap-2">
+          <span className="inline-flex items-center rounded-sm border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+            {t(locale, 'cloze.parked')}
+          </span>
+        </div>
+      )}
+
       <blockquote className="relative border-l-[3px] border-cinnabar-fade py-1 pl-5 pr-4 text-base leading-8 text-ink tracking-[1px]">
         <span aria-hidden="true" className="absolute left-2 top-0 text-xl text-cinnabar/40">
           「
@@ -131,14 +148,25 @@ export function QuoteCard({
           </div>
         )}
 
-        {/* Suggest blanks button */}
+        {/* Suggest blanks / Add a blank to review */}
         <div className="flex flex-wrap items-start gap-2">
-          <button
-            onClick={handleSuggest}
-            className="rounded-sm border border-border bg-paper-input px-2 py-1 text-xs text-muted transition hover:border-cinnabar-border hover:bg-cinnabar-light hover:text-cinnabar"
-          >
-            {t(locale, 'cloze.addBlank')}
-          </button>
+          {/* For parked quotes, render the button with data-parked-cta for prominent affordance */}
+          {highlightParked ? (
+            <button
+              data-parked-cta
+              onClick={handleSuggest}
+              className="rounded-sm border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 transition hover:border-amber-400 hover:bg-amber-100"
+            >
+              {t(locale, 'cloze.addBlank')}
+            </button>
+          ) : (
+            <button
+              onClick={handleSuggest}
+              className="rounded-sm border border-border bg-paper-input px-2 py-1 text-xs text-muted transition hover:border-cinnabar-border hover:bg-cinnabar-light hover:text-cinnabar"
+            >
+              {t(locale, 'cloze.addBlank')}
+            </button>
+          )}
 
           {/* Suggestions */}
           {suggestions !== null && suggestions.length > 0 && (

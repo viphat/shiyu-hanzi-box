@@ -1,6 +1,7 @@
-import type { QuoteEntry, WordEntry } from '@/lib/types';
-import type { UiLocale } from '@/lib/types';
-import { t } from '@/lib/i18n';
+import { useState } from 'react';
+import { isParkedQuote } from '@/lib/cloze';
+import { formatMessage, t } from '@/lib/i18n';
+import type { QuoteEntry, UiLocale, WordEntry } from '@/lib/types';
 import { QuoteCard } from './QuoteCard';
 
 export function QuoteList({
@@ -16,6 +17,17 @@ export function QuoteList({
   onDelete: (id: string) => void;
   locale: UiLocale;
 }) {
+  const [showParkedOnly, setShowParkedOnly] = useState(false);
+
+  // Non-archived parked count (spec §5: archived parked are intentionally silent)
+  const parkedCount = quotes.filter(
+    (q) => q.status !== 'archived' && isParkedQuote(q),
+  ).length;
+
+  const visible = showParkedOnly
+    ? quotes.filter((q) => isParkedQuote(q))
+    : quotes;
+
   if (quotes.length === 0) {
     return (
       <div className="rounded-sm border border-dashed border-border bg-paper-light py-12 text-center">
@@ -29,17 +41,43 @@ export function QuoteList({
   }
 
   return (
-    <div className="grid gap-3">
-      {quotes.map((quote) => (
-        <QuoteCard
-          key={quote.id}
-          quote={quote}
-          words={words}
-          onUpdate={(patch) => onUpdate(quote.id, patch)}
-          onDelete={() => onDelete(quote.id)}
-          locale={locale}
-        />
-      ))}
+    <div className="space-y-3">
+      {/* Header: parked count badge + filter toggle */}
+      {parkedCount > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            data-parked-count
+            className="inline-flex items-center rounded-sm border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
+          >
+            {formatMessage(locale, 'cloze.parkedCount', { count: parkedCount })}
+          </span>
+          <button
+            data-parked-filter
+            onClick={() => setShowParkedOnly((v) => !v)}
+            className={`rounded-sm border px-2 py-0.5 text-xs transition ${
+              showParkedOnly
+                ? 'border-amber-400 bg-amber-100 font-semibold text-amber-800'
+                : 'border-border bg-paper-input text-muted hover:border-amber-300 hover:text-amber-700'
+            }`}
+          >
+            {showParkedOnly ? t(locale, 'filter.all') : t(locale, 'cloze.parked')}
+          </button>
+        </div>
+      )}
+
+      <div className="grid gap-3">
+        {visible.map((quote) => (
+          <QuoteCard
+            key={quote.id}
+            quote={quote}
+            words={words}
+            onUpdate={(patch) => onUpdate(quote.id, patch)}
+            onDelete={() => onDelete(quote.id)}
+            locale={locale}
+            highlightParked={quote.status !== 'archived' && isParkedQuote(quote)}
+          />
+        ))}
+      </div>
     </div>
   );
 }

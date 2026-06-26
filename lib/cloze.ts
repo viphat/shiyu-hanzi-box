@@ -1,5 +1,14 @@
 import { makeId } from './id';
-import type { Cloze, WordEntry } from './types';
+import type { Cloze, QuoteEntry, WordEntry } from './types';
+
+/**
+ * Returns true when a quote has no cloze spans (absent or empty array).
+ * Archived parked quotes are intentionally silent; callers decide whether to
+ * filter on status.
+ */
+export function isParkedQuote(quote: QuoteEntry): boolean {
+  return !quote.clozes?.length;
+}
 
 /**
  * Returns true iff [a.start, a.end) and [b.start, b.end) intersect.

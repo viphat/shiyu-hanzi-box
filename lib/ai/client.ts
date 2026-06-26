@@ -1,6 +1,8 @@
 import type { AiInsight, AiProvider } from '../types';
 import { parseAiResponse } from './parse';
 import type { AiMessage } from './prompt';
+import { buildClozeMessages } from './cloze-prompt';
+import { parseClozeSuggestions, type ClozeSuggestion } from './cloze-parse';
 
 export interface FetchAiParams {
   baseUrl: string;
@@ -62,6 +64,7 @@ async function postChatCompletion(
     model: string;
     messages: AiMessage[];
     provider: AiProvider;
+    maxTokens?: number;
   },
 ): Promise<
   | { ok: true; content: string; modelId: string }
@@ -78,7 +81,7 @@ async function postChatCompletion(
       model: modelId,
       messages: params.messages,
       response_format: { type: 'json_object' },
-      max_tokens: 1200,
+      max_tokens: params.maxTokens ?? 1200,
     }),
   });
 
@@ -110,6 +113,32 @@ export async function fetchAiInsight(params: FetchAiParams): Promise<AiClientRes
     }
 
     return parsed;
+  } catch {
+    return { ok: false, reason: 'Provider unreachable; retry.' };
+  }
+}
+
+export async function fetchClozeSuggestions(params: {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  provider: AiProvider;
+  quoteText: string;
+}): Promise<
+  | { ok: true; suggestions: ClozeSuggestion[] }
+  | { ok: false; reason: string }
+> {
+  try {
+    const result = await postChatCompletion({
+      baseUrl: params.baseUrl,
+      apiKey: params.apiKey,
+      model: params.model,
+      provider: params.provider,
+      messages: buildClozeMessages(params.quoteText),
+      maxTokens: 400,
+    });
+    if (!result.ok) return result;
+    return parseClozeSuggestions(result.content);
   } catch {
     return { ok: false, reason: 'Provider unreachable; retry.' };
   }

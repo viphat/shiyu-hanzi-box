@@ -299,6 +299,130 @@ describe('ClozeEditor — suggest blanks', () => {
   });
 });
 
+describe('ClozeEditor — drag-select via quoteTextRef', () => {
+  // happy-dom can't drive a real Selection, so we stub window.getSelection and
+  // hand the editor a ref to a span we build by hand (mirroring QuoteCard).
+  function buildQuoteSpan(text: string): { span: HTMLSpanElement; textNode: Text } {
+    const span = document.createElement('span');
+    span.setAttribute('data-quote-text', '');
+    const textNode = document.createTextNode(text);
+    span.append(textNode);
+    document.body.append(span);
+    return { span, textNode };
+  }
+
+  function stubSelection(partial: {
+    anchorNode: Node;
+    anchorOffset: number;
+    focusNode: Node;
+    focusOffset: number;
+    isCollapsed?: boolean;
+  }) {
+    const selection = {
+      isCollapsed: false,
+      removeAllRanges: vi.fn(),
+      ...partial,
+    };
+    return vi
+      .spyOn(window, 'getSelection')
+      .mockReturnValue(selection as unknown as Selection);
+  }
+
+  it('commits a manual cloze for a valid selection within the quote span', async () => {
+    const quote = makeQuote({ text: '学而时习之', clozes: [] });
+    const onChange = vi.fn();
+    const { span, textNode } = buildQuoteSpan(quote.text);
+    const getSelection = stubSelection({
+      anchorNode: textNode, anchorOffset: 0,
+      focusNode: textNode, focusOffset: 2,
+    });
+
+    await renderClient(
+      <ClozeEditor
+        quote={quote}
+        savedWords={[]}
+        onChange={onChange}
+        locale="en"
+        quoteTextRef={{ current: span }}
+      />,
+    );
+    await click(getButton(messages.en['cloze.addBlank']));
+
+    expect(onChange).toHaveBeenCalledOnce();
+    const result: Cloze[] = onChange.mock.calls[0][0];
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ start: 0, end: 2 });
+    expect(result[0].wordId).toBeUndefined();
+
+    getSelection.mockRestore();
+    span.remove();
+  });
+
+  it('maps a whole-quote (select-all) selection to the full text span', async () => {
+    // anchorNode === focusNode === the span element; offsets are CHILD indices.
+    const quote = makeQuote({ text: '学而时习之', clozes: [] });
+    const onChange = vi.fn();
+    const { span } = buildQuoteSpan(quote.text);
+    const getSelection = stubSelection({
+      anchorNode: span, anchorOffset: 0,
+      focusNode: span, focusOffset: 1,
+    });
+
+    await renderClient(
+      <ClozeEditor
+        quote={quote}
+        savedWords={[]}
+        onChange={onChange}
+        locale="en"
+        quoteTextRef={{ current: span }}
+      />,
+    );
+    await click(getButton(messages.en['cloze.addBlank']));
+
+    expect(onChange).toHaveBeenCalledOnce();
+    const result: Cloze[] = onChange.mock.calls[0][0];
+    expect(result[0]).toMatchObject({ start: 0, end: quote.text.length });
+
+    getSelection.mockRestore();
+    span.remove();
+  });
+
+  it('ignores a selection whose endpoints leave this card’s quote span', async () => {
+    // Simulates a selection spanning into a sibling quote card: the focus node
+    // is not inside the span this editor was given.
+    const quote = makeQuote({ text: '学而时习之', clozes: [] });
+    const onChange = vi.fn();
+    const { span, textNode } = buildQuoteSpan(quote.text);
+    const otherSpan = document.createElement('span');
+    otherSpan.setAttribute('data-quote-text', '');
+    const otherText = document.createTextNode('别的句子');
+    otherSpan.append(otherText);
+    document.body.append(otherSpan);
+
+    const getSelection = stubSelection({
+      anchorNode: textNode, anchorOffset: 0,
+      focusNode: otherText, focusOffset: 2,
+    });
+
+    await renderClient(
+      <ClozeEditor
+        quote={quote}
+        savedWords={[]}
+        onChange={onChange}
+        locale="en"
+        quoteTextRef={{ current: span }}
+      />,
+    );
+    await click(getButton(messages.en['cloze.addBlank']));
+
+    expect(onChange).not.toHaveBeenCalled();
+
+    getSelection.mockRestore();
+    span.remove();
+    otherSpan.remove();
+  });
+});
+
 describe('ClozeEditor — manual span validation (via clozeFromRange)', () => {
   // The drag-select path in the component calls clozeFromRange. We test the
   // pure function directly in cloze.test.ts. Here we verify that the component

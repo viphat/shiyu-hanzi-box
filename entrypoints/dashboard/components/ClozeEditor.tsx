@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { type RefObject, useState } from 'react';
 import { clozeFromRange, clozesOverlap, suggestClozes } from '@/lib/cloze';
+import { resolveSelectionOffsets } from '@/lib/cloze-selection';
 import { t } from '@/lib/i18n';
 import type { Cloze, QuoteEntry, UiLocale, WordEntry } from '@/lib/types';
 
@@ -8,9 +9,11 @@ interface ClozeEditorProps {
   savedWords: WordEntry[];
   onChange: (clozes: Cloze[]) => void;
   locale: UiLocale;
+  /** Ref to the span that renders this quote's text (for drag-select). */
+  quoteTextRef?: RefObject<HTMLElement | null>;
 }
 
-export function ClozeEditor({ quote, savedWords, onChange, locale }: ClozeEditorProps) {
+export function ClozeEditor({ quote, savedWords, onChange, locale, quoteTextRef }: ClozeEditorProps) {
   const clozes = quote.clozes ?? [];
   const [suggestions, setSuggestions] = useState<Cloze[] | null>(null);
 
@@ -52,48 +55,24 @@ export function ClozeEditor({ quote, savedWords, onChange, locale }: ClozeEditor
   }
 
   // ---------------------------------------------------------------------------
-  // Manual drag-select: "Add blank" button reads window.getSelection()
+  // Manual drag-select: "Add blank" maps the current selection (constrained to
+  // THIS card's quote span) back to character offsets, then validates it.
   // ---------------------------------------------------------------------------
 
   function handleAddBlank() {
     const sel = window.getSelection();
-    if (!sel || sel.isCollapsed) return;
+    const quoteSpan = quoteTextRef?.current;
+    if (!sel || !quoteSpan) return;
 
-    // The quote text node is rendered inside a <span data-quote-text>.
-    // Walk up from anchorNode to find if it's inside that span.
-    const anchorNode = sel.anchorNode;
-    const focusNode = sel.focusNode;
-    if (!anchorNode || !focusNode) return;
-
-    // Both anchor and focus must be inside a text node that is a child of the
-    // [data-quote-text] span (or that span itself).
-    function offsetInQuoteText(node: Node, offset: number): number | null {
-      // Check if node is a Text node whose parent has [data-quote-text]
-      if (
-        node.nodeType === Node.TEXT_NODE &&
-        (node.parentElement?.hasAttribute('data-quote-text') ?? false)
-      ) {
-        return offset;
-      }
-      // Check if node itself is the [data-quote-text] span
-      if (
-        node.nodeType === Node.ELEMENT_NODE &&
-        (node as Element).hasAttribute('data-quote-text')
-      ) {
-        return offset;
-      }
-      return null;
-    }
-
-    const startOffset = offsetInQuoteText(anchorNode, sel.anchorOffset);
-    const endOffset = offsetInQuoteText(focusNode, sel.focusOffset);
-
-    if (startOffset === null || endOffset === null) {
+    // Offsets are resolved against this editor's own span, so a selection that
+    // strays into a sibling card (or anywhere else) resolves to null.
+    const offsets = resolveSelectionOffsets(sel, quoteSpan);
+    if (!offsets) {
       sel.removeAllRanges();
       return;
     }
 
-    const cloze = clozeFromRange(quote.text, startOffset, endOffset, clozes);
+    const cloze = clozeFromRange(quote.text, offsets.start, offsets.end, clozes);
     if (!cloze) {
       sel.removeAllRanges();
       return;

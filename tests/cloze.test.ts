@@ -114,6 +114,22 @@ describe('clozeFromRange', () => {
     expect(result!.start).toBe(0);
     expect(result!.end).toBe(text.length);
   });
+
+  it('returns null for a whitespace-only selection', () => {
+    // '学 而' -> the single space at index 1 is unreviewable as a blank.
+    expect(clozeFromRange('学 而', 1, 2, [])).toBeNull();
+  });
+
+  it('returns null for a punctuation-only selection', () => {
+    // '学，而' -> the fullwidth comma at index 1 carries no reviewable content.
+    expect(clozeFromRange('学，而', 1, 2, [])).toBeNull();
+  });
+
+  it('accepts a span that includes at least one meaningful char', () => {
+    // '学，' contains 学, so the punctuation riding along is fine.
+    const result = clozeFromRange('学，而', 0, 2, []);
+    expect(result).not.toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------

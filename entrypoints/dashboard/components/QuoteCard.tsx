@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { t } from '@/lib/i18n';
 import type { Cloze, QuoteEntry, UiLocale, WordEntry } from '@/lib/types';
 import { ClozeEditor } from './ClozeEditor';
@@ -21,6 +21,10 @@ export function QuoteCard({
 }) {
   const [note, setNote] = useState(quote.note);
   const [showTraditional, setShowTraditional] = useState(false);
+  // Drag-select reads the offsets back from this exact node. The mapping in
+  // lib/cloze-selection.ts assumes the quote text lives under this span; keep
+  // them in sync if the quote ever renders with inline decoration.
+  const quoteTextRef = useRef<HTMLSpanElement>(null);
 
   return (
     <div className="rounded-sm border border-border bg-paper-light p-4 shadow-sm transition hover:border-border-hover hover:shadow-md">
@@ -28,7 +32,7 @@ export function QuoteCard({
         <span aria-hidden="true" className="absolute left-2 top-0 text-xl text-cinnabar/40">
           「
         </span>
-        <span data-quote-text>{quote.text}</span>
+        <span ref={quoteTextRef} data-quote-text>{quote.text}</span>
         <span aria-hidden="true" className="absolute bottom-0 right-1 text-xl text-cinnabar/40">
           」
         </span>
@@ -82,6 +86,7 @@ export function QuoteCard({
         savedWords={savedWords}
         onChange={(clozes: Cloze[]) => onUpdate({ clozes })}
         locale={locale}
+        quoteTextRef={quoteTextRef}
       />
       <div className="mt-1 flex justify-end gap-1">
         {quote.status !== 'reviewed' && (

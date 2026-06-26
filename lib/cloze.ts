@@ -42,6 +42,14 @@ function isWhitespace(ch: string): boolean {
   return /^\s$/u.test(ch);
 }
 
+/** True if the string holds at least one non-whitespace, non-punctuation char. */
+function hasMeaningfulChar(text: string): boolean {
+  for (const ch of text) {
+    if (!isWhitespace(ch) && !isUnicodePunct(ch)) return true;
+  }
+  return false;
+}
+
 /**
  * Normalize the raw text character-by-character, producing a NormalizedView.
  * Mirrors normalizeText() from lib/normalize.ts exactly:
@@ -210,6 +218,10 @@ export function clozeFromRange(
   // Empty or out-of-range
   if (start >= end) return null;
   if (start < 0 || end > text.length) return null;
+
+  // Reject selections with no reviewable character (whitespace/punctuation
+  // only) — such a blank mirrors a normalized-empty span and can't be answered.
+  if (!hasMeaningfulChar(text.slice(start, end))) return null;
 
   const candidate: Cloze = { id: makeId(), start, end, hint: 'none' };
 

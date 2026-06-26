@@ -2,19 +2,10 @@ import { useEffect, useState } from 'react';
 import { fetchClozeSuggestions } from '@/lib/ai/client';
 import { suggestionsToCandidates, type ClozeCandidate } from '@/lib/ai/cloze-parse';
 import { requestAiSettingsPermission } from '@/lib/ai/permissions';
-import { getAiSettings } from '@/lib/ai/settings';
+import { getAiSettings, isAiConfigured } from '@/lib/ai/settings';
 import type { AiSettings, QuoteEntry } from '@/lib/types';
 
 export type ClozeAiState = 'checking' | 'idle' | 'loading' | 'disabled' | 'error';
-
-function isConfigured(settings: AiSettings): boolean {
-  return (
-    settings.enabled &&
-    settings.apiKey.trim() !== '' &&
-    settings.baseUrl.trim() !== '' &&
-    settings.model.trim() !== ''
-  );
-}
 
 export function useClozeSuggestions(quote: QuoteEntry) {
   const [settings, setSettings] = useState<AiSettings | null>(null);
@@ -28,7 +19,7 @@ export function useClozeSuggestions(quote: QuoteEntry) {
       .then((next) => {
         if (!alive) return;
         setSettings(next);
-        if (isConfigured(next)) {
+        if (isAiConfigured(next)) {
           setState('idle');
           setError('');
         } else {
@@ -47,7 +38,7 @@ export function useClozeSuggestions(quote: QuoteEntry) {
   }, []);
 
   async function requestSuggestions() {
-    if (!settings || !isConfigured(settings)) {
+    if (!settings || !isAiConfigured(settings)) {
       setState('disabled');
       setError('Configure AI to use this.');
       return;

@@ -70,6 +70,15 @@ export function setAiApiKey(settings: AiSettings, apiKey: string): AiSettings {
   };
 }
 
+export function isAiConfigured(settings: AiSettings): boolean {
+  return (
+    settings.enabled &&
+    settings.apiKey.trim() !== '' &&
+    settings.baseUrl.trim() !== '' &&
+    settings.model.trim() !== ''
+  );
+}
+
 export async function getAiSettings(): Promise<AiSettings> {
   return aiSettingsStorage.getValue();
 }

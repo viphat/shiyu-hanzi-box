@@ -1,6 +1,7 @@
 import { makeId } from './id';
 import { normalizeText } from './normalize';
 import { mutateInbox } from './storage';
+import { suggestClozes } from './cloze';
 import type { Occurrence, WordEntry, QuoteEntry } from './types';
 
 export interface SourceInfo {
@@ -64,27 +65,39 @@ export async function saveWord(text: string, src: SourceInfo): Promise<WordEntry
   return result;
 }
 
-export async function saveQuote(text: string, src: SourceInfo): Promise<QuoteEntry | null> {
+export async function saveQuote(
+  text: string,
+  src: SourceInfo,
+  opts: { autoCloze?: boolean } = {},
+): Promise<QuoteEntry | null> {
   const trimmed = text.trim();
   if (trimmed.length === 0) return null;
 
   const now = src.capturedAt;
-  const quote: QuoteEntry = {
-    id: makeId(),
-    kind: 'quote',
-    text: trimmed,
-    category: 'uncategorized',
-    tags: [],
-    note: '',
-    status: 'inbox',
-    createdAt: now,
-    updatedAt: now,
-    sourceTitle: src.sourceTitle,
-    sourceUrl: src.sourceUrl,
-    sourceDomain: src.sourceDomain,
-    surrounding: src.surrounding,
-    pinyin: undefined,
-  };
-  await mutateInbox((inbox) => ({ ...inbox, quotes: [quote, ...inbox.quotes] }));
-  return quote;
+  let result: QuoteEntry | null = null;
+  await mutateInbox((inbox) => {
+    const clozes = opts.autoCloze !== false
+      ? suggestClozes(trimmed, inbox.words)
+      : [];
+    const quote: QuoteEntry = {
+      id: makeId(),
+      kind: 'quote',
+      text: trimmed,
+      category: 'uncategorized',
+      tags: [],
+      note: '',
+      status: 'inbox',
+      createdAt: now,
+      updatedAt: now,
+      sourceTitle: src.sourceTitle,
+      sourceUrl: src.sourceUrl,
+      sourceDomain: src.sourceDomain,
+      surrounding: src.surrounding,
+      pinyin: undefined,
+      clozes,
+    };
+    result = quote;
+    return { ...inbox, quotes: [quote, ...inbox.quotes] };
+  });
+  return result;
 }

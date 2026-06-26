@@ -1,5 +1,7 @@
 import { clozesOverlap } from './cloze';
 import type {
+  AiSettings,
+  AppSettings,
   Cloze,
   Inbox,
   Occurrence,
@@ -318,4 +320,62 @@ function cloneInbox(inbox: Inbox): Inbox {
     }),
     quotes: cloneJson(inbox.quotes).map((quote) => sanitizeQuoteClozes(quote)),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Full backup (format version 3): inbox + app settings + AI settings
+// ---------------------------------------------------------------------------
+
+export const FULL_BACKUP_FORMAT_VERSION = 3 as const;
+
+export interface FullBackup {
+  app: typeof BACKUP_APP;
+  formatVersion: typeof FULL_BACKUP_FORMAT_VERSION;
+  exportedAt: string;
+  inbox: Inbox;
+  settings: AppSettings;
+  aiSettings: AiSettings;
+}
+
+export function createFullBackup(
+  inbox: Inbox,
+  settings: AppSettings,
+  aiSettings: AiSettings,
+  exportedAt = new Date(),
+): FullBackup {
+  return {
+    app: BACKUP_APP,
+    formatVersion: FULL_BACKUP_FORMAT_VERSION,
+    exportedAt: exportedAt.toISOString(),
+    inbox: cloneInbox(inbox),
+    settings,
+    aiSettings,
+  };
+}
+
+export function serializeFullBackup(
+  inbox: Inbox,
+  settings: AppSettings,
+  aiSettings: AiSettings,
+  exportedAt = new Date(),
+): string {
+  return `${JSON.stringify(createFullBackup(inbox, settings, aiSettings, exportedAt), null, 2)}\n`;
+}
+
+export function restoreFullBackup(raw: string): {
+  inbox: Inbox;
+  settings?: AppSettings;
+  aiSettings?: AiSettings;
+} {
+  const parsed: unknown = JSON.parse(raw);
+  const value = parsed as Record<string, unknown>;
+  if (value && value.formatVersion === FULL_BACKUP_FORMAT_VERSION) {
+    return {
+      inbox: cloneInbox(value.inbox as Inbox),
+      settings: value.settings as AppSettings,
+      aiSettings: value.aiSettings as AiSettings,
+    };
+  }
+  // Fallback: treat as inbox-only backup (formatVersion 2 or lower); settings/AI left undefined.
+  return { inbox: parseBackup(raw) };
 }

@@ -79,6 +79,14 @@ async function click(btn: HTMLButtonElement) {
   });
 }
 
+async function setTextareaValue(el: HTMLTextAreaElement, value: string) {
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+    setter.call(el, value);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -344,5 +352,84 @@ describe('ClozeEditor — manual span validation (via clozeFromRange)', () => {
 
     // The add-blank button should always be present
     expect(queryButton(messages.en['cloze.addBlank'])).not.toBeNull();
+  });
+});
+
+describe('ClozeEditor — manual brace-markup editor', () => {
+  it('manual apply commits parsed clozes from brace markup', async () => {
+    const quote = makeQuote({ text: '满足人们的刚需', clozes: [] });
+    const onChange = vi.fn();
+    const onUpdate = vi.fn();
+
+    await renderClient(
+      <ClozeEditor
+        quote={quote}
+        onChange={onChange}
+        onUpdate={onUpdate}
+        locale="zh-CN"
+      />,
+    );
+
+    // Open the manual editor
+    await click(getButton('手动填空'));
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    await setTextareaValue(textarea, '满足人们的{刚需}');
+    await click(getButton('应用'));
+
+    // text unchanged -> onChange(clozes) called, onUpdate not called
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const committed = onChange.mock.calls[0][0];
+    expect(committed).toHaveLength(1);
+    expect(quote.text.slice(committed[0].start, committed[0].end)).toBe('刚需');
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
+
+  it('manual apply persists edited text via onUpdate when the sentence changes', async () => {
+    const quote = makeQuote({ text: '满足人们的刚需', clozes: [] });
+    const onChange = vi.fn();
+    const onUpdate = vi.fn();
+
+    await renderClient(
+      <ClozeEditor
+        quote={quote}
+        onChange={onChange}
+        onUpdate={onUpdate}
+        locale="zh-CN"
+      />,
+    );
+
+    await click(getButton('手动填空'));
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    await setTextareaValue(textarea, '满足大众的{刚需}');
+    await click(getButton('应用'));
+
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+    const patch = onUpdate.mock.calls[0][0];
+    expect(patch.text).toBe('满足大众的刚需');
+    expect(patch.clozes).toHaveLength(1);
+  });
+
+  it('manual apply shows an inline error on malformed markup and does not mutate', async () => {
+    const quote = makeQuote({ text: '满足人们的刚需', clozes: [] });
+    const onChange = vi.fn();
+    const onUpdate = vi.fn();
+
+    await renderClient(
+      <ClozeEditor
+        quote={quote}
+        onChange={onChange}
+        onUpdate={onUpdate}
+        locale="zh-CN"
+      />,
+    );
+
+    await click(getButton('手动填空'));
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    await setTextareaValue(textarea, '满足{刚需');
+    await click(getButton('应用'));
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onUpdate).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('无法识别填空');
   });
 });

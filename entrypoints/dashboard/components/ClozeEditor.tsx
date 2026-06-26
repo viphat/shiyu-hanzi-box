@@ -1,5 +1,5 @@
-import { type RefObject } from 'react';
-import { clozeFromRange } from '@/lib/cloze';
+import { type RefObject, useState } from 'react';
+import { clozeFromRange, parseClozeMarkup, seedMarkup } from '@/lib/cloze';
 import { resolveSelectionOffsets } from '@/lib/cloze-selection';
 import { t } from '@/lib/i18n';
 import type { Cloze, QuoteEntry, UiLocale } from '@/lib/types';
@@ -15,6 +15,35 @@ interface ClozeEditorProps {
 
 export function ClozeEditor({ quote, onChange, onUpdate, locale, quoteTextRef }: ClozeEditorProps) {
   const clozes = quote.clozes ?? [];
+
+  // ---------------------------------------------------------------------------
+  // Manual brace-markup editor state
+  // ---------------------------------------------------------------------------
+
+  const [showMarkup, setShowMarkup] = useState(false);
+  const [markup, setMarkup] = useState('');
+  const [markupError, setMarkupError] = useState('');
+
+  function openMarkup() {
+    setMarkup(seedMarkup(quote.text, clozes));
+    setMarkupError('');
+    setShowMarkup(true);
+  }
+
+  function applyMarkup() {
+    const result = parseClozeMarkup(markup);
+    if (!result.ok) {
+      setMarkupError(t(locale, 'cloze.markupError'));
+      return;
+    }
+    if (result.text === quote.text) {
+      onChange(result.clozes);
+    } else {
+      onUpdate({ text: result.text, clozes: result.clozes });
+    }
+    setMarkupError('');
+    setShowMarkup(false);
+  }
 
   // ---------------------------------------------------------------------------
   // Chips: existing clozes
@@ -81,6 +110,27 @@ export function ClozeEditor({ quote, onChange, onUpdate, locale, quoteTextRef }:
         </div>
       )}
 
+      {/* Manual brace-markup panel */}
+      {showMarkup && (
+        <div className="space-y-1 rounded-sm border border-border bg-paper-input p-2">
+          <textarea
+            value={markup}
+            onChange={(e) => setMarkup(e.target.value)}
+            rows={3}
+            className="w-full resize-none rounded-sm border border-border bg-paper-light p-2 text-sm text-ink outline-none focus:border-cinnabar-fade"
+          />
+          <p className="text-[11px] text-muted">{t(locale, 'cloze.markupHelp')}</p>
+          {markupError && <p className="text-[11px] text-cinnabar">{markupError}</p>}
+          <button
+            type="button"
+            onClick={applyMarkup}
+            className="rounded-sm border border-cinnabar-border bg-cinnabar px-2 py-0.5 text-xs text-white transition hover:bg-cinnabar/80"
+          >
+            {t(locale, 'cloze.applyMarks')}
+          </button>
+        </div>
+      )}
+
       {/* Actions row */}
       <div className="flex flex-wrap gap-2">
         <button
@@ -90,6 +140,13 @@ export function ClozeEditor({ quote, onChange, onUpdate, locale, quoteTextRef }:
           className="rounded-sm border border-border bg-paper-input px-2 py-1 text-xs text-muted transition hover:border-cinnabar-border hover:text-cinnabar"
         >
           {t(locale, 'cloze.addBlank')}
+        </button>
+        <button
+          type="button"
+          onClick={showMarkup ? () => setShowMarkup(false) : openMarkup}
+          className="rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-1 text-xs text-cinnabar transition hover:bg-cinnabar hover:text-white"
+        >
+          {t(locale, 'cloze.markBlanks')}
         </button>
       </div>
     </div>

@@ -143,6 +143,10 @@ export const messages = {
     'cloze.hintLength': 'Hint: length',
     'cloze.blankAria': 'hidden answer',
     'cloze.noParked': 'No parked quotes',
+    'cloze.markBlanks': 'Mark blanks',
+    'cloze.applyMarks': 'Apply',
+    'cloze.markupHelp': 'Wrap each answer in braces, e.g. 满足人们的{刚需}.',
+    'cloze.markupError': "Couldn't read your blanks — check the { } pairs.",
     'review.answer': 'Answer',
   },
   'zh-CN': {
@@ -287,6 +291,10 @@ export const messages = {
     'cloze.hintLength': '提示：字数',
     'cloze.blankAria': '隐藏的答案',
     'cloze.noParked': '没有待填空的句子',
+    'cloze.markBlanks': '手动填空',
+    'cloze.applyMarks': '应用',
+    'cloze.markupHelp': '用大括号包住每个答案，例如 满足人们的{刚需}。',
+    'cloze.markupError': '无法识别填空——请检查 { } 是否成对。',
     'review.answer': '答案',
   },
 } as const;

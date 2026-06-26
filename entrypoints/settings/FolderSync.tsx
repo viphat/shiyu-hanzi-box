@@ -146,15 +146,16 @@ function FolderSyncConnectedView({
       <dl className="mb-3 grid gap-2 text-xs text-muted sm:grid-cols-2">
         {config.folderName && (
           <div className="rounded-sm border border-border bg-paper-input px-2 py-1.5">
-            <dt className="font-medium text-ink-secondary">{config.folderName}</dt>
+            <dt className="font-medium text-muted">{t(locale, 'sync.field.folder')}</dt>
+            <dd className="mt-0.5 font-medium text-ink-secondary">{config.folderName}</dd>
           </div>
         )}
         <div className="rounded-sm border border-border bg-paper-input px-2 py-1.5">
-          <dt>Vault ID</dt>
+          <dt>{t(locale, 'sync.field.vaultId')}</dt>
           <dd className="mt-0.5 font-mono text-ink-secondary">{vaultIdAbbr}</dd>
         </div>
         <div className="rounded-sm border border-border bg-paper-input px-2 py-1.5">
-          <dt>Status</dt>
+          <dt>{t(locale, 'sync.field.status')}</dt>
           <dd className="mt-0.5 text-ink-secondary">
             {t(locale, statusKey as Parameters<typeof t>[1])}
             {config.pending && (
@@ -163,12 +164,12 @@ function FolderSyncConnectedView({
           </dd>
         </div>
         <div className="rounded-sm border border-border bg-paper-input px-2 py-1.5">
-          <dt>Last sync</dt>
+          <dt>{t(locale, 'sync.field.lastSync')}</dt>
           <dd className="mt-0.5 text-ink-secondary">{lastSuccessText}</dd>
         </div>
         {config.replicaLabel && (
           <div className="rounded-sm border border-border bg-paper-input px-2 py-1.5">
-            <dt>Label</dt>
+            <dt>{t(locale, 'sync.field.label')}</dt>
             <dd className="mt-0.5 text-ink-secondary">{config.replicaLabel}</dd>
           </div>
         )}
@@ -251,14 +252,14 @@ function PassphraseDialog({
                 onChange={(e) => setConfirmed(e.target.checked)}
                 className="accent-cinnabar"
               />
-              I understand
+              {t(locale, 'sync.dialog.iUnderstand')}
             </label>
           </div>
         )}
 
         <div className="space-y-3">
           <label className="block text-[11px] font-medium text-muted">
-            Passphrase
+            {t(locale, 'sync.dialog.passphrase')}
             <input
               type="password"
               value={passphrase}
@@ -268,12 +269,12 @@ function PassphraseDialog({
             />
           </label>
           <label className="block text-[11px] font-medium text-muted">
-            Device label (optional)
+            {t(locale, 'sync.dialog.deviceLabel')}
             <input
               type="text"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
-              placeholder="e.g. Home laptop"
+              placeholder={t(locale, 'sync.dialog.deviceLabelPlaceholder')}
               className="mt-1 w-full rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs text-ink outline-none focus:border-cinnabar-fade"
             />
           </label>
@@ -285,7 +286,7 @@ function PassphraseDialog({
             onClick={onCancel}
             className="rounded-sm border border-border px-3 py-1.5 text-xs text-ink-secondary tracking-[1px] transition hover:bg-paper-input"
           >
-            Cancel
+            {t(locale, 'sync.dialog.cancel')}
           </button>
           <button
             type="button"
@@ -381,6 +382,8 @@ export function FolderSync({ locale = 'zh-CN' }: { locale?: UiLocale }) {
   async function handleForgetKey() {
     const { forgetKey } = await import('@/lib/sync/local');
     await forgetKey();
+    const next = await getSyncConfig();
+    setConfig(next);
   }
 
   async function handleDisconnect() {

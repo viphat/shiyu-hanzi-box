@@ -143,6 +143,7 @@ export const messages = {
     'cloze.hintPinyin': 'Hint: pinyin',
     'cloze.hintLength': 'Hint: length',
     'cloze.blankAria': 'hidden answer',
+    'cloze.noParked': 'No parked quotes',
     'review.answer': 'Answer',
   },
   'zh-CN': {
@@ -287,6 +288,7 @@ export const messages = {
     'cloze.hintPinyin': '提示：拼音',
     'cloze.hintLength': '提示：字数',
     'cloze.blankAria': '隐藏的答案',
+    'cloze.noParked': '没有待填空的句子',
     'review.answer': '答案',
   },
 } as const;

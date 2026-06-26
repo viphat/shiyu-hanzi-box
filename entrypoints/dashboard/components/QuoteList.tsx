@@ -34,9 +34,11 @@ export function QuoteList({
     );
   }
 
+  const showFilterBar = parkedCount > 0 || showParkedOnly;
+
   return (
     <div className="space-y-3">
-      {parkedCount > 0 && (
+      {showFilterBar && (
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowParkedOnly((v) => !v)}
@@ -48,24 +50,32 @@ export function QuoteList({
           >
             {t(locale, 'cloze.parked')}
           </button>
-          <span className="text-xs text-muted">
-            {formatMessage(locale, 'cloze.parkedCount', { count: parkedCount })}
-          </span>
+          {parkedCount > 0 && (
+            <span className="text-xs text-muted">
+              {formatMessage(locale, 'cloze.parkedCount', { count: parkedCount })}
+            </span>
+          )}
         </div>
       )}
-      <div className="grid gap-3">
-        {visibleQuotes.map((quote) => (
-          <QuoteCard
-            key={quote.id}
-            quote={quote}
-            onUpdate={(patch) => onUpdate(quote.id, patch)}
-            onDelete={() => onDelete(quote.id)}
-            locale={locale}
-            savedWords={savedWords}
-            showParkedMarker={isParkedQuote(quote)}
-          />
-        ))}
-      </div>
+      {showParkedOnly && visibleQuotes.length === 0 ? (
+        <div className="rounded-sm border border-dashed border-border bg-paper-light py-8 text-center">
+          <p className="text-sm text-muted">{t(locale, 'cloze.noParked')}</p>
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          {visibleQuotes.map((quote) => (
+            <QuoteCard
+              key={quote.id}
+              quote={quote}
+              onUpdate={(patch) => onUpdate(quote.id, patch)}
+              onDelete={() => onDelete(quote.id)}
+              locale={locale}
+              savedWords={savedWords}
+              showParkedMarker={isParkedQuote(quote)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

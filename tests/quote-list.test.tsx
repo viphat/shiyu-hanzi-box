@@ -97,9 +97,10 @@ describe('QuoteList — parked count badge', () => {
       />,
     );
 
-    // "2 parked" badge should be visible
-    expect(container.textContent).toContain('2');
-    expect(container.textContent).toContain('parked');
+    // "2 parked" badge should be visible with the exact formatted string
+    expect(container.textContent).toContain(
+      messages.en['cloze.parkedCount'].replace('{count}', '2'),
+    );
   });
 
   it('does not show parked badge when all quotes have clozes', async () => {
@@ -136,9 +137,10 @@ describe('QuoteList — parked count badge', () => {
       />,
     );
 
-    // Only 1 parked
-    expect(container.textContent).toContain('1');
-    expect(container.textContent).toContain('parked');
+    // Only 1 parked — exact formatted string
+    expect(container.textContent).toContain(
+      messages.en['cloze.parkedCount'].replace('{count}', '1'),
+    );
   });
 });
 
@@ -215,6 +217,95 @@ describe('QuoteList — parked filter toggle', () => {
     await click(toggleBtnAgain);
     // Both visible again
     expect(container.textContent).toContain('温故知新');
+  });
+});
+
+describe('QuoteList — empty parked-filter state', () => {
+  it('shows no-parked message and keeps filter toggle when filter is active but no parked quotes remain', async () => {
+    // All quotes have clozes → none are parked
+    const quotes = [
+      makeQuote({ id: 'q1', text: '学而时习之', clozes: [makeCloze()] }),
+      makeQuote({ id: 'q2', text: '温故知新', clozes: [makeCloze()] }),
+    ];
+
+    // Render with parkedCount=0 initially; we need to simulate the scenario
+    // where the filter is already active. We achieve this by first rendering
+    // with a parked quote, clicking the toggle, then re-rendering without parked quotes.
+    const parkedQuote = makeQuote({ id: 'q0', text: '仁者爱人' }); // parked
+    await renderClient(
+      <QuoteList
+        quotes={[parkedQuote, ...quotes]}
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        locale="en"
+        savedWords={savedWords}
+      />,
+    );
+
+    // Activate the filter
+    const toggleBtn = queryButton(messages.en['cloze.parked'])!;
+    expect(toggleBtn).not.toBeNull();
+    await click(toggleBtn);
+
+    // Now re-render with no parked quotes (simulating the last parked quote being resolved)
+    await renderClient(
+      <QuoteList
+        quotes={quotes}
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        locale="en"
+        savedWords={savedWords}
+      />,
+    );
+
+    // The "no parked quotes" message should be visible
+    expect(container.textContent).toContain(messages.en['cloze.noParked']);
+    // The filter toggle should still be rendered so the user can turn it off
+    expect(queryButton(messages.en['cloze.parked'])).not.toBeNull();
+    // Non-parked quotes should NOT be visible while filter is active
+    expect(container.textContent).not.toContain('学而时习之');
+    expect(container.textContent).not.toContain('温故知新');
+  });
+
+  it('toggling the filter off after empty-state reveals all quotes', async () => {
+    const quotes = [
+      makeQuote({ id: 'q1', text: '学而时习之', clozes: [makeCloze()] }),
+    ];
+
+    const parkedQuote = makeQuote({ id: 'q0', text: '仁者爱人' });
+    await renderClient(
+      <QuoteList
+        quotes={[parkedQuote, ...quotes]}
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        locale="en"
+        savedWords={savedWords}
+      />,
+    );
+
+    // Turn the filter on
+    await click(queryButton(messages.en['cloze.parked'])!);
+
+    // Re-render with no parked quotes
+    await renderClient(
+      <QuoteList
+        quotes={quotes}
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        locale="en"
+        savedWords={savedWords}
+      />,
+    );
+
+    // Confirm empty state
+    expect(container.textContent).toContain(messages.en['cloze.noParked']);
+
+    // Turn the filter off
+    await click(queryButton(messages.en['cloze.parked'])!);
+
+    // All quotes now visible
+    expect(container.textContent).toContain('学而时习之');
+    expect(container.textContent).not.toContain(messages.en['cloze.noParked']);
   });
 });
 

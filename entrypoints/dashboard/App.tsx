@@ -4,10 +4,12 @@ import { useEffect, useMemo, useState } from 'react';
 import iconUrl from '../../assets/icon.png';
 import {
   answerReview,
+  answerReviewCloze,
   buildSrsQueue,
   getNextSrsWakeAt,
   getSrsStats,
   postponeReview,
+  postponeReviewCloze,
   startOfNextDay,
   type SrsQueueItem,
   type SrsStats,
@@ -151,8 +153,19 @@ export function App() {
     kind: Entry['kind'],
     id: string,
     rating: ReviewRating,
+    clozeId?: string,
   ): Promise<void> {
     const now = Date.now();
+    if (kind === 'quote' && clozeId != null) {
+      return mutate((current) => ({
+        ...current,
+        quotes: current.quotes.map((q) =>
+          q.id === id
+            ? answerReviewCloze(q, clozeId, rating, now, settings.srs)
+            : q,
+        ),
+      }));
+    }
     return mutate((current) =>
       updateReviewEntry(current, kind, id, (entry) =>
         answerReview(entry, rating, now, settings.srs),
@@ -163,9 +176,20 @@ export function App() {
   function postponeEntry(
     kind: Entry['kind'],
     id: string,
+    clozeId?: string,
   ): Promise<void> {
     const now = Date.now();
     const dueAt = startOfNextDay(now);
+    if (kind === 'quote' && clozeId != null) {
+      return mutate((current) => ({
+        ...current,
+        quotes: current.quotes.map((q) =>
+          q.id === id
+            ? postponeReviewCloze(q, clozeId, now, dueAt)
+            : q,
+        ),
+      }));
+    }
     return mutate((current) =>
       updateReviewEntry(current, kind, id, (entry) =>
         postponeReview(entry, now, dueAt),

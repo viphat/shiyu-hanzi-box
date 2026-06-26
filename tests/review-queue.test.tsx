@@ -558,6 +558,36 @@ describe('Cloze review card', () => {
     expect(container.textContent).toContain('学而 is learning');
   });
 
+  it('shows answer pinyin label and pinyin text after reveal on a cloze card', async () => {
+    // answer: 学而 (start=0, end=2) — pinyin should contain "xue" or similar
+    const cloze = makeCloze({ id: 'c1', start: 0, end: 2, hint: 'none' });
+    const entry = migrateReviewState(
+      quoteWithClozes('学而时习之', [cloze]),
+      NOW,
+    );
+
+    await renderClient(
+      <ReviewCard
+        item={{ kind: 'quote', entry, dueAt: NOW, clozeId: 'c1' }}
+        remainingCount={1}
+        onAnswer={vi.fn()}
+        onPostpone={vi.fn()}
+        locale="en"
+      />,
+    );
+
+    // Before reveal: answer label should not be visible
+    expect(container.textContent).not.toContain(messages.en['review.answer']);
+
+    await click(button(messages.en['review.reveal']));
+
+    // After reveal: "Answer:" label and pinyin of 学而 must be present
+    expect(container.textContent).toContain(messages.en['review.answer']);
+    // 学 pinyin contains "xué" (toned) or "xue", 而 pinyin contains "ér" or "er"
+    expect(container.textContent).toMatch(/xu[eé]/i);
+    expect(container.textContent).toMatch(/[eé]r/i);
+  });
+
   it('does not render a Traditional (繁) toggle on the cloze review card', () => {
     // Regression guard: cloze offsets index Simplified text. A Traditional
     // conversion can change string length, so the offsets would not map onto

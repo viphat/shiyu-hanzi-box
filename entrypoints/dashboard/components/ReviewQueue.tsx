@@ -438,6 +438,12 @@ function ClozeQuoteBody({
           <span aria-hidden="true" className="absolute bottom-0 right-1 text-2xl text-cinnabar/40">」</span>
         </blockquote>
         <div className="mt-3 flex items-center gap-2">
+          <span className="text-sm text-muted tracking-[1px]">
+            {t(locale, 'review.answer')}:
+          </span>
+          <span className="text-base font-medium text-cinnabar">
+            {toPinyin(answer)}
+          </span>
           <SpeakButton text={text} locale={locale} />
         </div>
         {quote.note && showNote && (

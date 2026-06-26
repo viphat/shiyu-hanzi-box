@@ -13,6 +13,7 @@ export default defineConfig({
       'scripting',
       'downloads',
       'unlimitedStorage',
+      'alarms',
       'clipboardRead',
       'tts',
     ],

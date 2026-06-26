@@ -16,6 +16,7 @@ import {
 } from '@/lib/srs';
 import { t } from '@/lib/i18n';
 import type {
+  AiSettings,
   Entry,
   Inbox as InboxState,
   QuoteEntry,
@@ -24,12 +25,17 @@ import type {
   UiLocale,
   WordEntry,
 } from '@/lib/types';
+import { getAiSettings, aiSettingsStorage, DEFAULT_AI_SETTINGS, setAiSettings } from '@/lib/ai/settings';
+import { replaceSettings } from '@/lib/settings';
 import { QuoteList } from './components/QuoteList';
 import { ReviewQueue } from './components/ReviewQueue';
+import { SyncStatusBadge } from './SyncStatusBadge';
 import { Toolbar } from './components/Toolbar';
 import { WordList } from './components/WordList';
 import { useInbox } from './hooks/useInbox';
 import { useSettings } from './hooks/useSettings';
+import { requestSyncMutation } from '../background/sync-mutation-handler';
+import { wordKey } from '@/lib/sync/project';
 
 type Tab = 'review' | 'words' | 'quotes';
 type StatusFilter = 'all' | Status;
@@ -38,6 +44,21 @@ export function App() {
   const { inbox, loading, mutate, replace } = useInbox();
   const { settings, loading: settingsLoading } = useSettings();
   const locale = settings.uiLocale;
+  const [aiSettings, setAiSettingsState] = useState<AiSettings>(DEFAULT_AI_SETTINGS);
+
+  useEffect(() => {
+    let mounted = true;
+    void getAiSettings().then((value) => {
+      if (mounted) setAiSettingsState(value);
+    });
+    const unwatch = aiSettingsStorage.watch((next) => {
+      if (mounted) setAiSettingsState(next ?? DEFAULT_AI_SETTINGS);
+    });
+    return () => {
+      mounted = false;
+      unwatch();
+    };
+  }, []);
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<Tab>('review');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('inbox');
@@ -127,10 +148,16 @@ export function App() {
   }
 
   function deleteWord(id: string) {
-    mutate((current) => ({
-      ...current,
-      words: current.words.filter((word) => word.id !== id),
-    }));
+    mutate((current) => {
+      const word = current.words.find((w) => w.id === id);
+      if (word) {
+        void requestSyncMutation('delete', [wordKey(word.normalized)]);
+      }
+      return {
+        ...current,
+        words: current.words.filter((w) => w.id !== id),
+      };
+    });
   }
 
   function updateQuote(id: string, patch: Partial<QuoteEntry>) {
@@ -143,6 +170,7 @@ export function App() {
   }
 
   function deleteQuote(id: string) {
+    void requestSyncMutation('delete', [`quote:${id}`]);
     mutate((current) => ({
       ...current,
       quotes: current.quotes.filter((quote) => quote.id !== id),
@@ -189,9 +217,12 @@ export function App() {
         <div className="mx-auto max-w-5xl px-5 py-6">
           <div className="grid gap-5 md:grid-cols-[1fr_auto] md:items-end">
             <div>
-              <p className="text-xs font-medium text-muted tracking-[2px]">
-                {t(locale, 'app.todayPrefix')} · {today}
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-muted tracking-[2px]">
+                  {t(locale, 'app.todayPrefix')} · {today}
+                </p>
+                <SyncStatusBadge locale={locale} />
+              </div>
               <div className="mt-2 flex items-center gap-3">
                 <img
                   src={iconUrl}
@@ -233,8 +264,14 @@ export function App() {
           inbox={inbox}
           query={query}
           onQuery={setQuery}
-          onRestore={replace}
+          onRestore={async (restored) => {
+            await replace(restored.inbox);
+            if (restored.settings) await replaceSettings(restored.settings);
+            if (restored.aiSettings) await setAiSettings(restored.aiSettings);
+          }}
           locale={locale}
+          settings={settings}
+          aiSettings={aiSettings}
         />
 
         <SrsStatsPanel stats={srsStats} locale={locale} />

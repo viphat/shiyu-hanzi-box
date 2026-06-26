@@ -1,5 +1,4 @@
-import type { QuoteEntry } from '@/lib/types';
-import type { UiLocale } from '@/lib/types';
+import type { QuoteEntry, UiLocale, WordEntry } from '@/lib/types';
 import { t } from '@/lib/i18n';
 import { QuoteCard } from './QuoteCard';
 
@@ -8,11 +7,13 @@ export function QuoteList({
   onUpdate,
   onDelete,
   locale,
+  savedWords,
 }: {
   quotes: QuoteEntry[];
   onUpdate: (id: string, patch: Partial<QuoteEntry>) => void;
   onDelete: (id: string) => void;
   locale: UiLocale;
+  savedWords: WordEntry[];
 }) {
   if (quotes.length === 0) {
     return (
@@ -35,6 +36,7 @@ export function QuoteList({
           onUpdate={(patch) => onUpdate(quote.id, patch)}
           onDelete={() => onDelete(quote.id)}
           locale={locale}
+          savedWords={savedWords}
         />
       ))}
     </div>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { t } from '@/lib/i18n';
-import type { QuoteEntry, UiLocale } from '@/lib/types';
+import type { Cloze, QuoteEntry, UiLocale, WordEntry } from '@/lib/types';
+import { ClozeEditor } from './ClozeEditor';
 import { TraditionalButton } from './TraditionalButton';
 
 export function QuoteCard({
@@ -8,11 +9,13 @@ export function QuoteCard({
   onUpdate,
   onDelete,
   locale,
+  savedWords,
 }: {
   quote: QuoteEntry;
   onUpdate: (patch: Partial<QuoteEntry>) => void;
   onDelete: () => void;
   locale: UiLocale;
+  savedWords: WordEntry[];
 }) {
   const [note, setNote] = useState(quote.note);
   const [showTraditional, setShowTraditional] = useState(false);
@@ -23,7 +26,7 @@ export function QuoteCard({
         <span aria-hidden="true" className="absolute left-2 top-0 text-xl text-cinnabar/40">
           「
         </span>
-        <span>{quote.text}</span>
+        <span data-quote-text>{quote.text}</span>
         <span aria-hidden="true" className="absolute bottom-0 right-1 text-xl text-cinnabar/40">
           」
         </span>
@@ -63,6 +66,12 @@ export function QuoteCard({
         placeholder={t(locale, 'quote.notePlaceholder')}
         rows={2}
         className="mt-3 w-full resize-none rounded-sm border border-border bg-paper-input p-2 text-xs text-ink outline-none transition placeholder:text-muted focus:border-cinnabar-fade"
+      />
+      <ClozeEditor
+        quote={quote}
+        savedWords={savedWords}
+        onChange={(clozes: Cloze[]) => onUpdate({ clozes })}
+        locale={locale}
       />
       <div className="mt-1 flex justify-end gap-1">
         {quote.status !== 'reviewed' && (

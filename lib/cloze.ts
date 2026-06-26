@@ -173,3 +173,31 @@ export function clozesOverlap(clozes: Cloze[]): boolean {
   }
   return false;
 }
+
+/**
+ * Validate and create a Cloze from a raw [start, end) selection against the
+ * given text and existing clozes. Returns null when invalid (empty, out-of-range,
+ * or overlapping with any existing cloze).
+ *
+ * Normalises so start < end regardless of selection direction.
+ */
+export function clozeFromRange(
+  text: string,
+  rawStart: number,
+  rawEnd: number,
+  existing: Cloze[],
+): Cloze | null {
+  const start = Math.min(rawStart, rawEnd);
+  const end = Math.max(rawStart, rawEnd);
+
+  // Empty or out-of-range
+  if (start >= end) return null;
+  if (start < 0 || end > text.length) return null;
+
+  const candidate: Cloze = { id: makeId(), start, end, hint: 'none' };
+
+  // Overlaps with any existing cloze
+  if (clozesOverlap([...existing, candidate])) return null;
+
+  return candidate;
+}

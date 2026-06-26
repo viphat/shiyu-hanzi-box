@@ -301,6 +301,7 @@ export function App() {
               onUpdate={updateQuote}
               onDelete={deleteQuote}
               locale={locale}
+              savedWords={inbox.words}
             />
           )}
         </section>

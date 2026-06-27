@@ -1,4 +1,4 @@
-import { RefreshCw, AlertCircle, CheckCircle2, Clock, WifiOff } from 'lucide-react';
+import { RefreshCw, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { browser } from 'wxt/browser';
 import { getSyncConfig, syncConfigStorage } from '@/lib/sync/local';
@@ -40,8 +40,8 @@ export function SyncStatusBadgeView({
     if (isAttention) return <AlertCircle className="h-3 w-3" aria-hidden="true" />;
     if (isSyncing) return <RefreshCw className="h-3 w-3 animate-spin" aria-hidden="true" />;
     if (status === 'synced') return <CheckCircle2 className="h-3 w-3" aria-hidden="true" />;
-    if (status === 'pending') return <Clock className="h-3 w-3" aria-hidden="true" />;
-    return <WifiOff className="h-3 w-3" aria-hidden="true" />;
+    // Only 'pending' remains ('disabled' returned null above).
+    return <Clock className="h-3 w-3" aria-hidden="true" />;
   }
 
   const baseClass =

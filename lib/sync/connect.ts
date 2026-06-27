@@ -1,4 +1,3 @@
-// lib/sync/connect.ts
 import { checkVerification, defaultKdfParams, deriveKey, makeVerification } from './crypto';
 import { decryptReplica, encryptReplica, isVaultManifest, type VaultManifest } from './vault';
 import { mergeSyncState } from './merge';

@@ -1,4 +1,3 @@
-// lib/sync/project.ts
 import type {
   AiSettings,
   AppSettings,
@@ -243,6 +242,26 @@ export function projectInbox(
 // Internal: rebuildReview
 // ---------------------------------------------------------------------------
 
+/**
+ * Guard: verify that an opaque snapshot payload carries all four required
+ * scheduler fields before we spread it into a ReviewState.  A foreign or
+ * corrupt payload (null, array, primitive, or an object missing any of the
+ * four required numeric fields) must NOT be used — materialising a partial
+ * ReviewState would hand downstream SRS logic (lib/srs.ts) an object with
+ * undefined scheduler fields, silently corrupting scheduling.  Returning
+ * undefined lets the SRS treat the entry as new rather than acting on noise.
+ */
+function isSchedulerPayload(payload: unknown): payload is ReviewState {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return false;
+  const p = payload as Record<string, unknown>;
+  return (
+    typeof p.dueAt === 'number' &&
+    typeof p.intervalDays === 'number' &&
+    typeof p.repetitions === 'number' &&
+    typeof p.lapses === 'number'
+  );
+}
+
 function rebuildReview(node: WordNode | QuoteNode): ReviewState | undefined {
   if (!node.snapshot && Object.keys(node.reviewEvents).length === 0) return undefined;
   const log = Object.values(node.reviewEvents)
@@ -253,8 +272,12 @@ function rebuildReview(node: WordNode | QuoteNode): ReviewState | undefined {
         a.id.localeCompare(b.id),
     )
     .map((e) => e.payload as ReviewLogEntry);
-  const base = (node.snapshot?.payload as Partial<ReviewState>) ?? {};
-  return { ...(base as ReviewState), reviewLog: log };
+  const payload = node.snapshot?.payload;
+  // Drop the review entirely when the snapshot payload is absent or invalid:
+  // returning a partial ReviewState (missing dueAt / intervalDays / etc.) is
+  // worse than returning undefined, which the caller treats as "no review yet".
+  if (!isSchedulerPayload(payload)) return undefined;
+  return { ...payload, reviewLog: log };
 }
 
 // ---------------------------------------------------------------------------

@@ -23,7 +23,7 @@ describe('local mutation protocol', () => {
       await setInbox({ words: [], quotes: [] });
     });
     // Simulate an interrupted write: metadata revision behind config.
-    await syncMetadataStorage.setValue({ revision: 0, state: null, lastDigest: null });
+    await syncMetadataStorage.setValue({ revision: 0, state: null, lastDigest: null, appSettingsUpdatedAt: 0, aiSettingsUpdatedAt: 0 });
     await reconcileOnStartup();
     const cfg = await getSyncConfig();
     const meta = await syncMetadataStorage.getValue();

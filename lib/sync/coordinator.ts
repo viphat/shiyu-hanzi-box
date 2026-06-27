@@ -35,10 +35,13 @@ export async function runSyncPass(
 
   // Local state -> sync state.
   const { inbox, settings, ai } = await readDomainSnapshot();
-  const persisted = (await syncMetadataStorage.getValue()).state;
+  const metaSnapshot = await syncMetadataStorage.getValue();
+  const persisted = metaSnapshot.state;
   let merged: SyncState = projectInbox(inbox, settings, ai, {
     replicaId: deps.replicaId,
     wallTime: deps.now(),
+    settingsStamp: metaSnapshot.appSettingsUpdatedAt,
+    aiStamp: metaSnapshot.aiSettingsUpdatedAt,
   });
   // Seed from persisted state so tombstones (and prior merged data) carry forward.
   // The fresh projection's field stamps win over older persisted ones (LWW);

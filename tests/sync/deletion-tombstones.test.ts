@@ -93,6 +93,8 @@ describe('deletion tombstones', () => {
       revision: 1,
       state: stateWithTombstone,
       lastDigest: null,
+      appSettingsUpdatedAt: 0,
+      aiSettingsUpdatedAt: 0,
     });
 
     // Seed a remote replica that STILL contains the word (no tombstone)

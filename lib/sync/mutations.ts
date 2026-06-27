@@ -12,10 +12,14 @@ export interface SyncMetadata {
   revision: number;
   state: SyncState | null;
   lastDigest: string | null;
+  /** Wall-clock ms when the user last edited app settings. 0 = never edited (unversioned). */
+  appSettingsUpdatedAt: number;
+  /** Wall-clock ms when the user last edited AI settings. 0 = never edited (unversioned). */
+  aiSettingsUpdatedAt: number;
 }
 
 export const syncMetadataStorage = storage.defineItem<SyncMetadata>('local:syncMetadata', {
-  fallback: { revision: 0, state: null, lastDigest: null },
+  fallback: { revision: 0, state: null, lastDigest: null, appSettingsUpdatedAt: 0, aiSettingsUpdatedAt: 0 },
 });
 
 export async function readDomainSnapshot() {
@@ -30,14 +34,21 @@ export async function readDomainSnapshot() {
 let chain: Promise<unknown> = Promise.resolve();
 
 export async function applyLocalMutation(
-  _kind: 'inbox' | 'settings' | 'ai',
+  kind: 'inbox' | 'settings' | 'ai',
   writer: () => Promise<void>,
 ): Promise<void> {
   const run = chain.then(async () => {
     await writer();
     const meta = await syncMetadataStorage.getValue();
     const nextRevision = meta.revision + 1;
-    await syncMetadataStorage.setValue({ ...meta, revision: nextRevision, state: null });
+    const now = Date.now();
+    await syncMetadataStorage.setValue({
+      ...meta,
+      revision: nextRevision,
+      state: null,
+      appSettingsUpdatedAt: kind === 'settings' ? now : meta.appSettingsUpdatedAt,
+      aiSettingsUpdatedAt: kind === 'ai' ? now : meta.aiSettingsUpdatedAt,
+    });
     await mutateSyncConfig((cfg) => ({
       ...cfg,
       localRevision: nextRevision,
@@ -65,7 +76,7 @@ export async function applyLocalMutation(
  * (a concurrent write landed — caller should abort and retry).
  */
 export async function applyLocalMutationIfUnchanged(
-  _kind: 'inbox' | 'settings' | 'ai',
+  _kind: 'inbox' | 'settings' | 'ai', // coordinator's merged write — must NOT bump settings timestamps
   expectedRevision: number,
   writer: () => Promise<void>,
 ): Promise<boolean> {
@@ -119,7 +130,13 @@ export async function applyDeletion(keys: string[]): Promise<void> {
       state = deleteEntity(state, key, { wallTime: Date.now(), counter: 0, replicaId });
     }
     const nextRevision = meta.revision + 1;
-    await syncMetadataStorage.setValue({ revision: nextRevision, state, lastDigest: meta.lastDigest });
+    await syncMetadataStorage.setValue({
+      revision: nextRevision,
+      state,
+      lastDigest: meta.lastDigest,
+      appSettingsUpdatedAt: meta.appSettingsUpdatedAt,
+      aiSettingsUpdatedAt: meta.aiSettingsUpdatedAt,
+    });
     await mutateSyncConfig((cfg) => ({
       ...cfg,
       localRevision: nextRevision,
@@ -137,11 +154,18 @@ export async function reconcileOnStartup(): Promise<void> {
   if (meta.revision === cfg.localRevision && meta.state) return;
   const replicaId = await ensureReplicaId();
   const { inbox, settings, ai } = await readDomainSnapshot();
-  const state = projectInbox(inbox, settings, ai, { replicaId, wallTime: Date.now() });
+  const state = projectInbox(inbox, settings, ai, {
+    replicaId,
+    wallTime: Date.now(),
+    settingsStamp: meta.appSettingsUpdatedAt,
+    aiStamp: meta.aiSettingsUpdatedAt,
+  });
   await syncMetadataStorage.setValue({
     revision: cfg.localRevision,
     state,
     lastDigest: meta.lastDigest,
+    appSettingsUpdatedAt: meta.appSettingsUpdatedAt,
+    aiSettingsUpdatedAt: meta.aiSettingsUpdatedAt,
   });
   if (cfg.vaultId) {
     await mutateSyncConfig((c) => ({ ...c, pending: true, status: 'pending' }));

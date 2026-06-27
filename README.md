@@ -157,7 +157,8 @@ does not run until you click the button.
 How it works:
 
 1. Open **Settings** from the dashboard toolbar, then use the **AI 设置** section.
-2. Choose a provider: DeepSeek, OpenAI, or a custom OpenAI-compatible endpoint.
+2. Choose a provider: DeepSeek, OpenAI, OpenRouter, Google Gemini, Qwen,
+   Moonshot (Kimi), or Zhipu (GLM). Claude is reachable through OpenRouter.
 3. Paste your API key and select a model.
 4. Click **测试连接** to verify the provider settings.
 5. Expand any word card and click **Ask AI**.

@@ -61,7 +61,8 @@ Use this flow for reviewer instructions or your own pre-submit smoke test.
 18. Open Settings from the dashboard.
 19. Change the UI language between `zh-CN` and English, then return to the
     dashboard to confirm labels update.
-20. Optional AI test: enable AI, choose DeepSeek or OpenAI, enter a valid API
+20. Optional AI test: enable AI, choose a provider (DeepSeek, OpenAI,
+    OpenRouter, Google Gemini, Qwen, Moonshot, or Zhipu), enter a valid API
     key, and click Test Connection. Then return to a saved word and click
     **Ask AI**, and on a saved quote click **建议填空** to fetch suggested blanks.
 21. On a saved quote card, add a tag in the tag-chip editor and confirm a chip
@@ -110,7 +111,9 @@ manual fallback.
   popup manual fallback there.
 - Newly saved quotes are "parked" with no cloze blanks and do not appear in the
   review queue until the user adds at least one blank (manually or via AI).
-- Custom AI endpoints must use HTTPS.
+- AI providers are an enumerated allow-list (DeepSeek, OpenAI, OpenRouter,
+  Google Gemini, Qwen, Moonshot, Zhipu); each host permission is optional and
+  requested lazily only for the selected provider. All endpoints use HTTPS.
 - The pronunciation button is hidden if Chrome exposes no compatible Chinese
   voice.
 - Kaikki dictionary import can take time for large JSONL files and should be

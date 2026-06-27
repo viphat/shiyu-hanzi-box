@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  originFromBaseUrl,
   requestAiSettingsPermission,
   requestProviderPermission,
 } from '../lib/ai/permissions';
@@ -29,22 +28,6 @@ const settings = (over: Partial<AiSettings> = {}): AiSettings => ({
   ...over,
 });
 
-describe('originFromBaseUrl', () => {
-  it('turns a base URL into a Chrome origin pattern', () => {
-    expect(originFromBaseUrl('https://api.deepseek.com/v1')).toBe(
-      'https://api.deepseek.com/*',
-    );
-  });
-
-  it('returns null for invalid URLs', () => {
-    expect(originFromBaseUrl('not a url')).toBeNull();
-  });
-
-  it('rejects insecure HTTP endpoints', () => {
-    expect(originFromBaseUrl('http://localhost:11434/v1')).toBeNull();
-  });
-});
-
 describe('requestProviderPermission', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -58,10 +41,10 @@ describe('requestProviderPermission', () => {
     });
   });
 
-  it('requests a custom origin when supplied', async () => {
-    await requestProviderPermission('custom', 'https://llm.example.test/*');
+  it('requests the enumerated origin for a multi-model proxy provider', async () => {
+    await requestProviderPermission('openrouter');
     expect(request).toHaveBeenCalledWith({
-      origins: ['https://llm.example.test/*'],
+      origins: ['https://openrouter.ai/*'],
     });
   });
 });
@@ -79,28 +62,11 @@ describe('requestAiSettingsPermission', () => {
     expect(request).not.toHaveBeenCalled();
   });
 
-  it('requests custom endpoint origin when AI is enabled', async () => {
-    await requestAiSettingsPermission(
-      settings({
-        provider: 'custom',
-        baseUrl: 'https://llm.example.test/v1',
-      }),
-    );
+  it('requests the selected provider origin when AI is enabled', async () => {
+    await requestAiSettingsPermission(settings({ provider: 'qwen' }));
 
     expect(request).toHaveBeenCalledWith({
-      origins: ['https://llm.example.test/*'],
+      origins: ['https://dashscope.aliyuncs.com/*'],
     });
-  });
-
-  it('does not request permission for insecure custom endpoints', async () => {
-    const ok = await requestAiSettingsPermission(
-      settings({
-        provider: 'custom',
-        baseUrl: 'http://localhost:11434/v1',
-      }),
-    );
-
-    expect(ok).toBe(false);
-    expect(request).not.toHaveBeenCalled();
   });
 });

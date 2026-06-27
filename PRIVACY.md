@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: 2026-06-26
+Last updated: 2026-06-28
 
 拾语汉字box is a local-first Chrome extension for saving selected Chinese words,
 phrases, and quotes while reading.
@@ -8,10 +8,11 @@ phrases, and quotes while reading.
 ## Data The Extension Handles
 
 The extension stores the text you explicitly save, your notes, pinyin,
-dictionary-derived insights, review ratings, due dates, scheduling state,
-review history, source page title, source page URL, source domain, surrounding
-page context, extension settings, optional AI settings, and optional imported
-dictionary data.
+dictionary-derived insights, quote tags, cloze blanks, review ratings, due
+dates, scheduling state, review history, source page title, source page URL,
+source domain, surrounding page context, extension settings, optional AI
+settings (including the optional API key), and optional imported dictionary
+data.
 
 The extension does not create an account, does not operate a developer-owned
 server, and does not sell user data.
@@ -54,12 +55,42 @@ speech engine. Chrome reports that some installed voices may use a remote
 network resource. The extension does not operate its own speech server and does
 not store generated audio.
 
+## Folder Sync (optional)
+
+Folder sync is optional and disabled by default. When you enable it, the
+extension writes an encrypted replica of your data to a folder you select
+through the browser's File System Access directory picker. The folder can be any
+local or cloud-synced directory you choose (for example iCloud Drive, Dropbox,
+OneDrive, Syncthing, a NAS mount, or a plain local directory).
+
+The entire sync payload — including your settings and the optional AI API key —
+is encrypted with your passphrase before it leaves the extension. The extension
+does not call any cloud provider's API and does not send your data to any
+developer-operated server; it only reads and writes files in the folder you
+pick. A forgotten passphrase cannot be recovered. The imported Kaikki
+dictionary and the locally remembered key are never written to the sync folder.
+
+When sync is enabled, the extension also schedules periodic background sync
+attempts so replicas stay in step; no sync activity occurs unless you have
+configured sync.
+
+## Exports and Backups
+
+Markdown notes, zip archives, and JSON backups are created only when you click an
+explicit export or backup action, and are saved through the browser's download
+flow to a location you control. The full JSON backup additionally includes your
+app settings and the optional AI API key so you can transfer them to another
+device; it is created only on an explicit backup action.
+
 ## Permissions
 
 The extension asks for the permissions needed to capture selected text after a
 user gesture, store the local inbox, export files, read clipboard text when you
 click the paste fallback, pronounce saved Chinese words after you click a
-speaker button, and optionally contact AI providers you configure.
+speaker button, schedule periodic background folder-sync attempts when you have
+enabled optional folder sync, and optionally contact AI providers you configure.
+AI provider host access is optional and requested only when you enable AI and
+use or test a provider.
 
 ## Contact
 

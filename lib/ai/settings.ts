@@ -30,10 +30,34 @@ export const PROVIDER_PRESETS: Array<{
     label: 'OpenAI',
   },
   {
-    provider: 'custom',
-    baseUrl: '',
-    model: '',
-    label: 'Custom endpoint',
+    provider: 'openrouter',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    model: 'openai/gpt-4o-mini',
+    label: 'OpenRouter',
+  },
+  {
+    provider: 'gemini',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    model: 'gemini-2.5-flash',
+    label: 'Google Gemini',
+  },
+  {
+    provider: 'qwen',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    model: 'qwen-plus',
+    label: '通义千问 Qwen',
+  },
+  {
+    provider: 'moonshot',
+    baseUrl: 'https://api.moonshot.cn/v1',
+    model: 'moonshot-v1-8k',
+    label: 'Moonshot Kimi',
+  },
+  {
+    provider: 'zhipu',
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    model: 'glm-4-flash',
+    label: '智谱 GLM',
   },
 ];
 

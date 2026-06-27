@@ -61,18 +61,27 @@ permission only schedules periodic sync attempts.
 
 ## Optional Host Permissions
 
-- `https://api.deepseek.com/*`: Requested only when the user enables DeepSeek
-  and uses an AI action — word "Ask AI" insight or quote "建议填空" cloze
-  suggestions — or tests the DeepSeek connection.
-- `https://api.openai.com/*`: Requested only when the user enables OpenAI and
-  uses an AI action (word insight or quote cloze suggestions) or tests the
-  OpenAI connection.
-- `https://*/*`: Allows users to configure a custom HTTPS OpenAI-compatible AI
-  endpoint. This remains optional and is requested lazily for the specific
-  origin derived from the configured Base URL.
+AI is opt-in. Each origin below is declared as an optional host permission and
+requested lazily, only for the provider the user selects, and only when the user
+enables AI and uses or tests an AI action (word "Ask AI" insight or quote
+"建议填空" cloze suggestions). No host is granted at install time.
 
-`http://*/*` was removed. Custom AI endpoints must use HTTPS so API keys and
-captured text are not sent over insecure transport.
+- `https://api.deepseek.com/*`: DeepSeek.
+- `https://api.openai.com/*`: OpenAI.
+- `https://openrouter.ai/*`: OpenRouter (a multi-model proxy; covers models from
+  many providers, including Claude, through one OpenAI-compatible host).
+- `https://generativelanguage.googleapis.com/*`: Google Gemini
+  (OpenAI-compatible endpoint).
+- `https://dashscope.aliyuncs.com/*`: Alibaba 通义千问 (Qwen).
+- `https://api.moonshot.cn/*`: Moonshot (Kimi).
+- `https://open.bigmodel.cn/*`: 智谱 (GLM).
+
+The previous broad `https://*/*` optional host permission and the arbitrary
+"custom endpoint" provider were removed. AI provider hosts are now an explicit,
+enumerated allow-list. Every listed provider exposes an OpenAI-compatible
+`chat/completions` API over HTTPS, so API keys and captured text are never sent
+over insecure transport. Users who need a model not directly listed (for example
+Claude) can reach it through OpenRouter.
 
 ## Remote Code Declaration
 

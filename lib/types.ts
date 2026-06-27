@@ -131,7 +131,14 @@ export interface AppSettings {
 // AI settings
 // ---------------------------------------------------------------------------
 
-export type AiProvider = 'deepseek' | 'openai' | 'custom';
+export type AiProvider =
+  | 'deepseek'
+  | 'openai'
+  | 'openrouter'
+  | 'gemini'
+  | 'qwen'
+  | 'moonshot'
+  | 'zhipu';
 
 /** Persisted AI settings, stored locally only. */
 export interface AiSettings {

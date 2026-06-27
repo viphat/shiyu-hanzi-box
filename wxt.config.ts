@@ -20,7 +20,11 @@ export default defineConfig({
     optional_host_permissions: [
       'https://api.deepseek.com/*',
       'https://api.openai.com/*',
-      'https://*/*',
+      'https://openrouter.ai/*',
+      'https://generativelanguage.googleapis.com/*',
+      'https://dashscope.aliyuncs.com/*',
+      'https://api.moonshot.cn/*',
+      'https://open.bigmodel.cn/*',
     ],
     commands: {
       'save-word': {

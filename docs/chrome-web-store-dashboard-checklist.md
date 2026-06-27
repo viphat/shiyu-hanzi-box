@@ -46,7 +46,7 @@ Core features:
 - Export daily Markdown notes, and back up/restore local data (inbox-only or full backup with settings and AI key).
 - Optionally sync between browser profiles through an encrypted, provider-neutral folder.
 - Optionally import a local Kaikki JSONL dictionary fallback.
-- Optionally use BYO-key AI insight with DeepSeek, OpenAI, or a custom HTTPS OpenAI-compatible endpoint.
+- Optionally use BYO-key AI insight with DeepSeek, OpenAI, OpenRouter, Google Gemini, Qwen, Moonshot (Kimi), or Zhipu (GLM). Claude is available through OpenRouter.
 ```
 
 Suggested category:
@@ -136,16 +136,38 @@ tts: Pronounces a saved Chinese word only after the user clicks its speaker butt
 
 ## Optional Host Permission Justifications
 
+All AI host permissions are optional and requested lazily, only for the provider
+the user selects, and only when the user enables AI and uses or tests an AI
+action (word "Ask AI" insight or quote "建议填空" cloze suggestions). None is
+granted at install time. Each provider exposes an OpenAI-compatible
+`chat/completions` API over HTTPS.
+
 ```text
-https://api.deepseek.com/*: Requested only when the user enables DeepSeek and uses an AI action (word "Ask AI" insight or quote "建议填空" cloze suggestions) or tests the DeepSeek connection.
+https://api.deepseek.com/*: Requested only when the user selects DeepSeek and uses or tests an AI action.
 ```
 
 ```text
-https://api.openai.com/*: Requested only when the user enables OpenAI and uses an AI action (word insight or quote cloze suggestions) or tests the OpenAI connection.
+https://api.openai.com/*: Requested only when the user selects OpenAI and uses or tests an AI action.
 ```
 
 ```text
-https://*/*: Allows users to configure a custom HTTPS OpenAI-compatible AI endpoint. The extension derives the specific origin from the configured Base URL and requests it lazily only when AI is enabled or tested.
+https://openrouter.ai/*: Requested only when the user selects OpenRouter and uses or tests an AI action. OpenRouter is a multi-model proxy that exposes many providers' models (including Claude) through one OpenAI-compatible host.
+```
+
+```text
+https://generativelanguage.googleapis.com/*: Requested only when the user selects Google Gemini (OpenAI-compatible endpoint) and uses or tests an AI action.
+```
+
+```text
+https://dashscope.aliyuncs.com/*: Requested only when the user selects Alibaba 通义千问 (Qwen) and uses or tests an AI action.
+```
+
+```text
+https://api.moonshot.cn/*: Requested only when the user selects Moonshot (Kimi) and uses or tests an AI action.
+```
+
+```text
+https://open.bigmodel.cn/*: Requested only when the user selects 智谱 (GLM) and uses or tests an AI action.
 ```
 
 ## User Data Disclosure

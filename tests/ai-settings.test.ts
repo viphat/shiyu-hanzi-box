@@ -22,13 +22,22 @@ describe('PROVIDER_PRESETS', () => {
     expect(getProviderOrigins('openai')).toEqual(['https://api.openai.com/*']);
   });
 
-  it('keeps custom endpoints empty until the user configures them', () => {
-    const custom = PROVIDER_PRESETS.find((preset) => preset.provider === 'custom');
+  it('enumerates a host-permission origin for every preset', () => {
+    for (const preset of PROVIDER_PRESETS) {
+      const origins = getProviderOrigins(preset.provider);
+      expect(origins).toHaveLength(1);
+      expect(origins[0]).toMatch(/^https:\/\/[^/]+\/\*$/);
+    }
+  });
 
-    expect(custom).toBeDefined();
-    expect(custom!.baseUrl).toBe('');
-    expect(custom!.model).toBe('');
-    expect(getProviderOrigins('custom')).toEqual([]);
+  it('routes the multi-model proxy and Chinese providers to their origins', () => {
+    expect(getProviderOrigins('openrouter')).toEqual(['https://openrouter.ai/*']);
+    expect(getProviderOrigins('gemini')).toEqual([
+      'https://generativelanguage.googleapis.com/*',
+    ]);
+    expect(getProviderOrigins('qwen')).toEqual(['https://dashscope.aliyuncs.com/*']);
+    expect(getProviderOrigins('moonshot')).toEqual(['https://api.moonshot.cn/*']);
+    expect(getProviderOrigins('zhipu')).toEqual(['https://open.bigmodel.cn/*']);
   });
 });
 

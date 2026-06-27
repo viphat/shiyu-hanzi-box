@@ -899,6 +899,10 @@ describe('applyTagRemoval', () => {
     await syncMetadataStorage.setValue({
       revision: 5,
       lastDigest: null,
+      // appSettingsUpdatedAt / aiSettingsUpdatedAt are required SyncMetadata
+      // fields (added in commit 762efa1); seed them as 0 ("unversioned").
+      appSettingsUpdatedAt: 0,
+      aiSettingsUpdatedAt: 0,
       state: {
         ...EMPTY_SYNC_STATE,
         quotes: {
@@ -921,7 +925,7 @@ describe('applyTagRemoval', () => {
   });
 
   it('creates the quote node and tagTombstones map if missing', async () => {
-    await syncMetadataStorage.setValue({ revision: 0, lastDigest: null, state: { ...EMPTY_SYNC_STATE } });
+    await syncMetadataStorage.setValue({ revision: 0, lastDigest: null, appSettingsUpdatedAt: 0, aiSettingsUpdatedAt: 0, state: { ...EMPTY_SYNC_STATE } });
     await applyTagRemoval([{ quoteId: 'new', tags: ['x'] }]);
     const meta = await syncMetadataStorage.getValue();
     expect(meta.state!.quotes.new.tagTombstones!.x).toBeDefined();
@@ -968,7 +972,15 @@ export async function applyTagRemoval(
       }
     }
     const nextRevision = meta.revision + 1;
-    await syncMetadataStorage.setValue({ revision: nextRevision, state, lastDigest: meta.lastDigest });
+    await syncMetadataStorage.setValue({
+      revision: nextRevision,
+      state,
+      lastDigest: meta.lastDigest,
+      // Carry the settings/AI version stamps forward (required SyncMetadata
+      // fields since commit 762efa1) — mirror applyDeletion.
+      appSettingsUpdatedAt: meta.appSettingsUpdatedAt,
+      aiSettingsUpdatedAt: meta.aiSettingsUpdatedAt,
+    });
     await mutateSyncConfig((cfg) => ({
       ...cfg,
       localRevision: nextRevision,

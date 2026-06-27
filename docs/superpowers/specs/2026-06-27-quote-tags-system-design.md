@@ -32,8 +32,10 @@ This project makes tags a first-class feature:
 | --- | --- |
 | Category migration (6c) | Migrate each quote's category into `tags` via `addTag`; **drop** the default `uncategorized`; remove the `category` field entirely. |
 | Normalization | Lowercase + trim + collapse internal whitespace; dedupe. One canonical key per tag. Display value == stored value. |
-| Sync merge (7) | Add-wins OR-Set: per-tag add stamp + per-tag remove tombstone, mirroring existing `occurrences` / `occurrenceTombstones` + `isSuppressed`. |
+| Sync merge (7) | Add-wins OR-Set: per-tag **stable** add stamp + per-tag remove tombstone, mirroring `occurrences` / `occurrenceTombstones` + `isSuppressed`. |
+| Add-stamp stability | **Carry-forward in the sync layer** — projection reuses the persisted add stamp for a tag that already exists (so unrelated quote edits never move it), minting a fresh stamp only for genuinely new tags / re-adds. The local `QuoteEntry.tags` stays `string[]`. |
 | Removal handling | **Approach A** — explicit `removeTags` sync mutation records tombstones, mirroring the existing `deleteQuote → requestSyncMutation('delete')` path. |
+| Cross-version replicas | Tolerant in-place read migration; `SYNC_FORMAT_VERSION` stays `1`. New code defends against missing `tags`/`tagTombstones` and folds any legacy `fields.tags` register into the OR-Set on read. |
 | Tags Cloud placement | Sub-tabs inside the Quotes tab: **List \| Cloud**. Clicking a tag in Cloud switches to List filtered by that tag. |
 | Multi-tag filter | **OR** (a quote matches if it has any selected tag). |
 | Tag management | Inline in the Cloud view: rename-everywhere and delete-everywhere, each with a confirm. |
@@ -79,8 +81,10 @@ Pure, dependency-free helpers:
   already present; returns a new array.
 - `removeTag(tags: string[], raw: string): string[]` — normalize and remove;
   returns a new array.
-- `tagCounts(quotes: QuoteEntry[]): Map<string, number>` — frequency map across
-  all quotes, used by autocomplete and the Cloud.
+- `tagCounts(quotes: QuoteEntry[]): Map<string, number>` — frequency map over the
+  given quote set. Callers pass the relevant scope: autocomplete passes *all*
+  quotes; the Cloud passes the `query` + `statusFilter`-visible quotes (see
+  Section 3 for each scope).
 
 ### Storage migration (category → tags)
 
@@ -106,47 +110,102 @@ export interface QuoteNode {
   id: string;
   fields: Record<string, Register<unknown>>;   // no longer holds `tags`
   createdAt: Register<number>;
-  tags: Record<string, HybridTimestamp>;        // tag -> add stamp
-  tagTombstones: Record<string, HybridTimestamp>; // tag -> remove stamp
+  tags?: Record<string, HybridTimestamp>;        // tag -> stable add stamp
+  tagTombstones?: Record<string, HybridTimestamp>; // tag -> remove stamp
   reviewEvents: Record<string, ReviewEventNode>;
   snapshot?: SchedulerSnapshotNode;
 }
 ```
 
+Both maps are **optional** so a node authored by an older client (which has
+neither) reads back safely — see *Cross-version compatibility* below.
+
 A tag is **present** during materialize iff
 `!isSuppressed(node.tags[tag], node.tagTombstones[tag])` — reusing the existing
-`isSuppressed` (tombstone wins on `>=`). Re-adding a removed tag works naturally
-because the new add stamp carries a later `wallTime` than the tombstone.
+`isSuppressed` (tombstone wins on `>=`).
 
-### Projection (`projectQuote`)
+### The stable-add-stamp requirement (must-fix)
+
+The occurrence OR-Set is correct only because each occurrence carries its own
+**immutable** stamp (`occ.capturedAt`, `project.ts:140`): an add stamp that
+never moves stays beaten by a later tombstone forever. `QuoteEntry.tags` is a
+plain `string[]` with no per-tag timestamp, so naively stamping every tag with
+the shared, mutable `quote.updatedAt` is **broken**: any unrelated edit (note,
+status, text) on a replica that still holds a tag bumps that tag's add stamp
+past an existing tombstone and **resurrects** the deleted tag. Routine
+two-device usage triggers it (delete on A; later edit the same quote's note on
+B → tag comes back).
+
+**Fix — carry-forward the add stamp in the sync layer.** Projection reuses the
+persisted add stamp for a tag that already exists, and mints a fresh stamp only
+for a genuinely new tag (or a re-add over a tombstone). `QuoteEntry.tags` stays
+`string[]`; all OR-Set state and logic live in the sync layer. `projectInbox`
+gains access to the persisted `SyncState` (it is already in scope in
+`runSyncPass` and `reconcileOnStartup`; passed in, defaulting to `undefined`
+for first-time bootstrap).
+
+### Projection (`projectQuote(quote, ctx, prev?)`)
+
+`prev` is the persisted `QuoteNode` for this quote id (or `undefined`). For each
+normalized local tag:
 
 ```ts
-tags: Object.fromEntries(quote.tags.map((tag) => [tag, s])),  // s = stamp(quote.updatedAt, replicaId)
-tagTombstones: {},
+const prevAdd = prev?.tags?.[tag];
+const prevTomb = prev?.tagTombstones?.[tag];
+const stillPresent = prevAdd && !isSuppressed(prevAdd, prevTomb);
+const addStamp = stillPresent
+  ? prevAdd                                   // carry forward — never moves on unrelated edits
+  : stamp(Math.max(quote.updatedAt, (prevTomb?.wallTime ?? 0) + 1), ctx.replicaId); // new / re-add, guaranteed > any prior tombstone
 ```
 
-(Tags are already normalized in the inbox, so no re-normalization needed here;
-projection may defensively `normalizeTags` to be safe.)
+`tagTombstones` projects as `{}` (removals are recorded only via the explicit
+mutation below, never inferred from projection). Carrying `prevTomb.wallTime + 1`
+into a re-add stamp also closes the same-millisecond re-add race (a re-add can
+never tie-or-lose to the tombstone it supersedes).
 
 ### Merge (`mergeQuoteNodes`)
 
 ```ts
-tags: mergeStampMap(a.tags, b.tags),
-tagTombstones: mergeStampMap(a.tagTombstones, b.tagTombstones),
+tags: mergeStampMap(a.tags ?? {}, b.tags ?? {}),
+tagTombstones: mergeStampMap(a.tagTombstones ?? {}, b.tagTombstones ?? {}),
 ```
 
-`mergeStampMap` already keeps the max stamp per key (`lib/sync/registers.ts:24`).
+`mergeStampMap` keeps the max stamp per key (`lib/sync/registers.ts:24`). Inputs
+are first passed through `liftLegacyTags` (below).
 
 ### Materialize (`materialize`)
 
 ```ts
-tags: Object.entries(node.tags)
-  .filter(([tag, stamp]) => !isSuppressed(stamp, node.tagTombstones[tag]))
+const node2 = liftLegacyTags(node);
+tags: Object.entries(node2.tags ?? {})
+  .filter(([tag, stamp]) => !isSuppressed(stamp, node2.tagTombstones?.[tag]))
   .map(([tag]) => tag)
   .sort(),
 ```
 
 Remove the `category` output entirely (drop the `?? 'uncategorized'` default).
+
+### Cross-version compatibility (rollout)
+
+Devices upgrade asynchronously, so the new code must read replica files written
+by the old version. `SYNC_FORMAT_VERSION` stays `1` (bumping it would make old
+replicas `replica-incompatible` and reject *all* their data, not just tags). A
+tolerant in-place read migration handles it:
+
+- **Crash safety:** all reads use `node.tags ?? {}` / `node.tagTombstones ?? {}`.
+- **`liftLegacyTags(node)`** (applied at the top of both `mergeQuoteNodes` and
+  `materialize`, since a quote present only in a remote node is copied by
+  `mergeNodeMap` without a per-node merge): if `node.tags` is absent/empty and a
+  legacy `node.fields.tags` register exists, build `tags` from that register's
+  value, each stamped with the register's stamp; then it can ignore
+  `fields.tags`. This makes tags added on a not-yet-upgraded device appear on
+  upgraded devices with no data loss.
+- **Known limitation:** new devices stop writing `fields.tags`, so a
+  not-yet-upgraded device won't *see* tags managed by an upgraded device until
+  it upgrades. No data is lost (it lives in the new maps); it is only invisible
+  on stale clients during the rollout window. Acceptable for a personal
+  extension. (We deliberately do **not** dual-write `fields.tags`, which would
+  let an old device's LWW register resurrect deleted tags.)
 
 ### Removal path — Approach A (explicit tombstone mutation)
 
@@ -156,18 +215,20 @@ remote replica's add would **resurrect** it. We must record a tombstone, exactly
 as entity deletion does.
 
 1. **Mutation kind** — extend `SyncMutationRequestMessage['kind']` with
-   `'removeTags'`; payload `{ quoteId: string; tags: string[] }`.
-2. **`applyTagRemoval(quoteId, tags)`** in `lib/sync/mutations.ts` — mirrors
-   `applyDeletion`: load persisted `SyncState`, stamp
-   `state.quotes[quoteId].tagTombstones[tag] = { wallTime: Date.now(), counter: 0, replicaId }`
-   for each tag (creating the quote node entry if needed), bump revision, mark
-   pending. Uses the same single-writer `chain` as the other mutations.
+   `'removeTags'`; payload is a **batch**:
+   `{ removals: Array<{ quoteId: string; tags: string[] }> }`. A single
+   tag removal sends a one-element array; rename/delete-everywhere send N.
+2. **`applyTagRemoval(removals)`** in `lib/sync/mutations.ts` — mirrors
+   `applyDeletion`: load persisted `SyncState`, and for each `{quoteId, tags}`
+   stamp `state.quotes[quoteId].tagTombstones[tag] = { wallTime: Date.now(), counter: 0, replicaId }`
+   (creating the quote node and its `tagTombstones` map if needed), then bump
+   revision once and mark pending. Uses the same single-writer `chain`.
 3. **Handler** (`entrypoints/background/sync-mutation-handler.ts`) routes
    `removeTags` → `applyTagRemoval`.
-4. **`mergeQuoteNodes` already carries tombstones forward**, so the next pass:
-   re-projects surviving tags (no tombstone) + persisted tombstone suppresses
-   the removed tag against any stale remote add; a genuinely newer remote re-add
-   still wins (add-wins).
+4. **After the Merge change above**, `mergeQuoteNodes` carries tombstones
+   forward, so the next pass: re-projects surviving tags (carry-forward add
+   stamps) while the persisted tombstone suppresses the removed tag against any
+   stale remote add; a genuinely newer remote re-add still wins (add-wins).
 
 ### Dashboard write path
 
@@ -176,15 +237,20 @@ Replace ad-hoc `updateQuote({ tags })` with `setQuoteTags(id, nextTags)` in
 
 1. `next = normalizeTags(nextTags)`.
 2. `removed = old.filter((t) => !next.includes(t))`.
-3. If `removed.length`, `void requestSyncMutation('removeTags', { quoteId: id, tags: removed })`.
+3. If `removed.length`, `void requestSyncMutation('removeTags', { removals: [{ quoteId: id, tags: removed }] })`.
 4. `mutate` the inbox: set `tags = next`, bump `updatedAt`.
 
-Adds need no special handling (natural re-projection + union merge).
+Adds need no special handling (carry-forward projection + union merge).
 
-- **Rename tag X→Y everywhere**: for each quote containing X, `setQuoteTags(quote, addTag(removeTag(quote.tags, X), Y))`. Removal of X fires a tombstone; Y is added naturally.
-- **Delete tag everywhere**: for each quote containing it, `setQuoteTags(quote, removeTag(quote.tags, tag))`.
+- **Rename tag X→Y everywhere**: compute the new `tags` per matching quote
+  (`addTag(removeTag(quote.tags, X), Y)`), write the inbox in one `mutate`, and
+  fire **one** batched `removeTags` mutation collecting `X` across all matching
+  quotes. Y is added naturally.
+- **Delete tag everywhere**: write the inbox in one `mutate` and fire **one**
+  batched `removeTags` mutation collecting the tag across all matching quotes.
 
-Both are batch loops over the inbox built on the single `setQuoteTags` path.
+Both run as a single inbox `mutate` + a single batched sync mutation (not O(N)
+serialized writes through the `chain`).
 
 ## Section 3 — UI
 
@@ -198,6 +264,8 @@ Both are batch loops over the inbox built on the single `setQuoteTags` path.
 - **Autocomplete**: a datalist/suggestion dropdown sourced from a memoized
   `tagCounts(inbox.quotes)` (passed down as a prop, e.g. `knownTags: string[]`),
   filtered by the current input and excluding already-applied tags.
+  **Scope:** autocomplete uses the **full** vocabulary across *all* quotes
+  (every status, parked included) so any existing tag can be reused.
 
 ### QuoteList (`entrypoints/dashboard/components/QuoteList.tsx`)
 
@@ -205,10 +273,15 @@ Both are batch loops over the inbox built on the single `setQuoteTags` path.
 - **List view**: current grid, plus active tag-filter chips shown above it
   (removable). Keeps the existing parked-quotes toggle.
 - **Cloud view** (new `TagCloud` component): renders each tag at a font size
-  scaled by its frequency (`tagCounts`). Clicking a tag adds it to the selected
+  scaled by its frequency. Clicking a tag adds it to the selected
   filter set and switches the sub-tab to List. Each tag has inline
   **rename** and **delete-everywhere** actions (icon buttons / hover menu), each
   guarded by a confirm dialog; these call the batch rename/delete helpers.
+  **Scope:** the Cloud counts the quotes currently visible under the active
+  `query` + `statusFilter` (i.e. the same set the List shows) but **ignores the
+  active tag filter** (so selecting a tag never collapses the cloud). Parked
+  quotes are included. This keeps a clicked tag's apparent count consistent with
+  what the filtered List then displays.
 
 ### Filtering (`App.tsx`)
 
@@ -244,15 +317,27 @@ Both are batch loops over the inbox built on the single `setQuoteTags` path.
 - **OR-Set sync** (extend `tests/sync/*`):
   - concurrent add on two replicas → both tags survive;
   - remove vs a stale add it causally saw → suppressed;
-  - concurrent re-add (newer wallTime) beats a remove → present (add-wins);
+  - **resurrection regression (the must-fix):** remove tag on A, then an
+    *unrelated* field edit (note/status) on B that still holds the tag, then
+    merge → tag stays removed. (The "stale add it causally saw" case alone would
+    pass even with the bug, so this distinct case is required.)
+  - add-stamp stability: an unrelated edit on a quote does **not** move a tag's
+    persisted add stamp (carry-forward);
+  - concurrent re-add beats a remove → present (add-wins), including the
+    same-millisecond re-add (re-add stamp uses `tombstone.wallTime + 1`);
   - `mergeStampMap` carries tombstones across passes.
-- **`applyTagRemoval`** records tombstones and bumps revision (extend
-  `tests/sync/sync-mutation-handler.test.ts`).
+- **Cross-version compatibility:** a `QuoteNode` with no `tags`/`tagTombstones`
+  reads back without throwing; `liftLegacyTags` folds a legacy `fields.tags`
+  register (incl. a quote present only in a remote node, copied by
+  `mergeNodeMap`) into the OR-Set.
+- **`applyTagRemoval`** records tombstones for a batched multi-quote payload and
+  bumps revision once (extend `tests/sync/sync-mutation-handler.test.ts`).
 - **`setQuoteTags`**: removal fires `removeTags`; add does not; normalization
   applied.
 - **Filtering**: OR semantics across multiple selected tags.
-- **TagCloud**: frequency counts; click selects + switches view; rename and
-  delete-everywhere mutate all matching quotes.
+- **TagCloud**: frequency counts (visible set, parked included, tag filter
+  ignored); click selects + switches view; rename and delete-everywhere mutate
+  all matching quotes via a single inbox `mutate` + one batched `removeTags`.
 - **QuoteCard component** (`tests/quote-list.test.tsx` or new): chip add/remove,
   autocomplete suggestions, no `category` input present.
 

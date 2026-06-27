@@ -42,7 +42,7 @@ export async function runSyncPass(
     wallTime: deps.now(),
     settingsStamp: metaSnapshot.appSettingsUpdatedAt,
     aiStamp: metaSnapshot.aiSettingsUpdatedAt,
-  });
+  }, persisted ?? undefined);
   // Seed from persisted state so tombstones (and prior merged data) carry forward.
   // The fresh projection's field stamps win over older persisted ones (LWW);
   // tombstones recorded with a later wallTime than the entity's updatedAt suppress

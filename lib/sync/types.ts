@@ -59,8 +59,12 @@ export interface WordNode {
 
 export interface QuoteNode {
   id: string;
-  fields: Record<string, Register<unknown>>;
+  fields: Record<string, Register<unknown>>;   // no longer holds `tags`
   createdAt: Register<number>;
+  /** tag -> stable add stamp. Optional so older replicas read back safely. */
+  tags?: Record<string, HybridTimestamp>;
+  /** tag -> remove stamp. */
+  tagTombstones?: Record<string, HybridTimestamp>;
   reviewEvents: Record<string, ReviewEventNode>;
   snapshot?: SchedulerSnapshotNode;
 }

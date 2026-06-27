@@ -1,6 +1,7 @@
 // lib/sync/merge.ts
 import { compareTimestamps } from './clock';
 import { mergeRegister, mergeRegisterMap, mergeStampMap } from './registers';
+import { liftLegacyTags } from './project';
 import type {
   HybridTimestamp,
   OccurrenceNode,
@@ -95,13 +96,17 @@ export function mergeWordNodes(a: WordNode, b: WordNode): WordNode {
 }
 
 export function mergeQuoteNodes(a: QuoteNode, b: QuoteNode): QuoteNode {
-  const events = mergeReviewEvents(a.reviewEvents, b.reviewEvents);
+  const la = liftLegacyTags(a);
+  const lb = liftLegacyTags(b);
+  const events = mergeReviewEvents(la.reviewEvents, lb.reviewEvents);
   return {
-    id: a.id,
-    createdAt: earliestCreatedAt(a.createdAt, b.createdAt),
-    fields: mergeRegisterMap(a.fields, b.fields),
+    id: la.id,
+    createdAt: earliestCreatedAt(la.createdAt, lb.createdAt),
+    fields: mergeRegisterMap(la.fields, lb.fields),
+    tags: mergeStampMap(la.tags ?? {}, lb.tags ?? {}),
+    tagTombstones: mergeStampMap(la.tagTombstones ?? {}, lb.tagTombstones ?? {}),
     reviewEvents: events,
-    snapshot: pickSnapshot(events, a.snapshot, b.snapshot),
+    snapshot: pickSnapshot(events, la.snapshot, lb.snapshot),
   };
 }
 

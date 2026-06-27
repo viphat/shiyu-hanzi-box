@@ -8,6 +8,7 @@ import { projectInbox } from './project';
 import { deleteEntity } from './merge';
 import { mergeStampMap } from './registers';
 import { EMPTY_SYNC_STATE, type SyncState } from './types';
+import { normalizeTags } from '../tags';
 
 export interface SyncMetadata {
   revision: number;
@@ -171,7 +172,9 @@ export async function applyTagRemoval(
         state.quotes[quoteId] = node;
       }
       if (!node.tagTombstones) node.tagTombstones = {};
-      for (const tag of tags) {
+      // Normalize so the tombstone keyspace always matches the add-stamp
+      // keyspace — a non-normalized key would silently no-op at materialize.
+      for (const tag of normalizeTags(tags)) {
         node.tagTombstones[tag] = { wallTime: now, counter: 0, replicaId };
       }
     }
@@ -210,6 +213,18 @@ export async function reconcileOnStartup(): Promise<void> {
   // doesn't silently drop deletions that haven't been flushed to a replica yet.
   if (meta.state?.tombstones) {
     state = { ...state, tombstones: mergeStampMap(meta.state.tombstones, state.tombstones) };
+  }
+  // Per-tag removals live only in each node's `tagTombstones` map (not the
+  // top-level `tombstones`), so they need the same carry-forward — otherwise a
+  // `removeTags` written just before an interrupted inbox edit is lost on
+  // rebuild and a remote replica still holding the tag resurrects it.
+  if (meta.state?.quotes) {
+    for (const [id, node] of Object.entries(state.quotes)) {
+      const prevTombstones = meta.state.quotes[id]?.tagTombstones;
+      if (prevTombstones) {
+        node.tagTombstones = mergeStampMap(prevTombstones, node.tagTombstones ?? {});
+      }
+    }
   }
   await syncMetadataStorage.setValue({
     revision: cfg.localRevision,

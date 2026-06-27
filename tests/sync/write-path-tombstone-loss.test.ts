@@ -25,11 +25,13 @@ import { deriveKey, defaultKdfParams } from '../../lib/sync/crypto';
 import {
   applyDeletion,
   applyLocalMutation,
+  reconcileOnStartup,
   syncMetadataStorage,
 } from '../../lib/sync/mutations';
 import { setSyncConfig, getSyncConfig } from '../../lib/sync/local';
 import { getInbox, setInbox } from '../../lib/storage';
-import type { WordEntry } from '../../lib/types';
+import { EMPTY_SYNC_STATE } from '../../lib/sync/types';
+import type { QuoteEntry, WordEntry } from '../../lib/types';
 
 const REPLICA_ID = '01J0AZ5K2YJ3M4N5P6Q7R8S9TW';
 
@@ -105,5 +107,69 @@ describe('broker write-path tombstone loss (delete flow)', () => {
     const inbox = await getInbox();
     // EXPECTED (correct behavior): the word stays deleted.
     expect(inbox.words.some((w) => w.normalized === '远')).toBe(false);
+  });
+});
+
+function taggedQuote(tags: string[]): QuoteEntry {
+  return {
+    id: 'q1',
+    kind: 'quote',
+    text: 'hi',
+    note: '',
+    status: 'inbox',
+    tags,
+    createdAt: 10,
+    updatedAt: 20,
+    sourceTitle: '',
+    sourceUrl: '',
+    sourceDomain: '',
+    surrounding: '',
+  };
+}
+
+describe('reconcile preserves per-tag tombstones', () => {
+  beforeEach(async () => {
+    fakeBrowser.reset();
+    const cfg = await getSyncConfig();
+    await setSyncConfig({ ...cfg, replicaId: REPLICA_ID, vaultId: 'V1' });
+  });
+
+  // A removeTags tombstone lives only in the per-node tagTombstones map (not the
+  // top-level `tombstones` map). When reconcile rebuilds from the domain — which
+  // happens whenever meta.revision has advanced past localRevision — it must
+  // carry those per-node tombstones forward, or a remote replica still holding
+  // the tag resurrects it on the next merge (the tag-level analogue of the
+  // entity-deletion loss above).
+  it('keeps a per-node tagTombstone across a reconcile rebuild', async () => {
+    // The inbox edit completed (tag gone from the domain)...
+    await setInbox({ words: [], quotes: [taggedQuote([])] });
+    // ...and a tombstone for the removed tag sits in the persisted per-node map.
+    await syncMetadataStorage.setValue({
+      revision: 7,
+      lastDigest: null,
+      appSettingsUpdatedAt: 0,
+      aiSettingsUpdatedAt: 0,
+      state: {
+        ...EMPTY_SYNC_STATE,
+        quotes: {
+          q1: {
+            id: 'q1',
+            fields: {},
+            createdAt: { value: 10, stamp: { wallTime: 10, counter: 0, replicaId: 'A' } },
+            tags: {},
+            tagTombstones: { foo: { wallTime: 50, counter: 0, replicaId: 'A' } },
+            reviewEvents: {},
+          },
+        },
+      },
+    });
+    // localRevision lags meta.revision, so reconcile rebuilds rather than no-ops.
+    const cfg = await getSyncConfig();
+    await setSyncConfig({ ...cfg, localRevision: 3 });
+
+    await reconcileOnStartup();
+
+    const meta = await syncMetadataStorage.getValue();
+    expect(meta.state?.quotes.q1.tagTombstones?.foo).toBeDefined();
   });
 });

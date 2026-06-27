@@ -49,7 +49,6 @@ function quote(overrides: Partial<QuoteEntry> = {}): QuoteEntry {
     id: 'quote-1',
     kind: 'quote',
     text: '学而时习之',
-    category: 'classic',
     tags: [],
     note: '',
     status: 'inbox',

@@ -10,14 +10,13 @@ import {
 } from '../lib/tags';
 import type { QuoteEntry } from '../lib/types';
 
-function quote(over: Partial<QuoteEntry> = {}): QuoteEntry {
+function quote(over: Partial<QuoteEntry> & { category?: string } = {}): QuoteEntry & { category?: string } {
   return {
     id: over.id ?? 'q1',
     kind: 'quote',
     text: 't',
     note: '',
     status: 'inbox',
-    category: 'uncategorized',
     tags: [],
     createdAt: 1,
     updatedAt: 1,
@@ -26,7 +25,7 @@ function quote(over: Partial<QuoteEntry> = {}): QuoteEntry {
     sourceDomain: '',
     surrounding: '',
     ...over,
-  } as QuoteEntry;
+  } as QuoteEntry & { category?: string };
 }
 
 describe('normalizeTag', () => {

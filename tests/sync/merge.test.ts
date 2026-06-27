@@ -112,7 +112,7 @@ function quoteInbox(tags: string[], updatedAt: number): Inbox {
     words: [],
     quotes: [{
       id: 'q1', kind: 'quote', text: 'hi', note: '', status: 'inbox',
-      category: 'uncategorized', tags, createdAt: 10, updatedAt,
+      tags, createdAt: 10, updatedAt,
       sourceTitle: '', sourceUrl: '', sourceDomain: '', surrounding: '',
     } as QuoteEntry],
   };

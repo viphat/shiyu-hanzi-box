@@ -25,7 +25,6 @@ const quote: QuoteEntry = {
   id: 'q1',
   kind: 'quote',
   text: '学而时习之',
-  category: '论语',
   tags: [],
   note: '',
   status: 'inbox',
@@ -59,8 +58,17 @@ describe('renderDay', () => {
     const md = renderDay(day, [], [quote]);
     expect(md).toContain('## Quotes');
     expect(md).toContain('学而时习之');
-    expect(md).toContain('论语');
     expect(md).toContain('https://lunyu.com');
+  });
+
+  it('renders quote tags as #hashtags without a category line', () => {
+    const md = renderDay('2026-01-01', [], [{
+      id: 'q1', kind: 'quote', text: 'hi', note: '', status: 'inbox',
+      tags: ['poetry', 'news'], createdAt: 1, updatedAt: 1,
+      sourceTitle: 'Src', sourceUrl: 'http://x', sourceDomain: 'x', surrounding: '',
+    } as never]);
+    expect(md).not.toContain('_category:_');
+    expect(md).toContain('#poetry #news');
   });
 
   it('omits empty sections', () => {

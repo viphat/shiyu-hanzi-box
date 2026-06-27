@@ -46,7 +46,6 @@ function quote(overrides: Partial<QuoteEntry> = {}): QuoteEntry {
     status: 'inbox',
     createdAt: 1,
     updatedAt: 1,
-    category: 'classic',
     sourceTitle: 'Analects',
     sourceUrl: 'https://example.com',
     sourceDomain: 'example.com',
@@ -210,7 +209,6 @@ describe('ReviewQueue advancement', () => {
         id: 'q2',
         text: '温故而知新',
         note: '',
-        category: 'classic',
       }),
       NOW,
     );
@@ -348,7 +346,6 @@ function quoteWithClozes(
     status: 'inbox',
     createdAt: 1,
     updatedAt: 1,
-    category: 'classic',
     sourceTitle: 'Analects',
     sourceUrl: 'https://example.com',
     sourceDomain: 'example.com',

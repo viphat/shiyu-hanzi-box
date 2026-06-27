@@ -374,7 +374,7 @@ function entryMatchesQuery(entry: Entry, query: string): boolean {
   const tags = entry.kind === 'quote' ? entry.tags.join(' ') : '';
   const source =
     entry.kind === 'quote'
-      ? `${entry.category} ${entry.sourceTitle} ${entry.sourceDomain}`
+      ? `${entry.sourceTitle} ${entry.sourceDomain}`
       : entry.occurrences
           .map((occurrence) => `${occurrence.sourceTitle} ${occurrence.sourceDomain}`)
           .join(' ');

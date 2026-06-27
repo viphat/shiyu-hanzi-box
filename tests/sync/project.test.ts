@@ -68,7 +68,6 @@ function quoteFixture(over: Partial<QuoteEntry> = {}): QuoteEntry {
     text: 'hi',
     note: '',
     status: 'inbox',
-    category: 'uncategorized',
     tags: [],
     createdAt: 10,
     updatedAt: 20,

@@ -83,9 +83,9 @@ export function renderDay(
   if (quotes.length > 0) {
     lines.push('## Quotes', '');
     for (const quote of quotes) {
-      const tags = quote.tags.length > 0 ? ` ${quote.tags.map((tag) => `#${tag}`).join(' ')}` : '';
+      const tags = quote.tags.length > 0 ? `  - ${quote.tags.map((tag) => `#${tag}`).join(' ')}` : null;
       lines.push(`- [ ] > ${renderQuoteBody(quote)}`);
-      lines.push(`  - _category:_ ${esc(quote.category)}${tags}`);
+      if (tags) lines.push(tags);
       if (quote.note) lines.push(`  - ${esc(quote.note)}`);
       lines.push(`  - [${esc(quote.sourceTitle || quote.sourceDomain)}](${quote.sourceUrl})`);
       lines.push('');

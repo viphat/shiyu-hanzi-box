@@ -47,11 +47,6 @@ export function QuoteCard({
         </div>
       )}
       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">
-        <input
-          value={quote.category}
-          onChange={(event) => onUpdate({ category: event.target.value })}
-          className="rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-1 text-cinnabar outline-none transition focus:border-cinnabar-fade focus:bg-paper-input"
-        />
         {quote.sourceUrl && (
           <a
             href={quote.sourceUrl}

@@ -5,7 +5,7 @@ import type { Cloze, QuoteEntry } from '../lib/types';
 function makeQuote(overrides: Partial<QuoteEntry> = {}): QuoteEntry {
   return {
     id: 'q1', kind: 'quote', text: '学而时习之', tags: [], note: '',
-    status: 'inbox', createdAt: 0, updatedAt: 0, category: 'classic',
+    status: 'inbox', createdAt: 0, updatedAt: 0,
     sourceTitle: '', sourceUrl: '', sourceDomain: '', surrounding: '',
     ...overrides,
   };

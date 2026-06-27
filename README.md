@@ -8,6 +8,38 @@ Markdown notes.
 The project is built with WXT, React, TypeScript, Tailwind CSS, Vitest, and
 `@webext-core/fake-browser`.
 
+## Who It's For
+
+Think of it as **Readwise for Chinese reading**: collect words and sentences as
+you read, enrich them with AI insights + an offline dictionary + pinyin, retain
+them with spaced repetition, and own the notes as plain files you control.
+
+It is built for a specific learner and workflow rather than for everyone:
+
+- **Intermediate–advanced self-study readers (≈HSK 3+)** reading native Chinese
+  on the web — news, web novels, blogs, Zhihu — who want to mine what they read.
+- **The immersion / sentence-mining crowd** (Refold / MIA / AJATT style). The
+  capture → cloze → FSRS loop is the core study method, not an add-on.
+- **PKM / "own your data" users** (Obsidian and similar) who want Markdown notes
+  in their own vault and folder sync to a directory they control, with no SaaS
+  account or lock-in.
+- **Privacy-conscious learners** who do not want their data — or their AI API
+  key — sitting in someone else's cloud. Everything is local-first; sync, when
+  enabled, is end-to-end encrypted into a folder you pick.
+
+It is **not** trying to be:
+
+- A beginner course — there is no curriculum, grading, or known-word tracking.
+- A mobile app — capture is desktop Chrome / Chromium only.
+- A reader for Kindle, PDFs, ebooks, or paper — capture is from web-page text
+  selection. (The popup paste-fallback handles text you can copy from elsewhere.)
+- A zero-setup tool — it rewards a self-directed learner who will tag, mark cloze
+  blanks, and tend a growing collection.
+
+If you read Chinese on the web, study by mining real sentences, and want to keep
+your notes in files you own, it fits closely. If you need a guided beginner path
+or mobile-first capture, it will not.
+
 ## Current Status
 
 Implemented:
@@ -25,11 +57,25 @@ Implemented:
 - Toolbar popup buttons for saving the current selection as a word or quote.
 - Lazy pinyin generation with `pinyin-pro`.
 - Daily Markdown rendering and zip export helpers.
-- Versioned JSON backup export and validated restore import for the full local
-  inbox.
+- Versioned JSON backup export and validated restore import. The inbox-only
+  backup is format version 2; the full backup (format version 3) also bundles
+  app settings and AI settings (including the API key) for a complete
+  device-to-device transfer.
 - Dashboard page opened from the toolbar popup or extension action menu, with
   search, status filters, cards, edit controls, pinyin, export actions, and
   backup/restore controls.
+- First-class quote tags: an inline tag-chip editor with autocomplete on each
+  quote card, normalized tag input, OR-based tag filtering, and a List | Cloud
+  view of the Quotes tab. The Tags Cloud sizes tags by frequency and supports
+  inline rename-everywhere and delete-everywhere. The legacy freeform
+  `category` field was removed and migrated into tags.
+- Optional, provider-neutral encrypted folder sync. Each browser profile keeps
+  `chrome.storage.local` as its fast local database and synchronizes an
+  encrypted replica through a user-selected folder (iCloud Drive, Dropbox,
+  OneDrive, Syncthing, a NAS mount, or a plain local directory). Sync is
+  local-first, eventually consistent, conflict-free (CRDT merge), and runs on
+  change, on UI startup, on a background alarm, and on demand. A dashboard
+  status badge shows the current sync state.
 - Focused one-card-at-a-time spaced repetition for saved words and quotes,
   with FSRS scheduling, local review analytics, and configurable retention/new
   card limits. Quotes are reviewed via cloze deletion: each blanked span is an
@@ -177,6 +223,64 @@ card to tomorrow without changing its memory state.
 All review data is stored locally on each entry and travels with JSON backups.
 No network access is required.
 
+## Quote Tags
+
+Quotes carry freeform tags (words have none). The legacy `category` field has
+been removed; existing categories were migrated into tags on read.
+
+- **Tag-chip editor** — each quote card has an inline editor. Add a tag from the
+  input (with autocomplete drawn from the existing tag vocabulary) or remove a
+  chip. Tags are normalized on save: lowercased, trimmed, internal whitespace
+  collapsed, and deduped, so the displayed value equals the stored value.
+- **Filtering** — the Quotes tab filters by tag with OR semantics: a quote
+  matches if it carries any selected tag.
+- **List | Cloud sub-tabs** — the Quotes tab has a List view and a Tags Cloud
+  view. In the Cloud, tags are sized by frequency; clicking a tag switches to the
+  filtered List.
+- **Tag management** — the Cloud view supports inline rename-everywhere and
+  delete-everywhere, each behind a confirm.
+- **Review** — a card's tags are shown during review.
+
+Tags sync as an add-wins OR-Set (per-tag add stamp plus per-tag remove
+tombstone), so concurrent tag edits on different replicas merge without
+conflicts. Tags also appear in daily Markdown exports.
+
+## Folder Sync (optional)
+
+Folder Sync adds optional, true bidirectional synchronization of user-owned
+state between browser profiles, without any provider account or API. Each
+profile keeps `chrome.storage.local` as its authoritative local database and
+synchronizes an encrypted replica through a folder you choose.
+
+- **Provider-neutral** — point it at a folder inside iCloud Drive, Dropbox,
+  OneDrive, Syncthing, a NAS mount, or an ordinary local directory. The
+  extension uses the browser's File System Access API and integrates with no
+  provider API.
+- **Local-first and eventually consistent** — capture, edit, review, and
+  settings changes keep working when the folder or cloud provider is
+  unavailable. Sync failures never roll back valid local work. Simultaneous
+  offline edits merge automatically and deterministically (CRDT merge).
+- **Encrypted** — the complete sync payload, including the AI API key, is
+  encrypted with a passphrase before it reaches the folder. The derived key is
+  remembered in the local browser profile. A forgotten passphrase cannot be
+  recovered; there is no escrow or rotation in this version.
+- **Triggers** — sync runs automatically after changes, on extension-page
+  startup, periodically via a background `alarms` wakeup, and on demand with
+  **Sync now**.
+- **Join semantics** — joining an existing vault merges inbox entries but
+  replaces this profile's app and AI settings (including the API key) with the
+  vault's.
+- **Scope** — words, quotes, occurrences, notes, generated annotations, SRS
+  state, app settings, and AI settings synchronize. The imported Kaikki
+  dictionary and its IndexedDB index stay local to each profile, as does the
+  remembered key.
+- **Status badge** — the dashboard shows Off / Synced / Syncing / Pending /
+  Needs attention.
+
+Configure it under **Settings → Folder Sync**: create a new vault or join an
+existing one, sync now, reauthorize the folder, forget the remembered key, or
+disconnect. Manual JSON backup/restore remains an independent recovery path.
+
 ## Settings, AI, And Optional Kaikki Dictionary
 
 Open **Settings** from the dashboard toolbar to choose the UI locale:
@@ -253,14 +357,16 @@ entrypoints/
     index.html
     main.tsx
     SettingsApp.tsx      # locale + SRS + AI + optional Kaikki settings
+    FolderSync.tsx       # Folder Sync settings section (create/join/sync/forget)
   dashboard/
     index.html
     main.tsx
     App.tsx              # dashboard shell, filters, list wiring
+    SyncStatusBadge.tsx  # Off/Synced/Syncing/Pending/Needs-attention badge
     hooks/useAiInsight.ts # AI insight request + persistence hook
     hooks/useInbox.ts    # live WXT inbox storage hook
     hooks/useSettings.ts # live WXT settings storage hook
-    components/          # toolbar, word/quote cards, lists, pinyin/traditional controls
+    components/          # toolbar, word/quote cards, lists, tag chips, TagCloud, pinyin/traditional controls
 lib/
   ai/
     client.ts            # OpenAI-compatible fetch wrapper
@@ -271,8 +377,22 @@ lib/
   capture.ts             # saveWord/saveQuote and word dedupe behavior
   cloze.ts               # cloze validation, overlap detection, markup parsing, hint types
   export.ts              # export map + zip generation
-  backup.ts              # versioned JSON backup + restore validation
+  backup.ts              # versioned inbox backup (v2) + full backup (v3) + restore validation
   id.ts                  # dependency-free id generation
+  tags.ts                # pure tag helpers (normalize, add/remove, counts, migrate)
+  sync/                  # encrypted provider-neutral folder sync (CRDT)
+    types.ts             #   sync state shapes, hybrid timestamps, OR-Set nodes
+    clock.ts             #   hybrid logical clock
+    registers.ts         #   last-writer-wins register merge
+    merge.ts             #   deterministic SyncState merge
+    project.ts           #   inbox <-> SyncState projection
+    mutations.ts         #   local:syncMetadata + queued sync mutations
+    coordinator.ts       #   sole-writer broker + debounced sync loop
+    connect.ts           #   create/join vault, folder authorization
+    crypto.ts            #   passphrase key derivation + payload encryption
+    vault.ts             #   encrypted vault file format
+    files.ts             #   File System Access folder I/O
+    local.ts             #   local:syncConfig storage item
   markdown.ts            # daily note rendering
   i18n.ts                # EN/zh-CN UI messages
   kaikki.ts              # Kaikki JSONL parser and URL validation
@@ -294,6 +414,13 @@ tests/
   normalize.test.ts
   pinyin.test.ts
   traditional.test.ts
+  tags.test.ts            # tag normalization / add / remove / counts / migrate
+  quote-filter.test.ts    # OR-semantics tag filtering
+  tag-cloud.test.tsx      # Tags Cloud rendering + rename/delete
+  backup.test.ts          # inbox backup (v2) round-trip + validation
+  backup-ai.test.ts       # full backup (v3) settings + AI key round-trip
+  storage-migration.test.ts # category -> tags read migration
+  sync/                   # folder-sync merge, projection, crypto, coordinator
 ```
 
 The dashboard UI lives in `entrypoints/dashboard/`.
@@ -371,7 +498,12 @@ The current test suite covers:
 - daily export grouping, archived-entry skipping, and zip byte generation.
 - versioned backup JSON generation, legacy raw inbox restore, and invalid import
   rejection.
+- full backup (v3) generation and restore of app settings and AI settings.
 - AI settings presets, permission origin requests, prompt building, response
   parsing, client error handling, component rendering, and backup round-trip.
 - FSRS migration, rating schedules, learning-step persistence, daily new-card
   caps, due-time wakeups, settings normalization, and one-card review UI.
+- tag normalization, add/remove/count helpers, category-to-tags migration,
+  OR-semantics tag filtering, and Tags Cloud rendering with rename/delete.
+- folder-sync deterministic merge, inbox projection, OR-Set tag merge,
+  passphrase crypto, and the sole-writer coordinator.

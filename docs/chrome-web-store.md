@@ -1,6 +1,6 @@
 # Chrome Web Store Submission Notes
 
-Last updated: 2026-06-26
+Last updated: 2026-06-28
 
 ## Package
 
@@ -37,6 +37,9 @@ Markdown notes.
   export actions.
 - `unlimitedStorage`: Supports the local-first inbox, dictionary cache, and
   optional large Kaikki import data.
+- `alarms`: Schedules periodic background folder-sync wakeups when the user has
+  enabled the optional encrypted folder sync. Used only for sync timing; no
+  alarms run unless sync is configured.
 - `clipboardRead`: Supports the popup "paste from clipboard and save" fallback
   when selected-text capture is unavailable.
 - `tts`: Pronounces a saved Chinese word only after the user clicks its speaker
@@ -44,6 +47,17 @@ Markdown notes.
   or an installed speech engine.
 
 No declared required permission was found unused as of this audit.
+
+## Folder Sync (no extra permission)
+
+Optional encrypted folder sync writes an encrypted replica of the user's data to
+a folder the user picks at runtime. It uses the browser's File System Access API
+via an explicit directory picker, so it needs no additional manifest permission
+and integrates with no provider API. The synchronized payload, including the AI
+API key, is encrypted with a user passphrase before it is written. The folder
+may live in iCloud Drive, Dropbox, OneDrive, Syncthing, a NAS mount, or a plain
+local directory. No developer-operated server is involved. The `alarms`
+permission only schedules periodic sync attempts.
 
 ## Optional Host Permissions
 
@@ -76,7 +90,12 @@ transfer occurs only after the user enables AI and clicks an AI action: word
 "建议填空" cloze suggestions send that quote's sentence text. When
 pronunciation is requested, the selected saved word is passed to Chrome's
 configured speech engine; some installed voices may use a remote speech
-resource.
+resource. If the user enables folder sync, an encrypted replica of their data
+(including settings and the AI API key) is written to a folder they choose; the
+data is encrypted with the user's passphrase before it leaves the extension and
+is never sent to a developer-operated server. The optional full JSON backup also
+includes app settings and the AI API key, and is created only when the user
+clicks the backup action.
 
 ## Store Assets
 

@@ -1,9 +1,9 @@
 # Chrome Web Store Dashboard Checklist
 
-Last updated: 2026-06-26
+Last updated: 2026-06-28
 
 Use this when completing the Chrome Developer Dashboard fields after uploading
-`.output/shiyu-hanzi-box-0.1.0-chrome.zip`.
+`.output/shiyu-hanzi-box-0.2.0-chrome.zip`.
 
 ## Store Listing
 
@@ -30,15 +30,21 @@ Saved words include one-click Mandarin pronunciation through Chrome/OS Chinese t
 
 Quotes are reviewed by cloze deletion. A saved quote starts with no blanks (parked); the user marks which words become blanks, either manually by wrapping an answer in braces or with optional AI suggestions, and each blank becomes its own spaced-repetition card.
 
+Organize quotes with tags: add tag chips with autocomplete on each quote card, filter by tag, and browse a frequency-sized tag cloud with rename and delete.
+
 AI is optional and disabled by default. If enabled, users bring their own API key and explicitly trigger it — "Ask AI" for a saved word, or "建议填空" to suggest cloze blanks for a quote. Generated word insight is stored locally so each word only needs to be generated once.
+
+Optional folder sync keeps your collection in step across browser profiles by writing an encrypted replica to a folder you choose (iCloud Drive, Dropbox, OneDrive, Syncthing, a NAS mount, or a local directory). Sync is provider-neutral, local-first, and encrypted with your passphrase; the extension never uses a developer-operated server.
 
 Core features:
 - Save selected Chinese words, phrases, and quotes.
 - Deduplicate words while preserving source occurrences.
 - View local dictionary definitions, pinyin tone chips, pronunciation, and source examples.
+- Tag quotes, filter by tag, and manage tags in a frequency-sized tag cloud.
 - Review saved words and quotes one card at a time with local spaced-repetition scheduling; quotes are reviewed by cloze deletion, with each blank scheduled as an independent card.
 - Add cloze blanks to quotes manually (brace markup) or with optional AI suggestions.
-- Export daily Markdown notes and backup/restore local data.
+- Export daily Markdown notes, and back up/restore local data (inbox-only or full backup with settings and AI key).
+- Optionally sync between browser profiles through an encrypted, provider-neutral folder.
 - Optionally import a local Kaikki JSONL dictionary fallback.
 - Optionally use BYO-key AI insight with DeepSeek, OpenAI, or a custom HTTPS OpenAI-compatible endpoint.
 ```
@@ -117,6 +123,10 @@ unlimitedStorage: Supports the local-first inbox, dictionary cache, and optional
 ```
 
 ```text
+alarms: Schedules periodic background sync attempts when the user has enabled optional encrypted folder sync. No alarms are scheduled unless the user configures sync.
+```
+
+```text
 clipboardRead: Supports the toolbar popup "paste from clipboard and save" fallback when selected-text capture is unavailable.
 ```
 
@@ -152,7 +162,7 @@ Disclose these categories if the dashboard asks:
 Suggested explanation:
 
 ```text
-The extension stores selected text, notes, source metadata, review ratings and schedules, local settings, optional API keys, and generated AI insights locally in the user's browser. Spaced-repetition ratings and schedules are calculated and stored locally. AI data transfer happens only when the user enables AI and explicitly clicks an AI action: word insight sends the saved word and its dictionary context, and quote cloze suggestions send that quote's sentence text. When pronunciation is requested, the saved word is passed to Chrome's configured speech engine; some installed voices may use a remote speech resource. The extension does not operate a developer-owned server, does not create accounts, and does not sell user data.
+The extension stores selected text, notes, source metadata, review ratings and schedules, local settings, optional API keys, and generated AI insights locally in the user's browser. Spaced-repetition ratings and schedules are calculated and stored locally. AI data transfer happens only when the user enables AI and explicitly clicks an AI action: word insight sends the saved word and its dictionary context, and quote cloze suggestions send that quote's sentence text. When pronunciation is requested, the saved word is passed to Chrome's configured speech engine; some installed voices may use a remote speech resource. If the user enables optional folder sync, an encrypted replica of their data — including settings and the AI API key — is written to a folder the user selects via the File System Access API; the payload is encrypted with the user's passphrase before it leaves the extension and is not sent to any developer-owned server. The optional full JSON backup likewise includes app settings and the AI API key and is created only on an explicit backup action. The extension does not operate a developer-owned server, does not create accounts, and does not sell user data.
 ```
 
 ## Remote Code

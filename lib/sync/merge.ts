@@ -49,10 +49,17 @@ function pickSnapshot(
 ): SchedulerSnapshotNode | undefined {
   const candidates = [a, b].filter(Boolean) as SchedulerSnapshotNode[];
   if (candidates.length === 0) return undefined;
-  // Snapshot tied to the highest-ordered review event wins; tie-break by stamp.
+  // Rule: a snapshot whose reviewEventId is present in the merged events map
+  // ("non-orphaned") is always preferred over one whose event is absent
+  // ("orphaned" — its event never existed or didn't survive the union).  When
+  // both are non-orphaned, reviewOrder decides; final tie-break by stamp.
+  // The array is sorted ascending so the LAST element is the winner.
   return candidates.sort((x, y) => {
     const ex = events[x.reviewEventId];
     const ey = events[y.reviewEventId];
+    // Non-orphaned > orphaned: sort orphaned first (lower rank) so non-orphaned
+    // ends up last and is picked as the winner.
+    if (!!ex !== !!ey) return ex ? 1 : -1;
     if (ex && ey) {
       const ord = reviewOrder(ex, ey);
       if (ord !== 0) return ord;

@@ -306,6 +306,111 @@ describe('QuoteList — empty parked-filter state', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// QuoteCard tag editor
+// ---------------------------------------------------------------------------
+
+import { QuoteCard } from '../entrypoints/dashboard/components/QuoteCard';
+
+function makeCardQuote(overrides: Partial<QuoteEntry> = {}): QuoteEntry {
+  return {
+    id: 'q1',
+    kind: 'quote',
+    text: 'hi',
+    note: '',
+    status: 'inbox',
+    tags: ['poetry'],
+    createdAt: 1,
+    updatedAt: 1,
+    sourceTitle: '',
+    sourceUrl: '',
+    sourceDomain: '',
+    surrounding: '',
+    ...overrides,
+  };
+}
+
+describe('QuoteCard tag editor', () => {
+  it('renders existing tags as chips and has no category input', async () => {
+    await renderClient(
+      <QuoteCard
+        quote={makeCardQuote()}
+        onUpdate={() => {}}
+        onSetTags={() => {}}
+        onDelete={() => {}}
+        knownTags={['poetry', 'news']}
+        locale="en"
+      />,
+    );
+
+    expect(container.textContent).toContain('poetry');
+    // No freeform category input with "uncategorized" value
+    const inputs = [...container.querySelectorAll<HTMLInputElement>('input')];
+    const hasUncategorized = inputs.some((el) => el.value === 'uncategorized');
+    expect(hasUncategorized).toBe(false);
+  });
+
+  it('commits a new tag on Enter via onSetTags', async () => {
+    const calls: string[][] = [];
+    await renderClient(
+      <QuoteCard
+        quote={makeCardQuote()}
+        onUpdate={() => {}}
+        onSetTags={(t) => calls.push(t)}
+        onDelete={() => {}}
+        knownTags={[]}
+        locale="en"
+      />,
+    );
+
+    const input = container.querySelector<HTMLInputElement>('input[placeholder="Add tag"]');
+    expect(input).not.toBeNull();
+
+    await act(async () => {
+      // Set value
+      Object.defineProperty(input!, 'value', { writable: true, value: 'News' });
+      input!.dispatchEvent(new Event('input', { bubbles: true }));
+      // Simulate React controlled input change
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+      nativeInputValueSetter?.call(input!, 'News');
+      input!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    // Re-render to get updated state by firing React's change event
+    await act(async () => {
+      input!.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+      );
+    });
+
+    // addTag normalizes: 'News' -> 'news', so result is ['poetry', 'news']
+    expect(calls[0]).toEqual(['poetry', 'news']);
+  });
+
+  it('removes a tag when its × is clicked', async () => {
+    const calls: string[][] = [];
+    await renderClient(
+      <QuoteCard
+        quote={makeCardQuote({ tags: ['poetry', 'news'] })}
+        onUpdate={() => {}}
+        onSetTags={(t) => calls.push(t)}
+        onDelete={() => {}}
+        knownTags={[]}
+        locale="en"
+      />,
+    );
+
+    const removeBtn = container.querySelector<HTMLButtonElement>(
+      '[aria-label="Remove tag poetry"]',
+    );
+    expect(removeBtn).not.toBeNull();
+
+    await click(removeBtn!);
+
+    expect(calls[0]).toEqual(['news']);
+  });
+});
+
 describe('QuoteCard — parked visual marker', () => {
   it('shows parked chip on a quote with no clozes', async () => {
     const quotes = [makeQuote({ id: 'q1' })]; // no clozes → parked

@@ -35,7 +35,7 @@ import { useInbox } from './hooks/useInbox';
 import { useSettings } from './hooks/useSettings';
 import { requestSyncMutation } from '../background/sync-mutation-handler';
 import { wordKey } from '@/lib/sync/project';
-import { addTag, planTagWrite, planTagRemovalAcrossQuotes, removeTag, normalizeTag } from '@/lib/tags';
+import { addTag, planTagWrite, planTagRemovalAcrossQuotes, removeTag, normalizeTag, tagCounts } from '@/lib/tags';
 
 type Tab = 'review' | 'words' | 'quotes';
 type StatusFilter = 'all' | Status;
@@ -98,6 +98,11 @@ export function App() {
       ),
     };
   }, [inbox, normalizedQuery, statusFilter]);
+
+  const knownTags = useMemo(
+    () => [...tagCounts(inbox.quotes).keys()].sort(),
+    [inbox.quotes],
+  );
 
   const srsSnapshot = useMemo(() => {
     const items = buildSrsQueue(inbox, reviewNow, settings.srs);
@@ -387,6 +392,7 @@ export function App() {
               onUpdate={updateQuote}
               onDelete={deleteQuote}
               onSetTags={setQuoteTags}
+              knownTags={knownTags}
               locale={locale}
             />
           )}

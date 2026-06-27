@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { t } from '@/lib/i18n';
+import { formatMessage, t } from '@/lib/i18n';
+import { addTag, removeTag } from '@/lib/tags';
 import type { Cloze, QuoteEntry, UiLocale } from '@/lib/types';
 import { ClozeEditor } from './ClozeEditor';
 import { TraditionalButton } from './TraditionalButton';
@@ -7,8 +8,9 @@ import { TraditionalButton } from './TraditionalButton';
 export function QuoteCard({
   quote,
   onUpdate,
-  onSetTags: _onSetTags,
+  onSetTags,
   onDelete,
+  knownTags,
   locale,
   showParkedMarker = false,
 }: {
@@ -16,11 +18,24 @@ export function QuoteCard({
   onUpdate: (patch: Partial<QuoteEntry>) => void;
   onSetTags: (nextTags: string[]) => void;
   onDelete: () => void;
+  knownTags: string[];
   locale: UiLocale;
   showParkedMarker?: boolean;
 }) {
   const [note, setNote] = useState(quote.note);
   const [showTraditional, setShowTraditional] = useState(false);
+  const [tagInput, setTagInput] = useState('');
+  const listId = `tags-${quote.id}`;
+  const suggestions = knownTags
+    .filter((tag) => !quote.tags.includes(tag) && tag.includes(tagInput.trim().toLowerCase()))
+    .slice(0, 8);
+
+  function commitTag() {
+    const raw = tagInput;
+    setTagInput('');
+    if (raw.trim() === '') return;
+    onSetTags(addTag(quote.tags, raw));
+  }
   // Drag-select reads the offsets back from this exact node. The mapping in
   // lib/cloze-selection.ts assumes the quote text lives under this span; keep
   // them in sync if the quote ever renders with inline decoration.
@@ -49,6 +64,41 @@ export function QuoteCard({
         </div>
       )}
       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">
+        {quote.tags.map((tag) => (
+          <span
+            key={tag}
+            className="inline-flex items-center gap-1 rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-1 text-cinnabar"
+          >
+            #{tag}
+            <button
+              type="button"
+              aria-label={formatMessage(locale, 'quote.removeTag', { tag })}
+              onClick={() => onSetTags(removeTag(quote.tags, tag))}
+              className="text-cinnabar/70 transition hover:text-cinnabar"
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        <input
+          value={tagInput}
+          list={listId}
+          onChange={(event) => setTagInput(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ',') {
+              event.preventDefault();
+              commitTag();
+            }
+          }}
+          onBlur={commitTag}
+          placeholder={t(locale, 'quote.addTag')}
+          className="w-24 rounded-sm border border-border bg-paper-input px-2 py-1 text-ink outline-none transition focus:border-cinnabar-fade"
+        />
+        <datalist id={listId}>
+          {suggestions.map((tag) => (
+            <option key={tag} value={tag} />
+          ))}
+        </datalist>
         {quote.sourceUrl && (
           <a
             href={quote.sourceUrl}

@@ -9,12 +9,14 @@ export function QuoteList({
   onUpdate,
   onDelete,
   onSetTags,
+  knownTags = [],
   locale,
 }: {
   quotes: QuoteEntry[];
   onUpdate: (id: string, patch: Partial<QuoteEntry>) => void;
   onDelete: (id: string) => void;
   onSetTags: (id: string, nextTags: string[]) => void;
+  knownTags?: string[];
   locale: UiLocale;
 }) {
   const [showParkedOnly, setShowParkedOnly] = useState(false);
@@ -70,6 +72,7 @@ export function QuoteList({
               onUpdate={(patch) => onUpdate(quote.id, patch)}
               onSetTags={(nextTags) => onSetTags(quote.id, nextTags)}
               onDelete={() => onDelete(quote.id)}
+              knownTags={knownTags}
               locale={locale}
               showParkedMarker={isParkedQuote(quote)}
             />

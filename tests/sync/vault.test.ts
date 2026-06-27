@@ -40,9 +40,57 @@ describe('replica encrypt/decrypt', () => {
   });
 });
 
+function validManifest() {
+  return {
+    app: 'shiyu-hanzi-box',
+    vaultFormatVersion: 1,
+    vaultId: 'V1',
+    cipher: 'AES-256-GCM',
+    kdf: defaultKdfParams(),
+    verification: { nonce: 'n', ciphertext: 'c' },
+  };
+}
+
 describe('vault manifest validation', () => {
   it('rejects foreign or unversioned manifests', () => {
     expect(isVaultManifest({ app: 'other' })).toBe(false);
     expect(isVaultManifest(null)).toBe(false);
+  });
+
+  it('accepts a manifest with floor-compliant KDF params', () => {
+    expect(isVaultManifest(validManifest())).toBe(true);
+  });
+
+  it('rejects a downgraded iteration count', () => {
+    expect(isVaultManifest({ ...validManifest(), kdf: { ...defaultKdfParams(), iterations: 1 } })).toBe(
+      false,
+    );
+    expect(
+      isVaultManifest({ ...validManifest(), kdf: { ...defaultKdfParams(), iterations: 599_999 } }),
+    ).toBe(false);
+  });
+
+  it('rejects a non-integer or non-numeric iteration count', () => {
+    expect(
+      isVaultManifest({ ...validManifest(), kdf: { ...defaultKdfParams(), iterations: 600_000.5 } }),
+    ).toBe(false);
+    expect(
+      isVaultManifest({
+        ...validManifest(),
+        kdf: { ...defaultKdfParams(), iterations: '600000' },
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects an unexpected KDF algorithm', () => {
+    expect(
+      isVaultManifest({ ...validManifest(), kdf: { ...defaultKdfParams(), algorithm: 'PBKDF2' } }),
+    ).toBe(false);
+  });
+
+  it('rejects a salt that is not 16 bytes', () => {
+    expect(isVaultManifest({ ...validManifest(), kdf: { ...defaultKdfParams(), salt: 'AAAA' } })).toBe(
+      false,
+    );
   });
 });

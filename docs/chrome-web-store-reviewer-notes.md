@@ -1,6 +1,6 @@
 # Chrome Web Store Reviewer Notes
 
-Last updated: 2026-06-26
+Last updated: 2026-06-28
 
 Use this file when filling the reviewer notes field during Chrome Web Store
 submission.
@@ -17,6 +17,10 @@ The bundled CC-CEDICT dictionary is packaged with the extension and used offline
 The tts permission supports the user-triggered speaker button on saved words. Clicking the button passes only that saved word to Chrome's configured Chinese speech engine. No audio is stored, and no developer-operated speech server is used.
 
 The Review tab shows one due card at a time and schedules it locally from the user's Again, Hard, Good, or Easy rating. Word details are revealed on demand. Quotes are reviewed by cloze deletion: a newly saved quote starts "parked" with no blanks and does not enter the review queue until the user adds at least one blank. Blanks are added either manually (open "手动填空 / Mark blanks", wrap an answer span in braces, and click Apply) or via the optional "建议填空" AI suggestion. Each blank is an independent card; in review the active blank is hidden until the user clicks Reveal, which shows the full quote with the answer highlighted. When the user clicks "建议填空", the quote's sentence text is sent to the user-configured AI provider, the same opt-in path as other AI actions.
+
+Quotes can be tagged. Tag chips are edited on each quote card with autocomplete, quotes can be filtered by tag, and a tag cloud allows rename and delete. Tags are stored locally and require no network access.
+
+Folder sync is optional and off by default. When enabled, the extension writes an encrypted replica of the user's data to a folder the user selects through the browser's File System Access directory picker. The folder can be any local or cloud-synced directory (iCloud Drive, Dropbox, OneDrive, Syncthing, NAS, etc.); the extension does not call any provider API and operates no developer server. The entire payload, including the AI API key, is encrypted with the user's passphrase before being written. The alarms permission only schedules periodic background sync attempts once the user has configured sync.
 ```
 
 ## Manual Test Script
@@ -52,12 +56,22 @@ Use this flow for reviewer instructions or your own pre-submit smoke test.
     `.md` file.
 16. Click the zip export action and confirm Chrome downloads a `.zip` file.
 17. Click the backup action and confirm Chrome downloads a `.json` backup file.
+    The full backup also includes app settings and the AI API key for transfer
+    to another device.
 18. Open Settings from the dashboard.
 19. Change the UI language between `zh-CN` and English, then return to the
     dashboard to confirm labels update.
 20. Optional AI test: enable AI, choose DeepSeek or OpenAI, enter a valid API
     key, and click Test Connection. Then return to a saved word and click
     **Ask AI**, and on a saved quote click **建议填空** to fetch suggested blanks.
+21. On a saved quote card, add a tag in the tag-chip editor and confirm a chip
+    appears. Open the Quotes tab's **Cloud** sub-tab, confirm the tag appears
+    sized by frequency, and click it to filter the **List** view.
+22. Optional folder sync test: open **Settings → Folder Sync**, click **Create
+    new vault**, choose an empty folder in the directory picker, and set a
+    passphrase. Confirm the dashboard sync badge moves to **Synced** and that an
+    encrypted file is written into the chosen folder. No network request is
+    required for this step.
 
 ## Popup Fallback Test
 
@@ -84,7 +98,11 @@ manual fallback.
 - Chrome/OS or an installed speech engine provides the voice; some installed
   voices may use a remote speech resource.
 - Markdown, zip, and backup files are created only after explicit download
-  actions.
+  actions. The full backup additionally bundles app settings and the AI API key.
+- Folder sync is off by default. When enabled it writes an encrypted replica to
+  a user-chosen folder via the File System Access API; the payload (including the
+  AI API key) is encrypted with the user's passphrase before being written, and
+  no developer-operated server is used. Tags are stored locally.
 
 ## Known Limitations
 
@@ -97,3 +115,7 @@ manual fallback.
   voice.
 - Kaikki dictionary import can take time for large JSONL files and should be
   run while the Settings page remains open.
+- Folder sync requires a browser with File System Access support, is eventually
+  consistent (not instant), and a forgotten passphrase cannot be recovered.
+  Joining an existing vault replaces this profile's app and AI settings with the
+  vault's while merging inbox entries.

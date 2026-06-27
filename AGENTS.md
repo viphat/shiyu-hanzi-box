@@ -4,26 +4,34 @@
 
 This repo is `shiyu-hanzi-box`, a local-first Chrome MV3 extension named
 拾语汉字box. Its job is to capture selected Chinese text as words or quotes,
-store the working inbox in `chrome.storage.local`, and export daily Markdown
-notes.
+store the working inbox in `chrome.storage.local`, enrich and review it, and
+export daily Markdown notes. It also supports first-class quote tags and
+optional encrypted provider-neutral folder sync between browser profiles.
 
-The implementation plan is in:
+The implementation plans and specs are in `docs/superpowers/`:
 
-- `docs/superpowers/plans/2026-06-20-shiyu-hanzi-box.md`
-- `docs/superpowers/specs/2026-06-20-shiyu-hanzi-box-design.md`
-- `docs/superpowers/plans/2026-06-21-word-insight-panel-ai.md`
-- `docs/superpowers/specs/2026-06-22-traditional-chinese-conversion-design.md`
-- `docs/superpowers/plans/2026-06-22-traditional-chinese-conversion.md`
-- `docs/superpowers/specs/2026-06-22-real-srs-system-design.md`
-- `docs/superpowers/plans/2026-06-24-real-srs-system.md`
-- `docs/superpowers/specs/2026-06-24-single-card-review-design.md`
-- `docs/superpowers/plans/2026-06-24-single-card-review.md`
-- `docs/superpowers/specs/2026-06-25-quote-review-cloze-design.md`
-- `docs/superpowers/plans/2026-06-25-quote-review-cloze.md`
+- `plans/2026-06-20-shiyu-hanzi-box.md`
+- `specs/2026-06-20-shiyu-hanzi-box-design.md`
+- `plans/2026-06-21-word-insight-panel-ai.md`
+- `plans/2026-06-22-optional-dashboard-access.md`
+- `specs/2026-06-22-traditional-chinese-conversion-design.md`
+- `plans/2026-06-22-traditional-chinese-conversion.md`
+- `specs/2026-06-22-real-srs-system-design.md`
+- `plans/2026-06-24-real-srs-system.md`
+- `specs/2026-06-24-single-card-review-design.md`
+- `plans/2026-06-24-single-card-review.md`
+- `specs/2026-06-25-quote-review-cloze-design.md`
+- `plans/2026-06-25-quote-review-cloze.md`
+- `specs/2026-06-25-encrypted-folder-sync-design.md`
+- `plans/2026-06-25-encrypted-folder-sync.md`
+- `plans/2026-06-26-cloze-input-redesign.md`
+- `specs/2026-06-27-quote-tags-system-design.md`
+- `plans/2026-06-27-quote-tags-system.md`
 
 Tasks 0 through 15, Traditional Chinese conversion, TTS, the real FSRS system,
-the focused single-card review experience, and cloze-deletion quote review have
-landed.
+the focused single-card review experience, cloze-deletion quote review, the
+versioned full backup (settings + AI key), encrypted folder sync, and the
+first-class quote tags system have landed.
 
 ## Commands
 
@@ -57,6 +65,12 @@ npx vitest run tests/export.test.ts
 npx vitest run tests/cloze.test.ts
 npx vitest run tests/cloze-editor.test.tsx
 npx vitest run tests/quote-list.test.tsx
+npx vitest run tests/tags.test.ts
+npx vitest run tests/quote-filter.test.ts
+npx vitest run tests/tag-cloud.test.tsx
+npx vitest run tests/backup-ai.test.ts
+npx vitest run tests/storage-migration.test.ts
+npx vitest run tests/sync
 ```
 
 Regenerate the CC-CEDICT compact asset under `public/dictionaries/`. Requires
@@ -112,6 +126,29 @@ The central data path is:
     from storage. Quotes save parked on capture; blanks are added by the user
     either manually (wrap spans in `{ }` and Apply) or via AI suggestions
     (建议填空, requires a configured AI provider).
+14. `lib/tags.ts` owns all tag behavior: normalization (lowercase, trim,
+    collapse internal whitespace, dedupe), add/remove, frequency counts, and the
+    one-time `category` → `tags` migration. `QuoteEntry.tags` is a plain
+    `string[]`; the `category` field has been removed. The tag-chip editor on
+    `QuoteCard`, the OR-semantics filter in `App.tsx`, and the
+    `entrypoints/dashboard/components/TagCloud.tsx` Cloud view all route tag
+    writes through `lib/tags.ts`. Tags display during review and in Markdown
+    export.
+15. `lib/sync/*` adds optional encrypted provider-neutral folder sync.
+    `chrome.storage.local` stays authoritative; the user-selected folder is an
+    encrypted replica transport reached through the File System Access API (no
+    provider API). State is a CRDT: hybrid-logical-clock-stamped LWW registers
+    plus add-wins OR-Sets (occurrences, review events, and quote tags). The
+    `coordinator` is the sole writer — local mutations flow through it, it
+    debounces and merges, and it writes only this profile's replica file.
+    `connect` handles create/join vault and folder authorization; `crypto` and
+    `vault` encrypt the whole payload (including the AI key) under a passphrase
+    whose derived key is remembered locally. Sync triggers: on change, on
+    UI startup, on a background `alarms` wakeup
+    (`entrypoints/background/sync-mutation-handler.ts`), and on demand.
+    `entrypoints/dashboard/SyncStatusBadge.tsx` shows the state;
+    `entrypoints/settings/FolderSync.tsx` is the settings UI. Kaikki data and the
+    remembered key never sync.
 
 Core modules:
 
@@ -124,9 +161,10 @@ Core modules:
 - `lib/cloze.ts`: cloze type guards, overlap detection, brace-markup parsing
   (`parseClozeMarkup` / `seedMarkup`), hint types (none / pinyin / length), and
   Anki-style `{{cN::...}}` Markdown rendering. This is the only file that may
-  define or validate cloze shapes. Backup format version is 2; v1 backups still
-  import (their quotes load parked because they carry no cloze arrays); malformed
-  cloze arrays are sanitized to `[]` on import (the quote is preserved).
+  define or validate cloze shapes. Inbox backup format version is 2; v1 backups
+  still import (their quotes load parked because they carry no cloze arrays);
+  malformed cloze arrays are sanitized to `[]` on import (the quote is
+  preserved).
 - `lib/page-context.ts`: self-contained injected function.
 - `lib/pinyin.ts`: `pinyin-pro` wrapper for lazy dashboard pinyin generation.
 - `lib/traditional.ts`: `opencc-js` wrapper for lazy dashboard Simplified →
@@ -141,6 +179,24 @@ Core modules:
   `lib/srs.ts`.
 - `lib/settings.ts`: `local:settings` storage plus normalized read, watch,
   mutation, and replacement helpers so old installs gain nested defaults.
+- `lib/tags.ts`: the only owner of tag behavior — normalization (lowercase,
+  trim, collapse whitespace, dedupe), add/remove, frequency counts, and the
+  `category` → `tags` migration. `QuoteEntry.tags` is a plain `string[]`; the
+  `category` field is gone. Do not normalize or mutate tags elsewhere.
+- `lib/backup.ts`: versioned JSON backup. `BACKUP_FORMAT_VERSION` (2) is the
+  inbox-only backup; `FULL_BACKUP_FORMAT_VERSION` (3) is the full backup that
+  also carries `AppSettings` and `AiSettings` (including the API key). Restore
+  validates each version and treats unknown/lower versions as inbox-only.
+- `lib/sync/*`: encrypted provider-neutral folder sync. `types.ts` defines the
+  CRDT `SyncState` (HLC-stamped LWW registers + add-wins OR-Sets for
+  occurrences, review events, and quote tags). `project.ts` projects inbox ↔
+  state; tag add-stamps are carried forward so unrelated edits never move them.
+  `merge.ts` is the deterministic merge; `coordinator.ts` is the sole writer
+  (debounced); `connect.ts` does create/join + folder authorization; `crypto.ts`
+  / `vault.ts` encrypt the whole payload under a passphrase; `files.ts` is
+  File System Access folder I/O; `local.ts` holds `local:syncConfig` and
+  `mutations.ts` holds `local:syncMetadata` + queued mutations. Each profile
+  writes only its own replica; Kaikki data and the remembered key never sync.
 - `lib/pinyin-helpers.ts`: CC-CEDICT numbered pinyin → tone marks/numbers, and
   pinyin-pro fallback for tone chips when no dictionary match exists.
 - `lib/dictionary.ts`: CC-CEDICT parsing, compact asset build/materialize,
@@ -212,6 +268,11 @@ Core modules:
   answer highlighted on Reveal. The Traditional (繁) toggle is suppressed for
   quote cloze cards because cloze offsets index Simplified text.
 - Keep SRS state local on each entry. Do not use it for capture dedupe.
+- Funnel all tag reads/writes through `lib/tags.ts`; normalize before persisting
+  and never reintroduce the removed `category` field.
+- Route local mutations that must sync through the `lib/sync` coordinator (the
+  sole writer). Keep `chrome.storage.local` authoritative; the folder is a
+  transport. Do not sync Kaikki data or the remembered key.
 - Use `@/*` imports where existing WXT code does, and relative imports where the
   file already uses that style.
 - Use `apply_patch` for manual edits.
@@ -257,5 +318,6 @@ cat .output/chrome-mv3/manifest.json
 ```
 
 Expected manifest features include `contextMenus`, `storage`, `activeTab`,
-`scripting`, `downloads`, `unlimitedStorage`, command shortcuts, a toolbar
-popup, and an MV3 background service worker.
+`scripting`, `downloads`, `unlimitedStorage`, `alarms` (background folder sync),
+`clipboardRead`, `tts`, command shortcuts, a toolbar popup, and an MV3
+background service worker.

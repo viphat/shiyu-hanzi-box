@@ -191,6 +191,11 @@ export const messages = {
     'sync.error.wrongPassphrase': 'Incorrect passphrase.',
     'sync.error.vaultInvalid': 'This folder does not contain a valid vault.',
     'sync.warn.backupUnencrypted': 'This backup file contains your saved data and AI API key in plain text and is NOT encrypted. Keep it somewhere safe.',
+    'cloud.empty': 'No tags yet.',
+    'cloud.rename': 'Rename tag {tag}',
+    'cloud.delete': 'Delete tag {tag} everywhere',
+    'cloud.renamePrompt': 'Rename tag "{tag}" to:',
+    'cloud.deleteConfirm': 'Delete the tag "{tag}" from all quotes?',
   },
   'zh-CN': {
     'app.loading': '正在翻开收藏箱...',
@@ -382,6 +387,11 @@ export const messages = {
     'sync.error.wrongPassphrase': '密语不正确。',
     'sync.error.vaultInvalid': '此文件夹中不包含有效的保险库。',
     'sync.warn.backupUnencrypted': '此备份文件以明文形式保存了您的所有数据和 AI API 密钥，未经加密。请妥善保管。',
+    'cloud.empty': '还没有标签。',
+    'cloud.rename': '重命名标签 {tag}',
+    'cloud.delete': '在所有句子中删除标签 {tag}',
+    'cloud.renamePrompt': '将标签"{tag}"重命名为：',
+    'cloud.deleteConfirm': '从所有句子中删除标签"{tag}"？',
   },
 } as const;
 

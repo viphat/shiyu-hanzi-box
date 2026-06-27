@@ -163,6 +163,42 @@ mutation below, never inferred from projection). Carrying `prevTomb.wallTime + 1
 into a re-add stamp also closes the same-millisecond re-add race (a re-add can
 never tie-or-lose to the tombstone it supersedes).
 
+### Where `prev` comes from (carry-forward reliability)
+
+The carry-forward is only correct if `prev` (the persisted `QuoteNode`) is
+reliably populated on a normal pass. It is. `runSyncPass` reads the persisted
+`SyncState` at the top of the pass (`coordinator.ts:28`) — the previous pass's
+fully `merged` state, which already holds every tag add stamp and tombstone —
+and passes it to `projectInbox`. That state is non-null on every pass after the
+first because:
+
+- Dashboard inbox edits write `inboxStorage` directly (`useInbox.mutate`) and
+  **never** null the sync state; `requestSyncMutation('inbox', …)` is not sent
+  from the UI. So an unrelated edit (note/status/text) leaves the persisted
+  add stamps and tombstones untouched between passes.
+- `applyTagRemoval` / `applyDeletion` write tombstones **into** the persisted
+  state and preserve it (revision bump, no null).
+- The only `state: null` is the transient inside `runSyncPass`
+  (`applyLocalMutation`, `coordinator.ts:56`), repopulated with `merged` before
+  the pass returns (`coordinator.ts:69`).
+- `reconcileOnStartup` returns early — keeping state — when the revision matches
+  (`mutations.ts:78`).
+
+`prev` is therefore `undefined` only on a genuine first-time bootstrap (or a
+full state loss), where no tombstones exist yet, so minting fresh add stamps
+from `updatedAt` is correct and resurrects nothing.
+
+**Carry-forward must live in projection, not only in the seed.** `runSyncPass`
+already seeds the projection from persisted state via
+`mergeSyncState(persisted, projected)` (`coordinator.ts:37`), which merges tag
+maps with `mergeStampMap` (max-per-key). If projection minted a fresh
+`stamp(updatedAt)` for an existing tag, that larger stamp would win the max and
+defeat the tombstone — exactly the resurrection bug. Carrying `prevAdd` forward
+keeps the projected stamp **equal** to the persisted one, so the seed merge is a
+no-op and the tombstone keeps winning. (Tombstones themselves still survive via
+that same seed: projection emits `tagTombstones: {}`, and `mergeStampMap` keeps
+the persisted tombstones.)
+
 ### Merge (`mergeQuoteNodes`)
 
 ```ts
@@ -199,7 +235,14 @@ tolerant in-place read migration handles it:
   legacy `node.fields.tags` register exists, build `tags` from that register's
   value, each stamped with the register's stamp; then it can ignore
   `fields.tags`. This makes tags added on a not-yet-upgraded device appear on
-  upgraded devices with no data loss.
+  upgraded devices with no data loss. The lift is safe even though it triggers
+  on *empty* (not just *absent*) `tags`: a tag that the new code removed leaves a
+  **suppressed but present** entry in `node.tags` (add stamp + tombstone), so the
+  map is never empty once new code has touched it. An empty `tags` alongside a
+  legacy `fields.tags` therefore only occurs for genuinely-old nodes the new code
+  has never managed — exactly the case lifting is meant to handle — and a later
+  tombstone still beats the lifted register stamp (old `updatedAt` < tombstone),
+  so a removed tag does not resurrect through the lift.
 - **Known limitation:** new devices stop writing `fields.tags`, so a
   not-yet-upgraded device won't *see* tags managed by an upgraded device until
   it upgrades. No data is lost (it lives in the new maps); it is only invisible
@@ -330,6 +373,11 @@ serialized writes through the `chain`).
   reads back without throwing; `liftLegacyTags` folds a legacy `fields.tags`
   register (incl. a quote present only in a remote node, copied by
   `mergeNodeMap`) into the OR-Set.
+  - **legacy resurrection guard:** an old replica re-sends `fields.tags=["X"]`
+    *after* `X` was removed (tombstoned) on an upgraded device → `X` stays
+    removed (the lifted register stamp is older than the tombstone). This is the
+    subtle resurrection path through `liftLegacyTags`, distinct from the in-format
+    resurrection regression above.
 - **`applyTagRemoval`** records tombstones for a batched multi-quote payload and
   bumps revision once (extend `tests/sync/sync-mutation-handler.test.ts`).
 - **`setQuoteTags`**: removal fires `removeTags`; add does not; normalization
@@ -348,3 +396,91 @@ serialized writes through the `chain`).
 - Tag-based SRS scheduling.
 - A separate Settings-page tag manager (management is inline in the Cloud only).
 - AND / toggle filter modes (OR only for now).
+
+---
+
+## Design Revision (2026-06-27): durable CRDT state vs. the broker write path
+
+> **Status:** Supersedes the *"Where `prev` comes from (carry-forward
+> reliability)"* section above. That section's premise is no longer true and the
+> carry-forward design cannot be implemented as written until the issue below is
+> resolved. **This is a prerequisite, fixed independently of the tags feature.**
+
+### What changed under the spec
+
+The reliability argument was written against the pre-`06a5332` write path. Commit
+`06a5332` ("route inbox/settings/AI writes through the sole-writer broker") then
+changed `useInbox.mutate` to do exactly what the spec said it would never do:
+
+- [`useInbox.ts:28-31`](../../../entrypoints/dashboard/hooks/useInbox.ts) — every
+  inbox edit now calls `requestSyncMutation('inbox', fn(current))`.
+- That routes to `applyLocalMutation('inbox', …)`, which sets
+  [`state: null`](../../../lib/sync/mutations.ts) (`mutations.ts:40`).
+
+So after *any* dashboard edit the persisted `SyncState` is `null` at the top of
+the next pass ([`coordinator.ts:38`](../../../lib/sync/coordinator.ts)). `prev`
+is therefore `undefined` for every quote on a normal pass — carry-forward never
+engages, and the seed merge `if (persisted) mergeSyncState(...)` is skipped
+entirely (`coordinator.ts:47`).
+
+### The bug is broader than tags — it already affects deletions
+
+Nulling `meta.state` discards any tombstone that was written into it but not yet
+flushed to a replica file. The dashboard delete flow
+([`App.tsx:172-173`](../../../entrypoints/dashboard/App.tsx)) is precisely this
+shape: `applyDeletion` writes a tombstone, then `mutate` nulls the state holding
+it. The planned `setQuoteTags` repeats the shape (`applyTagRemoval` then
+`mutate`), so tag removals would not be durable either.
+
+This is demonstrated by
+[`tests/sync/write-path-tombstone-loss.test.ts`](../../../tests/sync/write-path-tombstone-loss.test.ts):
+
+- A unit test confirms an inbox edit nulls the state that holds a just-written
+  tombstone (passes today).
+- An `it.fails` test reproduces a deleted word **resurrecting** through the next
+  sync pass when the delete is followed by an inbox edit. Removing the `.fails`
+  marker is the acceptance criterion for the fix.
+
+> Note: the existing `tests/sync/deletion-tombstones.test.ts` does not catch this
+> because it seeds a non-null `meta.state` directly and never exercises the
+> inbox-nulling `mutate` — it proves the *merge* logic, not the *write-path*
+> durability.
+
+### Why `state: null` is not load-bearing
+
+`runSyncPass` already tolerates a stale persisted state: it reprojects the whole
+inbox from scratch and reconciles via `mergeSyncState(persisted, projected)`
+(`coordinator.ts:39-47`). The fresh projection's field stamps win by LWW (every
+edit bumps `updatedAt`), so a *stale-but-present* persisted state is harmless,
+while a *null* one silently drops the only durable copy of tombstones and OR-Set
+add stamps. Nulling buys nothing and costs correctness.
+
+### Options
+
+| # | Approach | Fixes resurrection? | Fixes cross-device carry-forward? | Cost |
+| --- | --- | --- | --- | --- |
+| 1 (recommended) | `applyLocalMutation('inbox')` stops nulling — keep the prior `meta.state` (revision bump only), letting the next pass reproject-and-merge | Yes | Yes — `prev` is reliably the full persisted node | Smallest diff; relies on the existing project+merge reconciliation |
+| 2 | `applyLocalMutation('inbox')` reprojects the new inbox and merges onto persisted state, storing the merged result | Yes | Yes | Moves projection cost (settings/ai/replicaId/wallTime) into every inbox write |
+| 3 | Reorder so the inbox `mutate` runs *before* the tombstone mutation | Yes (local) | **No** — B's own edit still nulls B's add stamps before it ever saw the tombstone | Tiny, but leaves the headline cross-device case broken |
+
+Option 3 is rejected: it papers over local durability but leaves the original
+two-device resurrection ("delete on A, edit note on B") unfixed, which is the
+whole reason carry-forward exists.
+
+### Recommendation
+
+Adopt **Option 1**: make `applyLocalMutation` (at minimum the `'inbox'` kind)
+preserve `meta.state` instead of setting it to `null`. Verify by:
+
+1. The `it.fails` resurrection test flips to passing (drop the `.fails`).
+2. The full existing suite (`npx vitest run`) stays green — in particular the
+   sync, deletion-tombstone, and concurrent-write guard tests.
+
+Land this as its own commit *before* the quote-tags work. Once `meta.state` is
+durable, the tags plan proceeds essentially as written, with two edits:
+
+- Delete the stale *"Where `prev` comes from"* reasoning; `prev` is now reliably
+  non-null because the inbox write no longer nulls it.
+- `setQuoteTags` / rename / delete-everywhere can keep firing `removeTags` +
+  `mutate` in either order, since the tombstone now survives in the preserved
+  `meta.state`.

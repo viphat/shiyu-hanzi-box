@@ -4,7 +4,10 @@ export interface KdfParams {
   salt: string; // base64
 }
 
-const PBKDF2_ITERATIONS = 600_000;
+export const KDF_ALGORITHM = 'PBKDF2-HMAC-SHA-256';
+export const PBKDF2_MIN_ITERATIONS = 600_000;
+export const KDF_SALT_BYTES = 16;
+const PBKDF2_ITERATIONS = PBKDF2_MIN_ITERATIONS;
 const VERIFICATION_PLAINTEXT = 'shiyu-hanzi-box-vault-verification-v1';
 const VERIFICATION_AAD = new TextEncoder().encode('verification');
 
@@ -22,8 +25,37 @@ function fromBase64(value: string): Uint8Array {
 }
 
 export function defaultKdfParams(): KdfParams {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  return { algorithm: 'PBKDF2-HMAC-SHA-256', iterations: PBKDF2_ITERATIONS, salt: toBase64(salt) };
+  const salt = crypto.getRandomValues(new Uint8Array(KDF_SALT_BYTES));
+  return { algorithm: KDF_ALGORITHM, iterations: PBKDF2_ITERATIONS, salt: toBase64(salt) };
+}
+
+/**
+ * Validates KDF parameters read from an untrusted manifest. The shared sync
+ * folder is hostile by design, so the work-factor floor must be enforced when
+ * *reading* a vault, not just when creating one — otherwise an attacker who can
+ * write `vault.json` could downgrade `iterations` (e.g. to 1) and brute-force
+ * the passphrase offline. Rejects anything but PBKDF2-HMAC-SHA-256 with an
+ * integer iteration count >= 600,000 and a 16-byte salt.
+ */
+export function isValidKdfParams(value: unknown): value is KdfParams {
+  if (!value || typeof value !== 'object') return false;
+  const p = value as Record<string, unknown>;
+  if (p.algorithm !== KDF_ALGORITHM) return false;
+  if (
+    typeof p.iterations !== 'number' ||
+    !Number.isInteger(p.iterations) ||
+    p.iterations < PBKDF2_MIN_ITERATIONS
+  ) {
+    return false;
+  }
+  if (typeof p.salt !== 'string') return false;
+  let salt: Uint8Array;
+  try {
+    salt = fromBase64(p.salt);
+  } catch {
+    return false;
+  }
+  return salt.length === KDF_SALT_BYTES;
 }
 
 export async function deriveKey(passphrase: string, params: KdfParams): Promise<CryptoKey> {

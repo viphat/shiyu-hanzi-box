@@ -1,4 +1,4 @@
-import { decryptJson, encryptJson, type KdfParams } from './crypto';
+import { decryptJson, encryptJson, isValidKdfParams, type KdfParams } from './crypto';
 import { APP_ID, SYNC_FORMAT_VERSION, VAULT_FORMAT_VERSION, type SyncReplica } from './types';
 
 export interface VaultManifest {
@@ -24,8 +24,7 @@ export function isVaultManifest(value: unknown): value is VaultManifest {
     v.vaultFormatVersion === VAULT_FORMAT_VERSION &&
     typeof v.vaultId === 'string' &&
     v.cipher === 'AES-256-GCM' &&
-    !!v.kdf &&
-    typeof v.kdf === 'object' &&
+    isValidKdfParams(v.kdf) &&
     !!v.verification &&
     typeof v.verification === 'object'
   );

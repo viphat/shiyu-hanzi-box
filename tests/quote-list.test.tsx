@@ -87,9 +87,14 @@ describe('QuoteList — parked count badge', () => {
     await renderClient(
       <QuoteList
         quotes={quotes}
+        cloudQuotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         onSetTags={vi.fn()}
+        selectedTags={new Set()}
+        onToggleTag={vi.fn()}
+        onRenameTag={vi.fn()}
+        onDeleteTag={vi.fn()}
         locale="en"
       />,
     );
@@ -108,9 +113,14 @@ describe('QuoteList — parked count badge', () => {
     await renderClient(
       <QuoteList
         quotes={quotes}
+        cloudQuotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         onSetTags={vi.fn()}
+        selectedTags={new Set()}
+        onToggleTag={vi.fn()}
+        onRenameTag={vi.fn()}
+        onDeleteTag={vi.fn()}
         locale="en"
       />,
     );
@@ -127,9 +137,14 @@ describe('QuoteList — parked count badge', () => {
     await renderClient(
       <QuoteList
         quotes={quotes}
+        cloudQuotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         onSetTags={vi.fn()}
+        selectedTags={new Set()}
+        onToggleTag={vi.fn()}
+        onRenameTag={vi.fn()}
+        onDeleteTag={vi.fn()}
         locale="en"
       />,
     );
@@ -148,9 +163,14 @@ describe('QuoteList — parked filter toggle', () => {
     await renderClient(
       <QuoteList
         quotes={quotes}
+        cloudQuotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         onSetTags={vi.fn()}
+        selectedTags={new Set()}
+        onToggleTag={vi.fn()}
+        onRenameTag={vi.fn()}
+        onDeleteTag={vi.fn()}
         locale="en"
       />,
     );
@@ -167,9 +187,14 @@ describe('QuoteList — parked filter toggle', () => {
     await renderClient(
       <QuoteList
         quotes={quotes}
+        cloudQuotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         onSetTags={vi.fn()}
+        selectedTags={new Set()}
+        onToggleTag={vi.fn()}
+        onRenameTag={vi.fn()}
+        onDeleteTag={vi.fn()}
         locale="en"
       />,
     );
@@ -197,9 +222,14 @@ describe('QuoteList — parked filter toggle', () => {
     await renderClient(
       <QuoteList
         quotes={quotes}
+        cloudQuotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         onSetTags={vi.fn()}
+        selectedTags={new Set()}
+        onToggleTag={vi.fn()}
+        onRenameTag={vi.fn()}
+        onDeleteTag={vi.fn()}
         locale="en"
       />,
     );
@@ -232,9 +262,14 @@ describe('QuoteList — empty parked-filter state', () => {
     await renderClient(
       <QuoteList
         quotes={[parkedQuote, ...quotes]}
+        cloudQuotes={[parkedQuote, ...quotes]}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         onSetTags={vi.fn()}
+        selectedTags={new Set()}
+        onToggleTag={vi.fn()}
+        onRenameTag={vi.fn()}
+        onDeleteTag={vi.fn()}
         locale="en"
       />,
     );
@@ -248,9 +283,14 @@ describe('QuoteList — empty parked-filter state', () => {
     await renderClient(
       <QuoteList
         quotes={quotes}
+        cloudQuotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         onSetTags={vi.fn()}
+        selectedTags={new Set()}
+        onToggleTag={vi.fn()}
+        onRenameTag={vi.fn()}
+        onDeleteTag={vi.fn()}
         locale="en"
       />,
     );
@@ -273,9 +313,14 @@ describe('QuoteList — empty parked-filter state', () => {
     await renderClient(
       <QuoteList
         quotes={[parkedQuote, ...quotes]}
+        cloudQuotes={[parkedQuote, ...quotes]}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         onSetTags={vi.fn()}
+        selectedTags={new Set()}
+        onToggleTag={vi.fn()}
+        onRenameTag={vi.fn()}
+        onDeleteTag={vi.fn()}
         locale="en"
       />,
     );
@@ -287,9 +332,14 @@ describe('QuoteList — empty parked-filter state', () => {
     await renderClient(
       <QuoteList
         quotes={quotes}
+        cloudQuotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         onSetTags={vi.fn()}
+        selectedTags={new Set()}
+        onToggleTag={vi.fn()}
+        onRenameTag={vi.fn()}
+        onDeleteTag={vi.fn()}
         locale="en"
       />,
     );
@@ -418,9 +468,14 @@ describe('QuoteCard — parked visual marker', () => {
     await renderClient(
       <QuoteList
         quotes={quotes}
+        cloudQuotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         onSetTags={vi.fn()}
+        selectedTags={new Set()}
+        onToggleTag={vi.fn()}
+        onRenameTag={vi.fn()}
+        onDeleteTag={vi.fn()}
         locale="en"
       />,
     );
@@ -434,9 +489,14 @@ describe('QuoteCard — parked visual marker', () => {
     await renderClient(
       <QuoteList
         quotes={quotes}
+        cloudQuotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
         onSetTags={vi.fn()}
+        selectedTags={new Set()}
+        onToggleTag={vi.fn()}
+        onRenameTag={vi.fn()}
+        onDeleteTag={vi.fn()}
         locale="en"
       />,
     );
@@ -448,5 +508,46 @@ describe('QuoteCard — parked visual marker', () => {
     // Count occurrences - should be 0 (no badge since 0 parked, no chip on card)
     const occurrences = (container.textContent ?? '').split(parkedLabel).length - 1;
     expect(occurrences).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sub-tab toggle
+// ---------------------------------------------------------------------------
+
+describe('QuoteList — sub-tab toggle', () => {
+  it('switches to Cloud view and back to List', async () => {
+    await renderClient(
+      <QuoteList
+        quotes={[]}
+        cloudQuotes={[]}
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        onSetTags={vi.fn()}
+        knownTags={[]}
+        selectedTags={new Set()}
+        onToggleTag={vi.fn()}
+        onRenameTag={vi.fn()}
+        onDeleteTag={vi.fn()}
+        locale="en"
+      />,
+    );
+
+    // Initially in list view — "List" button should be present
+    const listBtn = queryButton(messages.en['quote.viewList']);
+    expect(listBtn).not.toBeNull();
+
+    // Click the Cloud button
+    const cloudBtn = queryButton(messages.en['quote.viewCloud']);
+    expect(cloudBtn).not.toBeNull();
+    await click(cloudBtn!);
+
+    // Click List button to go back
+    const listBtnAgain = queryButton(messages.en['quote.viewList']);
+    expect(listBtnAgain).not.toBeNull();
+    await click(listBtnAgain!);
+
+    // No throw; List tab active again — List button still present
+    expect(queryButton(messages.en['quote.viewList'])).not.toBeNull();
   });
 });

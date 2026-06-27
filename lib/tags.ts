@@ -74,6 +74,12 @@ export function planTagRemovalAcrossQuotes(
   return removals;
 }
 
+/** OR semantics: a quote matches if it has any selected tag (empty set = all). */
+export function quoteMatchesTags(quote: QuoteEntry, selectedTags: Set<string>): boolean {
+  if (selectedTags.size === 0) return true;
+  return quote.tags.some((tag) => selectedTags.has(tag));
+}
+
 /**
  * Fold a quote's freeform `category` into `tags` and drop the `category` field.
  * Idempotent; tolerates quotes that already lack `category`. The default

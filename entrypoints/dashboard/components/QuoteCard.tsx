@@ -7,12 +7,14 @@ import { TraditionalButton } from './TraditionalButton';
 export function QuoteCard({
   quote,
   onUpdate,
+  onSetTags: _onSetTags,
   onDelete,
   locale,
   showParkedMarker = false,
 }: {
   quote: QuoteEntry;
   onUpdate: (patch: Partial<QuoteEntry>) => void;
+  onSetTags: (nextTags: string[]) => void;
   onDelete: () => void;
   locale: UiLocale;
   showParkedMarker?: boolean;

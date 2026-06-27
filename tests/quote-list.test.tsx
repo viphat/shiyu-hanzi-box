@@ -89,6 +89,7 @@ describe('QuoteList — parked count badge', () => {
         quotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
+        onSetTags={vi.fn()}
         locale="en"
       />,
     );
@@ -109,6 +110,7 @@ describe('QuoteList — parked count badge', () => {
         quotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
+        onSetTags={vi.fn()}
         locale="en"
       />,
     );
@@ -127,6 +129,7 @@ describe('QuoteList — parked count badge', () => {
         quotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
+        onSetTags={vi.fn()}
         locale="en"
       />,
     );
@@ -147,6 +150,7 @@ describe('QuoteList — parked filter toggle', () => {
         quotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
+        onSetTags={vi.fn()}
         locale="en"
       />,
     );
@@ -165,6 +169,7 @@ describe('QuoteList — parked filter toggle', () => {
         quotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
+        onSetTags={vi.fn()}
         locale="en"
       />,
     );
@@ -194,6 +199,7 @@ describe('QuoteList — parked filter toggle', () => {
         quotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
+        onSetTags={vi.fn()}
         locale="en"
       />,
     );
@@ -228,6 +234,7 @@ describe('QuoteList — empty parked-filter state', () => {
         quotes={[parkedQuote, ...quotes]}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
+        onSetTags={vi.fn()}
         locale="en"
       />,
     );
@@ -243,6 +250,7 @@ describe('QuoteList — empty parked-filter state', () => {
         quotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
+        onSetTags={vi.fn()}
         locale="en"
       />,
     );
@@ -267,6 +275,7 @@ describe('QuoteList — empty parked-filter state', () => {
         quotes={[parkedQuote, ...quotes]}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
+        onSetTags={vi.fn()}
         locale="en"
       />,
     );
@@ -280,6 +289,7 @@ describe('QuoteList — empty parked-filter state', () => {
         quotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
+        onSetTags={vi.fn()}
         locale="en"
       />,
     );
@@ -305,6 +315,7 @@ describe('QuoteCard — parked visual marker', () => {
         quotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
+        onSetTags={vi.fn()}
         locale="en"
       />,
     );
@@ -320,6 +331,7 @@ describe('QuoteCard — parked visual marker', () => {
         quotes={quotes}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
+        onSetTags={vi.fn()}
         locale="en"
       />,
     );

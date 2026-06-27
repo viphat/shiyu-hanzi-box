@@ -35,6 +35,7 @@ import { useInbox } from './hooks/useInbox';
 import { useSettings } from './hooks/useSettings';
 import { requestSyncMutation } from '../background/sync-mutation-handler';
 import { wordKey } from '@/lib/sync/project';
+import { addTag, planTagWrite, removeTag, normalizeTag } from '@/lib/tags';
 
 type Tab = 'review' | 'words' | 'quotes';
 type StatusFilter = 'all' | Status;
@@ -174,6 +175,52 @@ export function App() {
       ...current,
       quotes: current.quotes.filter((quote) => quote.id !== id),
     }));
+  }
+
+  function setQuoteTags(id: string, nextTags: string[]) {
+    const current = inbox.quotes.find((q) => q.id === id);
+    if (!current) return;
+    const { next, removed } = planTagWrite(current.tags, nextTags);
+    if (removed.length > 0) {
+      void requestSyncMutation('removeTags', { removals: [{ quoteId: id, tags: removed }] });
+    }
+    void mutate((draft) => ({
+      ...draft,
+      quotes: draft.quotes.map((quote) =>
+        quote.id === id ? { ...quote, tags: next, updatedAt: Date.now() } : quote,
+      ),
+    }));
+  }
+
+  function renameTagEverywhere(from: string, to: string) {
+    const fromTag = normalizeTag(from);
+    const toTag = normalizeTag(to);
+    if (fromTag === '' || toTag === '' || fromTag === toTag) return;
+    const removals: Array<{ quoteId: string; tags: string[] }> = [];
+    void mutate((draft) => ({
+      ...draft,
+      quotes: draft.quotes.map((quote) => {
+        if (!quote.tags.includes(fromTag)) return quote;
+        removals.push({ quoteId: quote.id, tags: [fromTag] });
+        return { ...quote, tags: addTag(removeTag(quote.tags, fromTag), toTag), updatedAt: Date.now() };
+      }),
+    }));
+    if (removals.length > 0) void requestSyncMutation('removeTags', { removals });
+  }
+
+  function deleteTagEverywhere(tag: string) {
+    const target = normalizeTag(tag);
+    if (target === '') return;
+    const removals: Array<{ quoteId: string; tags: string[] }> = [];
+    void mutate((draft) => ({
+      ...draft,
+      quotes: draft.quotes.map((quote) => {
+        if (!quote.tags.includes(target)) return quote;
+        removals.push({ quoteId: quote.id, tags: [target] });
+        return { ...quote, tags: removeTag(quote.tags, target), updatedAt: Date.now() };
+      }),
+    }));
+    if (removals.length > 0) void requestSyncMutation('removeTags', { removals });
   }
 
   function answerEntry(
@@ -336,6 +383,7 @@ export function App() {
               quotes={matches.quotes}
               onUpdate={updateQuote}
               onDelete={deleteQuote}
+              onSetTags={setQuoteTags}
               locale={locale}
             />
           )}

@@ -1,4 +1,3 @@
-// tests/sync/coordinator-guard.test.ts
 //
 // Proves the no-clobber guarantee added in fix/sync-review-followups:
 //   1. applyLocalMutationIfUnchanged unit behaviour (abort vs commit).

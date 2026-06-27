@@ -9,7 +9,13 @@ import { registerSyncMutationHandler, SYNC_DEBOUNCE_ALARM } from './sync-mutatio
 import { reconcileOnStartup } from '../../lib/sync/mutations';
 import { registerSyncAlarms, SYNC_ALARM } from '../../lib/sync/connect';
 import { SYNC_NOW_MESSAGE } from '../settings/FolderSync';
-import { getSyncConfig, mutateSyncConfig, recallKey, loadDirectoryHandle } from '../../lib/sync/local';
+import {
+  ensureReplicaId,
+  getSyncConfig,
+  mutateSyncConfig,
+  recallKey,
+  loadDirectoryHandle,
+} from '../../lib/sync/local';
 import { openSyncFs } from '../../lib/sync/files';
 import { runSyncPass, SyncCoordinator } from '../../lib/sync/coordinator';
 
@@ -52,7 +58,6 @@ async function runAlarmSyncPass() {
   }
 
   const fs = await openSyncFs(handle);
-  const { ensureReplicaId } = await import('../../lib/sync/local');
   const replicaId = await ensureReplicaId();
 
   return runSyncPass({ fs, key, vaultId: config.vaultId, replicaId, now: () => Date.now() });

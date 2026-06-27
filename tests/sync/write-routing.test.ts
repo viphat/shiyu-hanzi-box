@@ -1,4 +1,3 @@
-// tests/sync/write-routing.test.ts
 // Verifies that inbox/settings/AI writes flow through the sole-writer broker,
 // bumping the shared revision and marking syncConfig.pending.
 import { beforeEach, describe, expect, it } from 'vitest';

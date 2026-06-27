@@ -1,4 +1,3 @@
-// entrypoints/background/sync-mutation-handler.ts
 import { applyDeletion, applyLocalMutation, applyTagRemoval } from '../../lib/sync/mutations';
 import { setInbox } from '../../lib/storage';
 import { replaceSettings } from '../../lib/settings';

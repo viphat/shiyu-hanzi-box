@@ -1,4 +1,3 @@
-// lib/sync/coordinator.ts
 import { mergeSyncState } from './merge';
 import { materialize, projectInbox } from './project';
 import { decryptReplica, encryptReplica } from './vault';

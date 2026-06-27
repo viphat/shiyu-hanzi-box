@@ -1,4 +1,3 @@
-// tests/sync/merge.test.ts
 import { describe, expect, it } from 'vitest';
 import { deleteEntity, mergeSyncState, mergeQuoteNodes } from '../../lib/sync/merge';
 import { projectInbox, materialize, wordKey } from '../../lib/sync/project';

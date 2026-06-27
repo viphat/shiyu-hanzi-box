@@ -35,7 +35,7 @@ import { useInbox } from './hooks/useInbox';
 import { useSettings } from './hooks/useSettings';
 import { requestSyncMutation } from '../background/sync-mutation-handler';
 import { wordKey } from '@/lib/sync/project';
-import { addTag, planTagWrite, removeTag, normalizeTag } from '@/lib/tags';
+import { addTag, planTagWrite, planTagRemovalAcrossQuotes, removeTag, normalizeTag } from '@/lib/tags';
 
 type Tab = 'review' | 'words' | 'quotes';
 type StatusFilter = 'all' | Status;
@@ -196,31 +196,34 @@ export function App() {
     const fromTag = normalizeTag(from);
     const toTag = normalizeTag(to);
     if (fromTag === '' || toTag === '' || fromTag === toTag) return;
-    const removals: Array<{ quoteId: string; tags: string[] }> = [];
+    // Compute removals synchronously from current React state — `mutate` reads
+    // storage asynchronously, so a mapper-populated array would be read too early.
+    const removals = planTagRemovalAcrossQuotes(inbox.quotes, fromTag);
+    if (removals.length > 0) void requestSyncMutation('removeTags', { removals });
     void mutate((draft) => ({
       ...draft,
-      quotes: draft.quotes.map((quote) => {
-        if (!quote.tags.includes(fromTag)) return quote;
-        removals.push({ quoteId: quote.id, tags: [fromTag] });
-        return { ...quote, tags: addTag(removeTag(quote.tags, fromTag), toTag), updatedAt: Date.now() };
-      }),
+      quotes: draft.quotes.map((quote) =>
+        quote.tags.includes(fromTag)
+          ? { ...quote, tags: addTag(removeTag(quote.tags, fromTag), toTag), updatedAt: Date.now() }
+          : quote,
+      ),
     }));
-    if (removals.length > 0) void requestSyncMutation('removeTags', { removals });
   }
 
   function deleteTagEverywhere(tag: string) {
     const target = normalizeTag(tag);
     if (target === '') return;
-    const removals: Array<{ quoteId: string; tags: string[] }> = [];
+    // Compute removals synchronously from current React state — see note above.
+    const removals = planTagRemovalAcrossQuotes(inbox.quotes, target);
+    if (removals.length > 0) void requestSyncMutation('removeTags', { removals });
     void mutate((draft) => ({
       ...draft,
-      quotes: draft.quotes.map((quote) => {
-        if (!quote.tags.includes(target)) return quote;
-        removals.push({ quoteId: quote.id, tags: [target] });
-        return { ...quote, tags: removeTag(quote.tags, target), updatedAt: Date.now() };
-      }),
+      quotes: draft.quotes.map((quote) =>
+        quote.tags.includes(target)
+          ? { ...quote, tags: removeTag(quote.tags, target), updatedAt: Date.now() }
+          : quote,
+      ),
     }));
-    if (removals.length > 0) void requestSyncMutation('removeTags', { removals });
   }
 
   function answerEntry(

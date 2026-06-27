@@ -1,8 +1,9 @@
 import { storage } from 'wxt/utils/storage';
-import { getInbox } from '../storage';
+import { getInbox, setInbox } from '../storage';
 import { getSettings } from '../settings';
 import { aiSettingsStorage } from '../ai/settings';
 import { ensureReplicaId, mutateSyncConfig } from './local';
+import type { Inbox } from '../types';
 import { projectInbox } from './project';
 import { deleteEntity } from './merge';
 import { EMPTY_SYNC_STATE, type SyncState } from './types';
@@ -49,6 +50,20 @@ export async function applyLocalMutation(
   });
   chain = run;
   return run;
+}
+
+/**
+ * Synced read-modify-write for inbox, for background callers (e.g. capture).
+ * Runs inside applyLocalMutation's chain so the revision is bumped atomically.
+ */
+export async function mutateInboxSynced(fn: (inbox: Inbox) => Inbox): Promise<Inbox> {
+  let result: Inbox | undefined;
+  await applyLocalMutation('inbox', async () => {
+    const inbox = await getInbox();
+    result = fn(inbox);
+    await setInbox(result);
+  });
+  return result!;
 }
 
 export async function applyDeletion(keys: string[]): Promise<void> {

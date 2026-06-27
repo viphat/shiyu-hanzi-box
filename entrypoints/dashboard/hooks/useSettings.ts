@@ -2,10 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   DEFAULT_SETTINGS,
   getSettings,
-  mutateSettings,
-  replaceSettings,
   watchSettings,
 } from '@/lib/settings';
+import { requestSyncMutation } from '@/entrypoints/background/sync-mutation-handler';
 import type { AppSettings } from '@/lib/types';
 
 export function useSettings() {
@@ -29,15 +28,14 @@ export function useSettings() {
     };
   }, []);
 
-  const mutate = useCallback(
-    async (fn: (settings: AppSettings) => AppSettings) => mutateSettings(fn),
-    [],
-  );
+  const mutate = useCallback(async (fn: (settings: AppSettings) => AppSettings) => {
+    const current = await getSettings();
+    await requestSyncMutation('settings', fn(current));
+  }, []);
 
-  const replace = useCallback(
-    async (next: AppSettings) => replaceSettings(next),
-    [],
-  );
+  const replace = useCallback(async (next: AppSettings) => {
+    await requestSyncMutation('settings', next);
+  }, []);
 
   return { settings, loading, mutate, replace };
 }

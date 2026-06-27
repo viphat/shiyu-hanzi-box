@@ -1,6 +1,6 @@
 import { makeId } from './id';
 import { normalizeText } from './normalize';
-import { mutateInbox } from './storage';
+import { mutateInboxSynced } from './sync/mutations';
 import type { Cloze, Occurrence, WordEntry, QuoteEntry } from './types';
 
 export interface SourceInfo {
@@ -18,7 +18,7 @@ export async function saveWord(text: string, src: SourceInfo): Promise<WordEntry
   if (normalized.length === 0) return null;
 
   let result: WordEntry | null = null;
-  await mutateInbox((inbox) => {
+  await mutateInboxSynced((inbox) => {
     const idx = inbox.words.findIndex((w) => w.normalized === normalized);
     if (idx === -1) {
       const now = src.capturedAt;
@@ -73,7 +73,7 @@ export async function saveQuote(
 
   const now = src.capturedAt;
   let result: QuoteEntry | null = null;
-  await mutateInbox((inbox) => {
+  await mutateInboxSynced((inbox) => {
     const clozes: Cloze[] = [];
     const quote: QuoteEntry = {
       id: makeId(),

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { inboxStorage } from '@/lib/storage';
 import type { Inbox } from '@/lib/types';
 import { EMPTY_INBOX } from '@/lib/types';
+import { requestSyncMutation } from '@/entrypoints/background/sync-mutation-handler';
 
 export function useInbox() {
   const [inbox, setInbox] = useState<Inbox>(EMPTY_INBOX);
@@ -26,11 +27,11 @@ export function useInbox() {
 
   const mutate = useCallback(async (fn: (inbox: Inbox) => Inbox) => {
     const current = await inboxStorage.getValue();
-    await inboxStorage.setValue(fn(current));
+    await requestSyncMutation('inbox', fn(current));
   }, []);
 
   const replace = useCallback(async (next: Inbox) => {
-    await inboxStorage.setValue(next);
+    await requestSyncMutation('inbox', next);
   }, []);
 
   return { inbox, loading, mutate, replace };

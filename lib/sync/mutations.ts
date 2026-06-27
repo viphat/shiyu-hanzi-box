@@ -53,6 +53,50 @@ export async function applyLocalMutation(
 }
 
 /**
+ * Revision-guarded write: atomically checks that no concurrent local mutation
+ * has landed since `expectedRevision` was captured, then runs the writer and
+ * bumps the revision exactly like applyLocalMutation.
+ *
+ * Runs on the same module-level `chain` as applyLocalMutation so it is FIFO
+ * w.r.t. other writes — the revision check inside the chained body sees any
+ * write that was queued before this call.
+ *
+ * Returns true if the write was committed; false if the revision had changed
+ * (a concurrent write landed — caller should abort and retry).
+ */
+export async function applyLocalMutationIfUnchanged(
+  _kind: 'inbox' | 'settings' | 'ai',
+  expectedRevision: number,
+  writer: () => Promise<void>,
+): Promise<boolean> {
+  let committed = false;
+  const run = chain.then(async () => {
+    // Use the metadata revision as the canonical source — it is written inside
+    // the same mutations chain body (fully awaited) so it is always consistent
+    // with any concurrent applyLocalMutation that ran before this slot.
+    const meta = await syncMetadataStorage.getValue();
+    if (meta.revision !== expectedRevision) {
+      // A concurrent local write landed — abort without writing or bumping.
+      committed = false;
+      return;
+    }
+    await writer();
+    const nextRevision = meta.revision + 1;
+    await syncMetadataStorage.setValue({ ...meta, revision: nextRevision, state: null });
+    await mutateSyncConfig((c) => ({
+      ...c,
+      localRevision: nextRevision,
+      pending: c.vaultId ? true : c.pending,
+      status: c.vaultId ? 'pending' : c.status,
+    }));
+    committed = true;
+  });
+  chain = run;
+  await run;
+  return committed;
+}
+
+/**
  * Synced read-modify-write for inbox, for background callers (e.g. capture).
  * Runs inside applyLocalMutation's chain so the revision is bumped atomically.
  */

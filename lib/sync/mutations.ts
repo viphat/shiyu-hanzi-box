@@ -6,6 +6,7 @@ import { ensureReplicaId, mutateSyncConfig } from './local';
 import type { Inbox } from '../types';
 import { projectInbox } from './project';
 import { deleteEntity } from './merge';
+import { mergeStampMap } from './registers';
 import { EMPTY_SYNC_STATE, type SyncState } from './types';
 
 export interface SyncMetadata {
@@ -45,7 +46,7 @@ export async function applyLocalMutation(
     await syncMetadataStorage.setValue({
       ...meta,
       revision: nextRevision,
-      state: null,
+      state: meta.state,
       appSettingsUpdatedAt: kind === 'settings' ? now : meta.appSettingsUpdatedAt,
       aiSettingsUpdatedAt: kind === 'ai' ? now : meta.aiSettingsUpdatedAt,
     });
@@ -93,7 +94,7 @@ export async function applyLocalMutationIfUnchanged(
     }
     await writer();
     const nextRevision = meta.revision + 1;
-    await syncMetadataStorage.setValue({ ...meta, revision: nextRevision, state: null });
+    await syncMetadataStorage.setValue({ ...meta, revision: nextRevision, state: meta.state });
     await mutateSyncConfig((c) => ({
       ...c,
       localRevision: nextRevision,
@@ -154,12 +155,17 @@ export async function reconcileOnStartup(): Promise<void> {
   if (meta.revision === cfg.localRevision && meta.state) return;
   const replicaId = await ensureReplicaId();
   const { inbox, settings, ai } = await readDomainSnapshot();
-  const state = projectInbox(inbox, settings, ai, {
+  let state = projectInbox(inbox, settings, ai, {
     replicaId,
     wallTime: Date.now(),
     settingsStamp: meta.appSettingsUpdatedAt,
     aiStamp: meta.aiSettingsUpdatedAt,
   });
+  // Preserve any tombstones from the existing state so an interrupted write
+  // doesn't silently drop deletions that haven't been flushed to a replica yet.
+  if (meta.state?.tombstones) {
+    state = { ...state, tombstones: mergeStampMap(meta.state.tombstones, state.tombstones) };
+  }
   await syncMetadataStorage.setValue({
     revision: cfg.localRevision,
     state,

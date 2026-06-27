@@ -68,25 +68,22 @@ describe('broker write-path tombstone loss (delete flow)', () => {
     await setSyncConfig({ ...cfg, replicaId: REPLICA_ID, vaultId: 'V1' });
   });
 
-  it('an inbox edit nulls the SyncState that holds a just-written tombstone', async () => {
+  it('an inbox edit preserves the SyncState tombstone', async () => {
     await applyDeletion(['word:远']);
     expect((await syncMetadataStorage.getValue()).state?.tombstones['word:远']).toBeDefined();
 
-    // The very next inbox write (any unrelated edit) goes through the broker and
-    // nulls the persisted state — taking the tombstone with it.
+    // The very next inbox write (any unrelated edit) goes through the broker.
+    // After the fix, the persisted state is NOT nulled — the tombstone survives.
     await applyLocalMutation('inbox', async () => {
       await setInbox({ words: [], quotes: [] });
     });
 
-    expect((await syncMetadataStorage.getValue()).state).toBeNull();
+    const meta = await syncMetadataStorage.getValue();
+    expect(meta.state).not.toBeNull();
+    expect(meta.state?.tombstones['word:远']).toBeDefined();
   });
 
-  // KNOWN-FAILING (it.fails): documents the live resurrection bug. The body
-  // asserts the *correct* behavior (the word stays deleted); `it.fails` expects
-  // that assertion to currently throw. Removing `.fails` is the acceptance
-  // criterion for the durable-state fix (see the design-revision addendum in
-  // the quote-tags spec).
-  it.fails('a deleted entity resurrects through the next pass when the delete is followed by an inbox edit', async () => {
+  it('a deleted entity stays deleted through the next pass when the delete is followed by an inbox edit', async () => {
     const d = await deps();
 
     // 1. Establish a synced baseline: inbox has the word, own replica + persisted

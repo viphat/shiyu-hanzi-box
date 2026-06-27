@@ -30,9 +30,32 @@ export function useInbox() {
     await requestSyncMutation('inbox', fn(current));
   }, []);
 
+  // Like `mutate`, but plans tag tombstones off the SAME freshly-read snapshot
+  // it builds the next inbox from, then fires the batched `removeTags` mutation
+  // before the inbox write. Single-snapshot planning prevents the planner and
+  // the mutator from disagreeing (which could resurrect a concurrently-synced
+  // tag). Returning null from the planner is a no-op.
+  const mutateWithRemovals = useCallback(
+    async (
+      plan: (current: Inbox) => {
+        removals: Array<{ quoteId: string; tags: string[] }>;
+        inbox: Inbox;
+      } | null,
+    ) => {
+      const current = await inboxStorage.getValue();
+      const result = plan(current);
+      if (!result) return;
+      if (result.removals.length > 0) {
+        await requestSyncMutation('removeTags', { removals: result.removals });
+      }
+      await requestSyncMutation('inbox', result.inbox);
+    },
+    [],
+  );
+
   const replace = useCallback(async (next: Inbox) => {
     await requestSyncMutation('inbox', next);
   }, []);
 
-  return { inbox, loading, mutate, replace };
+  return { inbox, loading, mutate, mutateWithRemovals, replace };
 }

@@ -41,7 +41,7 @@ type Tab = 'review' | 'words' | 'quotes';
 type StatusFilter = 'all' | Status;
 
 export function App() {
-  const { inbox, loading, mutate, replace } = useInbox();
+  const { inbox, loading, mutate, mutateWithRemovals, replace } = useInbox();
   const { settings, loading: settingsLoading } = useSettings();
   const locale = settings.uiLocale;
   const [aiSettings, setAiSettingsState] = useState<AiSettings>(DEFAULT_AI_SETTINGS);
@@ -192,52 +192,58 @@ export function App() {
     }));
   }
 
+  // The tag write paths plan their `removeTags` tombstones and build the next
+  // inbox from a single freshly-read snapshot. Planning off React state while
+  // `mutate` re-reads storage would split the two snapshots, so a tag a sync
+  // landed between render and click could be mutated locally with no tombstone
+  // — silently resurrecting it. Reading once keeps planning and mutation aligned.
   function setQuoteTags(id: string, nextTags: string[]) {
-    const current = inbox.quotes.find((q) => q.id === id);
-    if (!current) return;
-    const { next, removed } = planTagWrite(current.tags, nextTags);
-    if (removed.length > 0) {
-      void requestSyncMutation('removeTags', { removals: [{ quoteId: id, tags: removed }] });
-    }
-    void mutate((draft) => ({
-      ...draft,
-      quotes: draft.quotes.map((quote) =>
-        quote.id === id ? { ...quote, tags: next, updatedAt: Date.now() } : quote,
-      ),
-    }));
+    void mutateWithRemovals((current) => {
+      const target = current.quotes.find((q) => q.id === id);
+      if (!target) return null;
+      const { next, removed } = planTagWrite(target.tags, nextTags);
+      return {
+        removals: removed.length > 0 ? [{ quoteId: id, tags: removed }] : [],
+        inbox: {
+          ...current,
+          quotes: current.quotes.map((quote) =>
+            quote.id === id ? { ...quote, tags: next, updatedAt: Date.now() } : quote,
+          ),
+        },
+      };
+    });
   }
 
   function renameTagEverywhere(from: string, to: string) {
     const fromTag = normalizeTag(from);
     const toTag = normalizeTag(to);
     if (fromTag === '' || toTag === '' || fromTag === toTag) return;
-    // Compute removals synchronously from current React state — `mutate` reads
-    // storage asynchronously, so a mapper-populated array would be read too early.
-    const removals = planTagRemovalAcrossQuotes(inbox.quotes, fromTag);
-    if (removals.length > 0) void requestSyncMutation('removeTags', { removals });
-    void mutate((draft) => ({
-      ...draft,
-      quotes: draft.quotes.map((quote) =>
-        quote.tags.includes(fromTag)
-          ? { ...quote, tags: addTag(removeTag(quote.tags, fromTag), toTag), updatedAt: Date.now() }
-          : quote,
-      ),
+    void mutateWithRemovals((current) => ({
+      removals: planTagRemovalAcrossQuotes(current.quotes, fromTag),
+      inbox: {
+        ...current,
+        quotes: current.quotes.map((quote) =>
+          quote.tags.includes(fromTag)
+            ? { ...quote, tags: addTag(removeTag(quote.tags, fromTag), toTag), updatedAt: Date.now() }
+            : quote,
+        ),
+      },
     }));
   }
 
   function deleteTagEverywhere(tag: string) {
     const target = normalizeTag(tag);
     if (target === '') return;
-    // Compute removals synchronously from current React state — see note above.
-    const removals = planTagRemovalAcrossQuotes(inbox.quotes, target);
-    if (removals.length > 0) void requestSyncMutation('removeTags', { removals });
-    void mutate((draft) => ({
-      ...draft,
-      quotes: draft.quotes.map((quote) =>
-        quote.tags.includes(target)
-          ? { ...quote, tags: removeTag(quote.tags, target), updatedAt: Date.now() }
-          : quote,
-      ),
+    void mutateWithRemovals((current) => ({
+      removals: planTagRemovalAcrossQuotes(current.quotes, target),
+      inbox: {
+        ...current,
+        quotes: current.quotes.map((quote) =>
+          quote.tags.includes(target)
+            ? { ...quote, tags: removeTag(quote.tags, target), updatedAt: Date.now() }
+            : quote,
+        ),
+      },
     }));
   }
 

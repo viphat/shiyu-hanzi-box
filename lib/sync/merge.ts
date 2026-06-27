@@ -1,6 +1,5 @@
-// lib/sync/merge.ts
 import { compareTimestamps } from './clock';
-import { mergeRegister, mergeRegisterMap, mergeStampMap } from './registers';
+import { mergeRegisterMap, mergeStampMap } from './registers';
 import type {
   HybridTimestamp,
   OccurrenceNode,

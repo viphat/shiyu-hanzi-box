@@ -1,4 +1,3 @@
-// tests/sync/sync-mutation-handler.test.ts
 import { beforeEach, describe, expect, it } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import {

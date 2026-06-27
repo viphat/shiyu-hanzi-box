@@ -1,4 +1,3 @@
-// tests/sync/write-path-tombstone-loss.test.ts
 //
 // Reproduces the tombstone-loss exposure introduced when inbox writes were
 // routed through the sole-writer broker (commit 06a5332). The dashboard delete

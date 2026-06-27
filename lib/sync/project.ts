@@ -1,4 +1,3 @@
-// lib/sync/project.ts
 import type {
   AiSettings,
   AppSettings,

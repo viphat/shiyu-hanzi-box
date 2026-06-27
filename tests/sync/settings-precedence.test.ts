@@ -1,4 +1,3 @@
-// tests/sync/settings-precedence.test.ts
 //
 // Tests for review finding #3: settings/AI are stamped by real last-edit time,
 // so a fresh joiner's epoch-stamped (0) settings do NOT wipe the vault's

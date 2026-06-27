@@ -73,7 +73,7 @@ export function Toolbar({
   }
 
   async function downloadBackup() {
-    const confirmed = window.confirm(t(locale, 'sync.warn.includesApiKey'));
+    const confirmed = window.confirm(t(locale, 'sync.warn.backupUnencrypted'));
     if (!confirmed) return;
     const json = serializeFullBackup(inbox, settings, aiSettings);
     const blob = new Blob([json], { type: 'application/json;charset=utf-8' });

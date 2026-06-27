@@ -4,20 +4,20 @@ import {
   migrateQuoteCategoryToTags,
   normalizeTag,
   normalizeTags,
+  planTagRemovalAcrossQuotes,
   planTagWrite,
   removeTag,
   tagCounts,
 } from '../lib/tags';
 import type { QuoteEntry } from '../lib/types';
 
-function quote(over: Partial<QuoteEntry> = {}): QuoteEntry {
+function quote(over: Partial<QuoteEntry> & { category?: string } = {}): QuoteEntry & { category?: string } {
   return {
     id: over.id ?? 'q1',
     kind: 'quote',
     text: 't',
     note: '',
     status: 'inbox',
-    category: 'uncategorized',
     tags: [],
     createdAt: 1,
     updatedAt: 1,
@@ -26,7 +26,7 @@ function quote(over: Partial<QuoteEntry> = {}): QuoteEntry {
     sourceDomain: '',
     surrounding: '',
     ...over,
-  } as QuoteEntry;
+  } as QuoteEntry & { category?: string };
 }
 
 describe('normalizeTag', () => {
@@ -84,6 +84,41 @@ describe('planTagWrite', () => {
       next: ['a', 'b'],
       removed: [],
     });
+  });
+});
+
+describe('planTagRemovalAcrossQuotes', () => {
+  it('collects a batched removal entry for every quote containing the target', () => {
+    const quotes = [
+      quote({ id: 'q1', tags: ['poetry', 'tang'] }),
+      quote({ id: 'q2', tags: ['prose'] }),
+      quote({ id: 'q3', tags: ['poetry'] }),
+    ];
+    expect(planTagRemovalAcrossQuotes(quotes, 'poetry')).toEqual([
+      { quoteId: 'q1', tags: ['poetry'] },
+      { quoteId: 'q3', tags: ['poetry'] },
+    ]);
+  });
+
+  it('returns an empty array when no quote has the target tag', () => {
+    const quotes = [quote({ id: 'q1', tags: ['prose'] })];
+    expect(planTagRemovalAcrossQuotes(quotes, 'poetry')).toEqual([]);
+  });
+
+  it('is a pure synchronous read — drives the removeTags payload for rename/delete', () => {
+    // Regression: rename/deleteTagEverywhere must build removals synchronously
+    // from React state, NOT inside the async `mutate` mapper (which runs a
+    // microtask later, after the caller's removals.length check).
+    const quotes = [
+      quote({ id: 'q1', tags: ['old'] }),
+      quote({ id: 'q2', tags: ['old', 'keep'] }),
+    ];
+    const removals = planTagRemovalAcrossQuotes(quotes, 'old');
+    expect(removals).toHaveLength(2);
+    expect(removals).toEqual([
+      { quoteId: 'q1', tags: ['old'] },
+      { quoteId: 'q2', tags: ['old'] },
+    ]);
   });
 });
 

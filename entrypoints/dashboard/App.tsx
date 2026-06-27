@@ -35,6 +35,7 @@ import { useInbox } from './hooks/useInbox';
 import { useSettings } from './hooks/useSettings';
 import { requestSyncMutation } from '../background/sync-mutation-handler';
 import { wordKey } from '@/lib/sync/project';
+import { addTag, planTagWrite, planTagRemovalAcrossQuotes, removeTag, normalizeTag, tagCounts, quoteMatchesTags } from '@/lib/tags';
 
 type Tab = 'review' | 'words' | 'quotes';
 type StatusFilter = 'all' | Status;
@@ -61,6 +62,16 @@ export function App() {
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<Tab>('review');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('inbox');
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+
+  function toggleTag(tag: string) {
+    setSelectedTags((prev) => {
+      const next = new Set(prev);
+      if (next.has(tag)) next.delete(tag);
+      else next.add(tag);
+      return next;
+    });
+  }
   const [reviewNow, setReviewNow] = useState(() => Date.now());
   const normalizedQuery = query.trim().toLowerCase();
   const nextSrsWakeAt = useMemo(
@@ -86,17 +97,22 @@ export function App() {
   const matches = useMemo(() => {
     const byStatus = (status: Status) =>
       statusFilter === 'all' || status === statusFilter;
-
+    const quotesByQueryStatus = inbox.quotes.filter(
+      (quote) => entryMatchesQuery(quote, normalizedQuery) && byStatus(quote.status),
+    );
     return {
       words: inbox.words.filter(
         (word) => entryMatchesQuery(word, normalizedQuery) && byStatus(word.status),
       ),
-      quotes: inbox.quotes.filter(
-        (quote) =>
-          entryMatchesQuery(quote, normalizedQuery) && byStatus(quote.status),
-      ),
+      quotesByQueryStatus,
+      quotes: quotesByQueryStatus.filter((quote) => quoteMatchesTags(quote, selectedTags)),
     };
-  }, [inbox, normalizedQuery, statusFilter]);
+  }, [inbox, normalizedQuery, statusFilter, selectedTags]);
+
+  const knownTags = useMemo(
+    () => [...tagCounts(inbox.quotes).keys()].sort(),
+    [inbox.quotes],
+  );
 
   const srsSnapshot = useMemo(() => {
     const items = buildSrsQueue(inbox, reviewNow, settings.srs);
@@ -173,6 +189,55 @@ export function App() {
     mutate((current) => ({
       ...current,
       quotes: current.quotes.filter((quote) => quote.id !== id),
+    }));
+  }
+
+  function setQuoteTags(id: string, nextTags: string[]) {
+    const current = inbox.quotes.find((q) => q.id === id);
+    if (!current) return;
+    const { next, removed } = planTagWrite(current.tags, nextTags);
+    if (removed.length > 0) {
+      void requestSyncMutation('removeTags', { removals: [{ quoteId: id, tags: removed }] });
+    }
+    void mutate((draft) => ({
+      ...draft,
+      quotes: draft.quotes.map((quote) =>
+        quote.id === id ? { ...quote, tags: next, updatedAt: Date.now() } : quote,
+      ),
+    }));
+  }
+
+  function renameTagEverywhere(from: string, to: string) {
+    const fromTag = normalizeTag(from);
+    const toTag = normalizeTag(to);
+    if (fromTag === '' || toTag === '' || fromTag === toTag) return;
+    // Compute removals synchronously from current React state — `mutate` reads
+    // storage asynchronously, so a mapper-populated array would be read too early.
+    const removals = planTagRemovalAcrossQuotes(inbox.quotes, fromTag);
+    if (removals.length > 0) void requestSyncMutation('removeTags', { removals });
+    void mutate((draft) => ({
+      ...draft,
+      quotes: draft.quotes.map((quote) =>
+        quote.tags.includes(fromTag)
+          ? { ...quote, tags: addTag(removeTag(quote.tags, fromTag), toTag), updatedAt: Date.now() }
+          : quote,
+      ),
+    }));
+  }
+
+  function deleteTagEverywhere(tag: string) {
+    const target = normalizeTag(tag);
+    if (target === '') return;
+    // Compute removals synchronously from current React state — see note above.
+    const removals = planTagRemovalAcrossQuotes(inbox.quotes, target);
+    if (removals.length > 0) void requestSyncMutation('removeTags', { removals });
+    void mutate((draft) => ({
+      ...draft,
+      quotes: draft.quotes.map((quote) =>
+        quote.tags.includes(target)
+          ? { ...quote, tags: removeTag(quote.tags, target), updatedAt: Date.now() }
+          : quote,
+      ),
     }));
   }
 
@@ -334,8 +399,15 @@ export function App() {
           ) : (
             <QuoteList
               quotes={matches.quotes}
+              cloudQuotes={matches.quotesByQueryStatus}
               onUpdate={updateQuote}
               onDelete={deleteQuote}
+              onSetTags={setQuoteTags}
+              knownTags={knownTags}
+              selectedTags={selectedTags}
+              onToggleTag={toggleTag}
+              onRenameTag={renameTagEverywhere}
+              onDeleteTag={deleteTagEverywhere}
               locale={locale}
             />
           )}
@@ -374,7 +446,7 @@ function entryMatchesQuery(entry: Entry, query: string): boolean {
   const tags = entry.kind === 'quote' ? entry.tags.join(' ') : '';
   const source =
     entry.kind === 'quote'
-      ? `${entry.category} ${entry.sourceTitle} ${entry.sourceDomain}`
+      ? `${entry.sourceTitle} ${entry.sourceDomain}`
       : entry.occurrences
           .map((occurrence) => `${occurrence.sourceTitle} ${occurrence.sourceDomain}`)
           .join(' ');

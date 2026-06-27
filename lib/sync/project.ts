@@ -20,6 +20,7 @@ import { EMPTY_SYNC_STATE } from './types';
 import { isSuppressed } from './registers';
 import { DEFAULT_SETTINGS } from '../settings';
 import { DEFAULT_AI_SETTINGS } from '../ai/settings';
+import { normalizeTags } from '../tags';
 
 // ---------------------------------------------------------------------------
 // Public key helpers
@@ -169,10 +170,24 @@ function projectWord(word: WordEntry, ctx: BootstrapContext): WordNode {
   };
 }
 
-function projectQuote(quote: QuoteEntry, ctx: BootstrapContext): QuoteNode {
+function projectQuote(quote: QuoteEntry, ctx: BootstrapContext, prev?: QuoteNode): QuoteNode {
   const s = stamp(quote.updatedAt, ctx.replicaId);
-  // Override: call projectScheduler ONCE and destructure both fields (avoids double-computation)
   const { reviewEvents, snapshot } = projectScheduler(`quote:${quote.id}`, quote.review, ctx.replicaId);
+
+  // OR-Set add stamps with carry-forward: an already-present tag keeps its
+  // persisted add stamp (so unrelated edits never move it past a tombstone);
+  // a new tag or a re-add mints a fresh stamp guaranteed above any prior
+  // tombstone (which also closes the same-millisecond re-add race).
+  const tags: Record<string, HybridTimestamp> = {};
+  for (const tag of normalizeTags(quote.tags)) {
+    const prevAdd = prev?.tags?.[tag];
+    const prevTomb = prev?.tagTombstones?.[tag];
+    const stillPresent = prevAdd && !isSuppressed(prevAdd, prevTomb);
+    tags[tag] = stillPresent
+      ? prevAdd
+      : stamp(Math.max(quote.updatedAt, (prevTomb?.wallTime ?? 0) + 1), ctx.replicaId);
+  }
+
   return {
     id: quote.id,
     createdAt: reg(quote.createdAt, stamp(quote.createdAt, ctx.replicaId)),
@@ -180,8 +195,6 @@ function projectQuote(quote: QuoteEntry, ctx: BootstrapContext): QuoteNode {
       text: reg(quote.text, s),
       note: reg(quote.note, s),
       status: reg(quote.status, s),
-      category: reg(quote.category, s),
-      tags: reg(quote.tags, s),
       sourceTitle: reg(quote.sourceTitle, s),
       sourceUrl: reg(quote.sourceUrl, s),
       sourceDomain: reg(quote.sourceDomain, s),
@@ -190,6 +203,8 @@ function projectQuote(quote: QuoteEntry, ctx: BootstrapContext): QuoteNode {
       traditionalText: reg(quote.traditionalText ?? null, s),
       updatedAt: reg(quote.updatedAt, s),
     },
+    tags,
+    tagTombstones: {},
     reviewEvents,
     snapshot,
   };
@@ -204,6 +219,7 @@ export function projectInbox(
   settings: AppSettings,
   ai: AiSettings,
   ctx: BootstrapContext,
+  persisted?: SyncState,
 ): SyncState {
   // Use the tracked last-edit timestamps for settings/AI so that:
   //   0 ("unversioned", never edited) loses to any real remote stamp, and
@@ -234,7 +250,9 @@ export function projectInbox(
     },
   };
   for (const word of inbox.words) state.words[wordKey(word.normalized)] = projectWord(word, ctx);
-  for (const quote of inbox.quotes) state.quotes[quote.id] = projectQuote(quote, ctx);
+  for (const quote of inbox.quotes) {
+    state.quotes[quote.id] = projectQuote(quote, ctx, persisted?.quotes[quote.id]);
+  }
   return state;
 }
 
@@ -281,6 +299,32 @@ function rebuildReview(node: WordNode | QuoteNode): ReviewState | undefined {
 }
 
 // ---------------------------------------------------------------------------
+// Public: liftLegacyTags
+// ---------------------------------------------------------------------------
+
+/**
+ * Tolerant cross-version read: if a node has no OR-Set `tags` map (authored by
+ * an older client) but carries a legacy `fields.tags` register, fold that
+ * register's value into the OR-Set, each tag stamped with the register's stamp.
+ * Safe to call on already-migrated nodes — it no-ops when `tags` is non-empty.
+ * The empty-trigger is safe: a removed tag leaves a suppressed-but-present
+ * entry, so a touched node's map is never empty; an empty map alongside a
+ * legacy register only occurs for genuinely-old nodes.
+ */
+export function liftLegacyTags(node: QuoteNode): QuoteNode {
+  const hasOrSet = node.tags && Object.keys(node.tags).length > 0;
+  if (hasOrSet) return node;
+  const legacy = node.fields.tags as Register<unknown> | undefined;
+  const legacyValue = legacy?.value;
+  if (!Array.isArray(legacyValue) || legacyValue.length === 0) return node;
+  const tags: Record<string, HybridTimestamp> = {};
+  for (const tag of normalizeTags(legacyValue as string[])) {
+    tags[tag] = legacy!.stamp;
+  }
+  return { ...node, tags };
+}
+
+// ---------------------------------------------------------------------------
 // Public: materialize
 // ---------------------------------------------------------------------------
 
@@ -321,17 +365,21 @@ export function materialize(state: SyncState): {
   words.sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id));
 
   const quotes: QuoteEntry[] = [];
-  for (const [id, node] of Object.entries(state.quotes)) {
-    if (isSuppressed(node.fields.updatedAt?.stamp, state.tombstones[`quote:${id}`])) continue;
+  for (const [id, raw] of Object.entries(state.quotes)) {
+    if (isSuppressed(raw.fields.updatedAt?.stamp, state.tombstones[`quote:${id}`])) continue;
+    const node = liftLegacyTags(raw);
     const review = rebuildReview(node);
+    const tags = Object.entries(node.tags ?? {})
+      .filter(([tag, addStamp]) => !isSuppressed(addStamp, node.tagTombstones?.[tag]))
+      .map(([tag]) => tag)
+      .sort();
     quotes.push({
       id: node.id,
       kind: 'quote',
       text: node.fields.text?.value as string,
       note: (node.fields.note?.value as string) ?? '',
       status: node.fields.status?.value as QuoteEntry['status'],
-      category: (node.fields.category?.value as string) ?? 'uncategorized',
-      tags: (node.fields.tags?.value as string[]) ?? [],
+      tags,
       createdAt: node.createdAt.value,
       updatedAt: node.fields.updatedAt?.value as number,
       sourceTitle: (node.fields.sourceTitle?.value as string) ?? '',

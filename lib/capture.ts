@@ -79,7 +79,6 @@ export async function saveQuote(
       id: makeId(),
       kind: 'quote',
       text: trimmed,
-      category: 'uncategorized',
       tags: [],
       note: '',
       status: 'inbox',

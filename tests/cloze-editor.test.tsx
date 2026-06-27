@@ -40,7 +40,6 @@ function makeQuote(overrides: Partial<QuoteEntry> = {}): QuoteEntry {
     status: 'inbox',
     createdAt: 1,
     updatedAt: 1,
-    category: 'classic',
     sourceTitle: 'Analects',
     sourceUrl: 'https://example.com',
     sourceDomain: 'example.com',

@@ -3,11 +3,13 @@ import {
   legacyOccurrenceId,
   materialize,
   projectInbox,
+  liftLegacyTags,
   wordKey,
 } from '../../lib/sync/project';
 import { DEFAULT_SETTINGS } from '../../lib/settings';
 import { DEFAULT_AI_SETTINGS } from '../../lib/ai/settings';
-import type { Inbox, WordEntry } from '../../lib/types';
+import type { Inbox, WordEntry, QuoteEntry } from '../../lib/types';
+import type { SyncState } from '../../lib/sync/types';
 
 const ctx = { replicaId: 'A', wallTime: 1000 };
 
@@ -55,5 +57,91 @@ describe('project then materialize round-trip', () => {
     const ai = { ...DEFAULT_AI_SETTINGS, apiKey: 'secret', enabled: true };
     const state = projectInbox(inbox, DEFAULT_SETTINGS, ai, ctx);
     expect(materialize(state).ai.apiKey).toBe('secret');
+  });
+});
+
+function quoteFixture(over: Partial<QuoteEntry> = {}): QuoteEntry {
+  return {
+    id: 'q1',
+    kind: 'quote',
+    text: 'hi',
+    note: '',
+    status: 'inbox',
+    tags: [],
+    createdAt: 10,
+    updatedAt: 20,
+    sourceTitle: '',
+    sourceUrl: '',
+    sourceDomain: '',
+    surrounding: '',
+    ...over,
+  } as QuoteEntry;
+}
+
+function project(inbox: { quotes: QuoteEntry[] }, persisted?: SyncState) {
+  return projectInbox(
+    { words: [], quotes: inbox.quotes },
+    DEFAULT_SETTINGS,
+    DEFAULT_AI_SETTINGS,
+    ctx,
+    persisted,
+  );
+}
+
+describe('quote tags OR-Set projection', () => {
+  it('projects local tags into the add-stamp map with empty tombstones', () => {
+    const state = project({ quotes: [quoteFixture({ tags: ['a', 'b'] })] });
+    expect(Object.keys(state.quotes.q1.tags ?? {}).sort()).toEqual(['a', 'b']);
+    expect(state.quotes.q1.tagTombstones).toEqual({});
+  });
+
+  it('round-trips tags through materialize, sorted', () => {
+    const state = project({ quotes: [quoteFixture({ tags: ['b', 'a'] })] });
+    expect(materialize(state).inbox.quotes[0].tags).toEqual(['a', 'b']);
+  });
+
+  it('carries forward an existing tag add stamp (unrelated edit does not move it)', () => {
+    const first = project({ quotes: [quoteFixture({ tags: ['a'], updatedAt: 20 })] });
+    const addStampBefore = first.quotes.q1.tags!.a;
+    // Unrelated edit bumps updatedAt; persisted state seeded as `prev`.
+    const second = project(
+      { quotes: [quoteFixture({ tags: ['a'], updatedAt: 999 })] },
+      first,
+    );
+    expect(second.quotes.q1.tags!.a).toEqual(addStampBefore);
+  });
+
+  it('mints a re-add stamp strictly above a prior tombstone (closes same-ms race)', () => {
+    const prev: SyncState = {
+      ...project({ quotes: [quoteFixture({ tags: [] })] }),
+    };
+    prev.quotes.q1.tags = {};
+    prev.quotes.q1.tagTombstones = { a: { wallTime: 5000, counter: 0, replicaId: 'A' } };
+    // Re-add at the same wallTime as the tombstone.
+    const state = project(
+      { quotes: [quoteFixture({ tags: ['a'], updatedAt: 5000 })] },
+      prev,
+    );
+    expect(state.quotes.q1.tags!.a.wallTime).toBe(5001);
+  });
+
+  it('liftLegacyTags folds a legacy fields.tags register into the OR-Set', () => {
+    const node = {
+      id: 'q1',
+      fields: { tags: { value: ['legacy'], stamp: { wallTime: 7, counter: 0, replicaId: 'A' } } },
+      createdAt: { value: 1, stamp: { wallTime: 1, counter: 0, replicaId: 'A' } },
+      reviewEvents: {},
+    } as never;
+    const lifted = liftLegacyTags(node);
+    expect(Object.keys(lifted.tags ?? {})).toEqual(['legacy']);
+    expect(lifted.tags!.legacy.wallTime).toBe(7);
+  });
+
+  it('materialize reads a node with no tags/tagTombstones without throwing', () => {
+    const state = project({ quotes: [quoteFixture({ tags: ['a'] })] });
+    delete state.quotes.q1.tags;
+    delete state.quotes.q1.tagTombstones;
+    expect(() => materialize(state)).not.toThrow();
+    expect(materialize(state).inbox.quotes[0].tags).toEqual([]);
   });
 });

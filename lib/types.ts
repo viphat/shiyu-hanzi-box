@@ -81,7 +81,6 @@ export interface WordEntry extends EntryBase {
 
 export interface QuoteEntry extends EntryBase {
   kind: 'quote';
-  category: string; // freeform; defaults to 'uncategorized'
   tags: string[];
   sourceTitle: string;
   sourceUrl: string;

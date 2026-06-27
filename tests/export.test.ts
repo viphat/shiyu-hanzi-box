@@ -27,7 +27,6 @@ const quote: QuoteEntry = {
   id: 'q1',
   kind: 'quote',
   text: 'x',
-  category: 'uncategorized',
   tags: [],
   note: '',
   status: 'inbox',

@@ -56,6 +56,31 @@ export function planTagWrite(
 }
 
 /**
+ * Plan a bulk tag removal across many quotes: for every quote that contains
+ * `target` (already normalized by the caller), produce a `{ quoteId, tags:
+ * [target] }` removal entry. Pure — reads the quotes synchronously so callers
+ * can build the batched `removeTags` payload before any async persistence.
+ */
+export function planTagRemovalAcrossQuotes(
+  quotes: Array<{ id: string; tags: string[] }>,
+  target: string,
+): Array<{ quoteId: string; tags: string[] }> {
+  const removals: Array<{ quoteId: string; tags: string[] }> = [];
+  for (const quote of quotes) {
+    if (quote.tags.includes(target)) {
+      removals.push({ quoteId: quote.id, tags: [target] });
+    }
+  }
+  return removals;
+}
+
+/** OR semantics: a quote matches if it has any selected tag (empty set = all). */
+export function quoteMatchesTags(quote: QuoteEntry, selectedTags: Set<string>): boolean {
+  if (selectedTags.size === 0) return true;
+  return quote.tags.some((tag) => selectedTags.has(tag));
+}
+
+/**
  * Fold a quote's freeform `category` into `tags` and drop the `category` field.
  * Idempotent; tolerates quotes that already lack `category`. The default
  * `uncategorized` contributes no tag.

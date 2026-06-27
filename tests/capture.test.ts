@@ -56,7 +56,15 @@ describe('saveQuote', () => {
     await saveQuote('学而时习之', src);
     const inbox = await getInbox();
     expect(inbox.quotes).toHaveLength(2);
-    expect(inbox.quotes[0].category).toBe('uncategorized');
+  });
+
+  it('captured quotes have no category field and start with empty tags', async () => {
+    const quote = await saveQuote('你好世界', {
+      sourceTitle: 't', sourceUrl: 'u', sourceDomain: 'd', surrounding: 's', capturedAt: 1,
+    });
+    expect(quote).not.toBeNull();
+    expect('category' in (quote as object)).toBe(false);
+    expect(quote!.tags).toEqual([]);
   });
 
   it('ignores empty text', async () => {

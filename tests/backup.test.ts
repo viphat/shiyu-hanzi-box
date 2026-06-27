@@ -44,7 +44,6 @@ const quote: QuoteEntry = {
   id: 'q1',
   kind: 'quote',
   text: '学而时习之',
-  category: 'classic',
   tags: ['论语'],
   note: '',
   status: 'inbox',
@@ -124,6 +123,21 @@ describe('parseBackup', () => {
     expect(() => parseBackup(JSON.stringify(broken))).toThrow(
       /Invalid backup inbox/,
     );
+  });
+
+  it('restoring an old backup folds category into tags and drops category', () => {
+    const raw = JSON.stringify({
+      app: 'shiyu-hanzi-box', formatVersion: 2, exportedAt: '2026-01-01T00:00:00.000Z',
+      words: [],
+      quotes: [{
+        id: 'q1', kind: 'quote', text: 't', note: '', status: 'inbox',
+        category: 'Poetry', tags: ['a'], createdAt: 1, updatedAt: 1,
+        sourceTitle: '', sourceUrl: '', sourceDomain: '', surrounding: '',
+      }],
+    });
+    const inbox = parseBackup(raw);
+    expect(inbox.quotes[0].tags).toEqual(['a', 'poetry']);
+    expect('category' in inbox.quotes[0]).toBe(false);
   });
 });
 

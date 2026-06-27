@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { deleteEntity, mergeSyncState } from '../../lib/sync/merge';
-import { projectInbox, wordKey } from '../../lib/sync/project';
+import { deleteEntity, mergeSyncState, mergeQuoteNodes } from '../../lib/sync/merge';
+import { projectInbox, materialize, wordKey } from '../../lib/sync/project';
 import { DEFAULT_SETTINGS } from '../../lib/settings';
 import { DEFAULT_AI_SETTINGS } from '../../lib/ai/settings';
-import type { Inbox, WordEntry } from '../../lib/types';
+import type { Inbox, WordEntry, QuoteEntry } from '../../lib/types';
+import type { QuoteNode } from '../../lib/sync/types';
 
 function word(over: Partial<WordEntry>): WordEntry {
   return {
@@ -63,5 +64,86 @@ describe('merge algebra', () => {
     const order1 = mergeSyncState(mergeSyncState(a, b), c);
     const order2 = mergeSyncState(mergeSyncState(c, a), b);
     expect(order1).toEqual(order2);
+  });
+});
+
+function qnode(over: Partial<QuoteNode> = {}): QuoteNode {
+  return {
+    id: 'q1',
+    fields: { updatedAt: { value: 1, stamp: { wallTime: 1, counter: 0, replicaId: 'A' } } },
+    createdAt: { value: 1, stamp: { wallTime: 1, counter: 0, replicaId: 'A' } },
+    tags: {},
+    tagTombstones: {},
+    reviewEvents: {},
+    ...over,
+  };
+}
+const ts = (w: number, r = 'A') => ({ wallTime: w, counter: 0, replicaId: r });
+
+describe('mergeQuoteNodes tag OR-Set', () => {
+  it('unions concurrent adds of different tags', () => {
+    const a = qnode({ tags: { a: ts(10) } });
+    const b = qnode({ tags: { b: ts(11, 'B') } });
+    const m = mergeQuoteNodes(a, b);
+    expect(Object.keys(m.tags!).sort()).toEqual(['a', 'b']);
+  });
+
+  it('a remove suppresses a stale add it causally saw', () => {
+    const a = qnode({ tags: { a: ts(10) }, tagTombstones: { a: ts(20) } });
+    const b = qnode({ tags: { a: ts(10) } });
+    const m = mergeQuoteNodes(a, b);
+    // add stamp 10 <= tombstone 20 => suppressed
+    expect(m.tagTombstones!.a.wallTime).toBe(20);
+    expect(m.tags!.a.wallTime).toBe(10);
+  });
+
+  it('keeps the max add stamp and max tombstone per tag', () => {
+    const a = qnode({ tags: { a: ts(10) }, tagTombstones: { a: ts(15) } });
+    const b = qnode({ tags: { a: ts(30, 'B') }, tagTombstones: {} });
+    const m = mergeQuoteNodes(a, b);
+    expect(m.tags!.a.wallTime).toBe(30);
+    expect(m.tagTombstones!.a.wallTime).toBe(15);
+  });
+});
+
+function quoteInbox(tags: string[], updatedAt: number): Inbox {
+  return {
+    words: [],
+    quotes: [{
+      id: 'q1', kind: 'quote', text: 'hi', note: '', status: 'inbox',
+      tags, createdAt: 10, updatedAt,
+      sourceTitle: '', sourceUrl: '', sourceDomain: '', surrounding: '',
+    } as QuoteEntry],
+  };
+}
+
+describe('tag resurrection regression', () => {
+  it('a remove on A is not resurrected by an unrelated edit on B', () => {
+    const ctxA = { replicaId: 'A', wallTime: 100 };
+    const ctxB = { replicaId: 'B', wallTime: 100 };
+
+    // Both start with tag "foo" at updatedAt 20.
+    let a = projectInbox(quoteInbox(['foo'], 20), DEFAULT_SETTINGS, DEFAULT_AI_SETTINGS, ctxA);
+
+    // A removes foo: record tombstone at wallTime 50, project the now-empty tag set.
+    a.quotes.q1.tagTombstones = { foo: { wallTime: 50, counter: 0, replicaId: 'A' } };
+    a = mergeSyncState(
+      a,
+      projectInbox(quoteInbox([], 50), DEFAULT_SETTINGS, DEFAULT_AI_SETTINGS, ctxA, a),
+    );
+    expect(materialize(a).inbox.quotes[0].tags).toEqual([]); // suppressed on A
+
+    // B still holds foo and edits its note (updatedAt 80) WITHOUT seeing the tombstone.
+    const bPrev = projectInbox(quoteInbox(['foo'], 20), DEFAULT_SETTINGS, DEFAULT_AI_SETTINGS, ctxB);
+    const b = mergeSyncState(
+      bPrev,
+      projectInbox(quoteInbox(['foo'], 80), DEFAULT_SETTINGS, DEFAULT_AI_SETTINGS, ctxB, bPrev),
+    );
+    // Carry-forward keeps foo's add stamp at 20, NOT 80.
+    expect(b.quotes.q1.tags!.foo.wallTime).toBe(20);
+
+    // A merges B's replica: foo must stay removed.
+    const merged = mergeSyncState(a, b);
+    expect(materialize(merged).inbox.quotes[0].tags).toEqual([]);
   });
 });

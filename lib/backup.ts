@@ -1,4 +1,5 @@
 import { clozesOverlap } from './cloze';
+import { migrateQuoteCategoryToTags } from './tags';
 import type {
   AiSettings,
   AppSettings,
@@ -122,7 +123,6 @@ function isQuoteEntry(value: unknown): value is QuoteEntry {
     isRecord(value) &&
     value.kind === 'quote' &&
     hasEntryBase(value) &&
-    isString(value.category) &&
     isStringArray(value.tags) &&
     isString(value.sourceTitle) &&
     isString(value.sourceUrl) &&
@@ -318,7 +318,9 @@ function cloneInbox(inbox: Inbox): Inbox {
       const { tags: _tags, ...rest } = word as WordEntry & { tags?: unknown };
       return cloneJson(rest) as WordEntry;
     }),
-    quotes: cloneJson(inbox.quotes).map((quote) => sanitizeQuoteClozes(quote)),
+    quotes: cloneJson(inbox.quotes).map((quote) =>
+      sanitizeQuoteClozes(migrateQuoteCategoryToTags(quote) as QuoteEntry),
+    ),
   };
 }
 

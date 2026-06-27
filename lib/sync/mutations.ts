@@ -149,6 +149,51 @@ export async function applyDeletion(keys: string[]): Promise<void> {
   return run;
 }
 
+export async function applyTagRemoval(
+  removals: Array<{ quoteId: string; tags: string[] }>,
+): Promise<void> {
+  const run = chain.then(async () => {
+    const replicaId = await ensureReplicaId();
+    const meta = await syncMetadataStorage.getValue();
+    const state: SyncState = meta.state ?? (JSON.parse(JSON.stringify(EMPTY_SYNC_STATE)) as SyncState);
+    const now = Date.now();
+    for (const { quoteId, tags } of removals) {
+      let node = state.quotes[quoteId];
+      if (!node) {
+        node = {
+          id: quoteId,
+          fields: {},
+          createdAt: { value: now, stamp: { wallTime: now, counter: 0, replicaId } },
+          tags: {},
+          tagTombstones: {},
+          reviewEvents: {},
+        };
+        state.quotes[quoteId] = node;
+      }
+      if (!node.tagTombstones) node.tagTombstones = {};
+      for (const tag of tags) {
+        node.tagTombstones[tag] = { wallTime: now, counter: 0, replicaId };
+      }
+    }
+    const nextRevision = meta.revision + 1;
+    await syncMetadataStorage.setValue({
+      revision: nextRevision,
+      state,
+      lastDigest: meta.lastDigest,
+      appSettingsUpdatedAt: meta.appSettingsUpdatedAt,
+      aiSettingsUpdatedAt: meta.aiSettingsUpdatedAt,
+    });
+    await mutateSyncConfig((cfg) => ({
+      ...cfg,
+      localRevision: nextRevision,
+      pending: true,
+      status: cfg.vaultId ? 'pending' : cfg.status,
+    }));
+  });
+  chain = run;
+  return run;
+}
+
 export async function reconcileOnStartup(): Promise<void> {
   const meta = await syncMetadataStorage.getValue();
   const cfg = await mutateSyncConfig((c) => c);

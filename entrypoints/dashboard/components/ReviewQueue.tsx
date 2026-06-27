@@ -241,9 +241,16 @@ export function ReviewCard({
               ? t(locale, 'app.inbox')
               : t(locale, 'app.reviewed')}
           </span>
-          {entry.kind === 'quote' && (
-            <span className="rounded-sm border border-border bg-paper-input px-2 py-1">
-              {entry.category}
+          {entry.kind === 'quote' && entry.tags.length > 0 && (
+            <span className="flex flex-wrap gap-1">
+              {entry.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-1 text-cinnabar"
+                >
+                  #{tag}
+                </span>
+              ))}
             </span>
           )}
           {source && (

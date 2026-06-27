@@ -1,4 +1,4 @@
-import { applyDeletion, applyLocalMutation } from '../../lib/sync/mutations';
+import { applyDeletion, applyLocalMutation, applyTagRemoval } from '../../lib/sync/mutations';
 import { setInbox } from '../../lib/storage';
 import { replaceSettings } from '../../lib/settings';
 import { aiSettingsStorage } from '../../lib/ai/settings';
@@ -18,13 +18,16 @@ export const SYNC_MUTATION_MESSAGE = 'shiyu:sync-mutation';
 
 export interface SyncMutationRequestMessage {
   type: typeof SYNC_MUTATION_MESSAGE;
-  kind: 'inbox' | 'settings' | 'ai' | 'delete';
+  kind: 'inbox' | 'settings' | 'ai' | 'delete' | 'removeTags';
   payload: unknown;
 }
 
 async function writeKind(kind: SyncMutationRequestMessage['kind'], payload: unknown) {
   if (kind === 'delete') {
     await applyDeletion(payload as string[]);
+  } else if (kind === 'removeTags') {
+    const { removals } = payload as { removals: Array<{ quoteId: string; tags: string[] }> };
+    await applyTagRemoval(removals);
   } else {
     await applyLocalMutation(kind, async () => {
       if (kind === 'inbox') await setInbox(payload as Inbox);

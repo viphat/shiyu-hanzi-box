@@ -216,13 +216,30 @@ function FolderSyncConnectedView({
   );
 }
 
+// ---- Error code helper ----
+
+/**
+ * Maps known vault error codes to localized messages.
+ * Falls back to the raw message for unknown codes.
+ */
+function errorMessage(locale: UiLocale, code: string): string {
+  const map: Record<string, Parameters<typeof t>[1]> = {
+    'vault-exists': 'sync.error.vaultExists',
+    'wrong-passphrase': 'sync.error.wrongPassphrase',
+    'vault-invalid': 'sync.error.vaultInvalid',
+  };
+  const key = map[code];
+  return key ? t(locale, key) : code;
+}
+
 // ---- Dialog components ----
 
-function PassphraseDialog({
+export function PassphraseDialog({
   locale,
   title,
   warning,
   confirmLabel,
+  requireConfirm,
   onConfirm,
   onCancel,
 }: {
@@ -230,12 +247,17 @@ function PassphraseDialog({
   title: string;
   warning?: string;
   confirmLabel: string;
+  requireConfirm: boolean;
   onConfirm: (passphrase: string, label: string) => void;
   onCancel: () => void;
 }) {
   const [passphrase, setPassphrase] = useState('');
+  const [confirmPassphrase, setConfirmPassphrase] = useState('');
   const [label, setLabel] = useState('');
   const [confirmed, setConfirmed] = useState(!warning);
+
+  const mismatch = requireConfirm && passphrase !== '' && confirmPassphrase !== '' && passphrase !== confirmPassphrase;
+  const isSubmitDisabled = !passphrase || !confirmed || (requireConfirm && (confirmPassphrase === '' || passphrase !== confirmPassphrase));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -268,6 +290,22 @@ function PassphraseDialog({
               autoFocus
             />
           </label>
+          {requireConfirm && (
+            <label className="block text-[11px] font-medium text-muted">
+              {t(locale, 'sync.dialog.passphraseConfirm')}
+              <input
+                type="password"
+                value={confirmPassphrase}
+                onChange={(e) => setConfirmPassphrase(e.target.value)}
+                className="mt-1 w-full rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs text-ink outline-none focus:border-cinnabar-fade"
+              />
+              {mismatch && (
+                <span className="mt-1 block text-[11px] text-cinnabar">
+                  {t(locale, 'sync.dialog.passphraseMismatch')}
+                </span>
+              )}
+            </label>
+          )}
           <label className="block text-[11px] font-medium text-muted">
             {t(locale, 'sync.dialog.deviceLabel')}
             <input
@@ -290,7 +328,7 @@ function PassphraseDialog({
           </button>
           <button
             type="button"
-            disabled={!passphrase || !confirmed}
+            disabled={isSubmitDisabled}
             onClick={() => onConfirm(passphrase, label)}
             className="rounded-sm bg-cinnabar px-3 py-1.5 text-xs font-medium text-white tracking-[1px] transition hover:brightness-95 disabled:opacity-50"
           >
@@ -336,7 +374,7 @@ export function FolderSync({ locale = 'zh-CN' }: { locale?: UiLocale }) {
       setConfig(next);
     } catch (err) {
       if (err instanceof Error && err.name !== 'AbortError') {
-        setError(err.message);
+        setError(errorMessage(locale, err.message));
       }
     }
   }
@@ -351,7 +389,7 @@ export function FolderSync({ locale = 'zh-CN' }: { locale?: UiLocale }) {
       setConfig(next);
     } catch (err) {
       if (err instanceof Error && err.name !== 'AbortError') {
-        setError(err.message);
+        setError(errorMessage(locale, err.message));
       }
     }
   }
@@ -426,6 +464,7 @@ export function FolderSync({ locale = 'zh-CN' }: { locale?: UiLocale }) {
           locale={locale}
           title={t(locale, 'sync.action.createVault')}
           confirmLabel={t(locale, 'sync.action.createVault')}
+          requireConfirm={true}
           onConfirm={(p, l) => void handleCreateVault(p, l)}
           onCancel={() => setDialog(null)}
         />
@@ -437,6 +476,7 @@ export function FolderSync({ locale = 'zh-CN' }: { locale?: UiLocale }) {
           title={t(locale, 'sync.action.joinVault')}
           warning={t(locale, 'sync.warn.joinReplacesSettings')}
           confirmLabel={t(locale, 'sync.action.joinVault')}
+          requireConfirm={false}
           onConfirm={(p, l) => void handleJoinVault(p, l)}
           onCancel={() => setDialog(null)}
         />

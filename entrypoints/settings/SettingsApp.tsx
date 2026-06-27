@@ -12,7 +12,8 @@ import { browser } from 'wxt/browser';
 import iconUrl from '../../assets/icon.png';
 import { testAiConnection as testAiProviderConnection } from '@/lib/ai/client';
 import { requestAiSettingsPermission } from '@/lib/ai/permissions';
-import { DEFAULT_AI_SETTINGS, getAiSettings, setAiSettings } from '@/lib/ai/settings';
+import { DEFAULT_AI_SETTINGS, getAiSettings } from '@/lib/ai/settings';
+import { requestSyncMutation } from '@/entrypoints/background/sync-mutation-handler';
 import { t } from '@/lib/i18n';
 import { manualKaikkiDownloadUrl } from '@/lib/kaikki';
 import { clearKaikkiCache } from '@/lib/kaikki-cache';
@@ -211,7 +212,7 @@ export function SettingsApp() {
       setAiTestResult({ ok: false, message: 'Provider permission was not granted.' });
       return false;
     }
-    await setAiSettings(next);
+    await requestSyncMutation('ai', next);
     setAiSettingsState(next);
     setMessage({ tone: 'success', text: t(locale, 'settings.saved') });
     return true;

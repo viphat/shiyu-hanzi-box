@@ -5,7 +5,7 @@ import { decryptReplica, encryptReplica } from './vault';
 import { setInbox } from '../storage';
 import { replaceSettings, getSettings } from '../settings';
 import { aiSettingsStorage } from '../ai/settings';
-import { applyLocalMutation, readDomainSnapshot, syncMetadataStorage } from './mutations';
+import { applyLocalMutationIfUnchanged, readDomainSnapshot, syncMetadataStorage } from './mutations';
 import { getSyncConfig, mutateSyncConfig } from './local';
 import type { SyncError, SyncReplica, SyncState, SyncStatus } from './types';
 import type { SyncFs } from './files';
@@ -23,12 +23,25 @@ export async function runSyncPass(
 ): Promise<{ status: SyncStatus; warnings: SyncError[] }> {
   const warnings: SyncError[] = [];
 
+  // Capture the metadata revision BEFORE reading the snapshot so we can detect
+  // any concurrent write that arrives during the slow replica I/O window.
+  // We use the metadata revision (not syncConfig.localRevision) because
+  // applyLocalMutation writes it fully-awaited inside the mutations chain,
+  // making it the reliable canonical counter for FIFO comparisons.
+  const baseline = (await syncMetadataStorage.getValue()).revision;
+
+  // Show 'syncing' so the badge/settings reflect that a pass is in progress.
+  await mutateSyncConfig((c) => ({ ...c, status: 'syncing' as SyncStatus }));
+
   // Local state -> sync state.
   const { inbox, settings, ai } = await readDomainSnapshot();
-  const persisted = (await syncMetadataStorage.getValue()).state;
+  const metaSnapshot = await syncMetadataStorage.getValue();
+  const persisted = metaSnapshot.state;
   let merged: SyncState = projectInbox(inbox, settings, ai, {
     replicaId: deps.replicaId,
     wallTime: deps.now(),
+    settingsStamp: metaSnapshot.appSettingsUpdatedAt,
+    aiStamp: metaSnapshot.aiSettingsUpdatedAt,
   });
   // Seed from persisted state so tombstones (and prior merged data) carry forward.
   // The fresh projection's field stamps win over older persisted ones (LWW);
@@ -51,9 +64,10 @@ export async function runSyncPass(
     }
   }
 
-  // Persist merged domain through the broker (sole writer).
+  // Persist merged domain through the broker (sole writer), guarded against
+  // concurrent writes that arrived during the replica I/O above.
   const out = materialize(merged);
-  await applyLocalMutation('inbox', async () => {
+  const written = await applyLocalMutationIfUnchanged('inbox', baseline, async () => {
     await setInbox(out.inbox);
     const current = await getSettings();
     await replaceSettings({
@@ -64,6 +78,15 @@ export async function runSyncPass(
     });
     await aiSettingsStorage.setValue(out.ai);
   });
+
+  if (!written) {
+    // A concurrent local write landed during the pass — the merged state is
+    // based on a stale snapshot, so we must NOT overwrite it. Stay pending so
+    // the next debounced/periodic pass picks up the new local state.
+    await mutateSyncConfig((c) => ({ ...c, pending: true, status: 'pending' }));
+    return { status: 'pending', warnings };
+  }
+
   // Capture the revision right after our own write — this is the expected revision.
   const revisionAfterOwnWrite = (await getSyncConfig()).localRevision;
   await syncMetadataStorage.setValue({

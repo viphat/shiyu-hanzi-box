@@ -76,6 +76,18 @@ export const PORTABLE_APP_FIELDS = [
 export interface BootstrapContext {
   replicaId: string;
   wallTime: number;
+  /**
+   * Wall-clock ms of the last user edit to app settings (kaikki included).
+   * 0 = never edited ("unversioned") — loses to any real vault stamp.
+   * Defaults to 0 when omitted.
+   */
+  settingsStamp?: number;
+  /**
+   * Wall-clock ms of the last user edit to AI settings.
+   * 0 = never edited ("unversioned") — loses to any real vault stamp.
+   * Defaults to 0 when omitted.
+   */
+  aiStamp?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -194,7 +206,13 @@ export function projectInbox(
   ai: AiSettings,
   ctx: BootstrapContext,
 ): SyncState {
-  const s = stamp(ctx.wallTime, ctx.replicaId);
+  // Use the tracked last-edit timestamps for settings/AI so that:
+  //   0 ("unversioned", never edited) loses to any real remote stamp, and
+  //   a real edit timestamp wins by recency rather than "last-synced".
+  // Inbox domain stamps (words/quotes/occurrences/review) always use their
+  // own domain timestamps — unchanged.
+  const sSettings = stamp(ctx.settingsStamp ?? 0, ctx.replicaId);
+  const sAi = stamp(ctx.aiStamp ?? 0, ctx.replicaId);
   const state: SyncState = {
     ...EMPTY_SYNC_STATE,
     replicas: [ctx.replicaId],
@@ -202,18 +220,18 @@ export function projectInbox(
     quotes: {},
     tombstones: {},
     appSettings: {
-      uiLocale: reg(settings.uiLocale, s),
-      'srs.desiredRetention': reg(settings.srs.desiredRetention, s),
-      'srs.maximumIntervalDays': reg(settings.srs.maximumIntervalDays, s),
-      'srs.newCardsPerDay': reg(settings.srs.newCardsPerDay, s),
-      'srs.enableFuzz': reg(settings.srs.enableFuzz, s),
+      uiLocale: reg(settings.uiLocale, sSettings),
+      'srs.desiredRetention': reg(settings.srs.desiredRetention, sSettings),
+      'srs.maximumIntervalDays': reg(settings.srs.maximumIntervalDays, sSettings),
+      'srs.newCardsPerDay': reg(settings.srs.newCardsPerDay, sSettings),
+      'srs.enableFuzz': reg(settings.srs.enableFuzz, sSettings),
     },
     aiSettings: Object.fromEntries(
-      AI_FIELDS.map((f) => [f, reg((ai as unknown as Record<string, unknown>)[f], s)]),
+      AI_FIELDS.map((f) => [f, reg((ai as unknown as Record<string, unknown>)[f], sAi)]),
     ),
     kaikkiSource: {
-      sourceUrl: reg(settings.kaikki.sourceUrl, s),
-      sourceName: reg(settings.kaikki.sourceName, s),
+      sourceUrl: reg(settings.kaikki.sourceUrl, sSettings),
+      sourceName: reg(settings.kaikki.sourceName, sSettings),
     },
   };
   for (const word of inbox.words) state.words[wordKey(word.normalized)] = projectWord(word, ctx);

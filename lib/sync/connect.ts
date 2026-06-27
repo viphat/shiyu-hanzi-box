@@ -52,7 +52,13 @@ export async function createVaultOnFs(
 
   const replicaId = await ensureReplicaId();
   const { inbox, settings, ai } = await readDomainSnapshot();
-  const state = projectInbox(inbox, settings, ai, { replicaId, wallTime: now });
+  const meta = await syncMetadataStorage.getValue();
+  const state = projectInbox(inbox, settings, ai, {
+    replicaId,
+    wallTime: now,
+    settingsStamp: meta.appSettingsUpdatedAt,
+    aiStamp: meta.aiSettingsUpdatedAt,
+  });
   await writeOwnReplica(fs, key, vaultId, replicaId, state, now);
   await persistConnection(vaultId, label, state);
   return { vaultId, key };
@@ -84,7 +90,17 @@ export async function joinVaultOnFs(
 
   const replicaId = await ensureReplicaId();
   const { inbox, settings, ai } = await readDomainSnapshot();
-  const local = projectInbox(inbox, settings, ai, { replicaId, wallTime: now });
+  const meta = await syncMetadataStorage.getValue();
+  // Stamp settings/AI with the joiner's real edit time (0 = never edited).
+  // A fresh joiner with epoch-stamped (0) settings correctly loses to the
+  // vault's real-stamped settings in mergeSyncState — the join-wipe is fixed
+  // without changing the merge order.
+  const local = projectInbox(inbox, settings, ai, {
+    replicaId,
+    wallTime: now,
+    settingsStamp: meta.appSettingsUpdatedAt,
+    aiStamp: meta.aiSettingsUpdatedAt,
+  });
   // Established vault: remote portable settings win; local inbox still merges.
   const merged = remote ? mergeSyncState(remote, local) : local;
 

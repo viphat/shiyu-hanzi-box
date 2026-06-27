@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { fetchAiInsight, type AiClientResult } from '@/lib/ai/client';
 import { buildMessages } from '@/lib/ai/prompt';
 import { getAiSettings, isAiConfigured } from '@/lib/ai/settings';
-import { mutateInbox } from '@/lib/storage';
+import { inboxStorage } from '@/lib/storage';
+import { requestSyncMutation } from '@/entrypoints/background/sync-mutation-handler';
 import type {
   AiInsight,
   AiSettings,
@@ -84,14 +85,15 @@ export function useAiInsight(word: WordEntry, cedictEntries: DictionaryEntry[]) 
       }
 
       const insight: AiInsight = result.value;
-      await mutateInbox((inbox) => ({
-        ...inbox,
-        words: inbox.words.map((current) =>
+      const cur = await inboxStorage.getValue();
+      await requestSyncMutation('inbox', {
+        ...cur,
+        words: cur.words.map((current) =>
           current.id === word.id
             ? { ...current, aiInsight: insight, updatedAt: Date.now() }
             : current,
         ),
-      }));
+      });
 
       setState('idle');
     } catch {

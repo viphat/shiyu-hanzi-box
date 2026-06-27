@@ -25,8 +25,7 @@ import type {
   UiLocale,
   WordEntry,
 } from '@/lib/types';
-import { getAiSettings, aiSettingsStorage, DEFAULT_AI_SETTINGS, setAiSettings } from '@/lib/ai/settings';
-import { replaceSettings } from '@/lib/settings';
+import { getAiSettings, aiSettingsStorage, DEFAULT_AI_SETTINGS } from '@/lib/ai/settings';
 import { QuoteList } from './components/QuoteList';
 import { ReviewQueue } from './components/ReviewQueue';
 import { SyncStatusBadge } from './SyncStatusBadge';
@@ -266,8 +265,8 @@ export function App() {
           onQuery={setQuery}
           onRestore={async (restored) => {
             await replace(restored.inbox);
-            if (restored.settings) await replaceSettings(restored.settings);
-            if (restored.aiSettings) await setAiSettings(restored.aiSettings);
+            if (restored.settings) await requestSyncMutation('settings', restored.settings);
+            if (restored.aiSettings) await requestSyncMutation('ai', restored.aiSettings);
           }}
           locale={locale}
           settings={settings}

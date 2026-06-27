@@ -5,7 +5,7 @@ import {
   MENU_SAVE_WORD,
   MENU_SAVE_QUOTE,
 } from './capture-handler';
-import { registerSyncMutationHandler } from './sync-mutation-handler';
+import { registerSyncMutationHandler, SYNC_DEBOUNCE_ALARM } from './sync-mutation-handler';
 import { reconcileOnStartup } from '../../lib/sync/mutations';
 import { registerSyncAlarms, SYNC_ALARM } from '../../lib/sync/connect';
 import { SYNC_NOW_MESSAGE } from '../settings/FolderSync';
@@ -81,9 +81,9 @@ export default defineBackground(() => {
   void reconcileOnStartup();
   registerSyncAlarms();
 
-  // Alarm listener: periodic sync (every 5 min via SYNC_ALARM)
+  // Alarm listener: periodic sync (every 5 min via SYNC_ALARM) + debounced sync
   browser.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name === SYNC_ALARM) {
+    if (alarm.name === SYNC_ALARM || alarm.name === SYNC_DEBOUNCE_ALARM) {
       void triggerSync('alarm');
     }
   });

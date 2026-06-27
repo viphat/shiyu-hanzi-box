@@ -180,6 +180,12 @@ export const messages = {
     'sync.field.status': 'Status',
     'sync.field.lastSync': 'Last sync',
     'sync.field.label': 'Label',
+    'sync.dialog.passphraseConfirm': 'Confirm passphrase',
+    'sync.dialog.passphraseMismatch': 'Passphrases do not match',
+    'sync.error.vaultExists': 'A vault already exists in this folder. Use "Join existing vault" instead.',
+    'sync.error.wrongPassphrase': 'Incorrect passphrase.',
+    'sync.error.vaultInvalid': 'This folder does not contain a valid vault.',
+    'sync.warn.backupUnencrypted': 'This backup file contains your saved data and AI API key in plain text and is NOT encrypted. Keep it somewhere safe.',
   },
   'zh-CN': {
     'app.loading': '正在翻开收藏箱...',
@@ -360,6 +366,12 @@ export const messages = {
     'sync.field.status': '状态',
     'sync.field.lastSync': '上次同步',
     'sync.field.label': '标签',
+    'sync.dialog.passphraseConfirm': '确认密语',
+    'sync.dialog.passphraseMismatch': '两次输入的密语不一致',
+    'sync.error.vaultExists': '此文件夹中已存在保险库，请使用"加入现有保险库"。',
+    'sync.error.wrongPassphrase': '密语不正确。',
+    'sync.error.vaultInvalid': '此文件夹中不包含有效的保险库。',
+    'sync.warn.backupUnencrypted': '此备份文件以明文形式保存了您的所有数据和 AI API 密钥，未经加密。请妥善保管。',
   },
 } as const;
 

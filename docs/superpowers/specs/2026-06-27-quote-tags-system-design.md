@@ -401,10 +401,11 @@ serialized writes through the `chain`).
 
 ## Design Revision (2026-06-27): durable CRDT state vs. the broker write path
 
-> **Status:** Supersedes the *"Where `prev` comes from (carry-forward
-> reliability)"* section above. That section's premise is no longer true and the
-> carry-forward design cannot be implemented as written until the issue below is
-> resolved. **This is a prerequisite, fixed independently of the tags feature.**
+> **Status: RESOLVED in commit `7a5afcc`.** Supersedes the *"Where `prev` comes
+> from (carry-forward reliability)"* section above, whose premise was no longer
+> true. The prerequisite below was the blocker for the carry-forward design; it
+> has now been fixed independently of the tags feature (Option 1, below). The
+> analysis is kept for the record.
 
 ### What changed under the spec
 
@@ -467,20 +468,21 @@ Option 3 is rejected: it papers over local durability but leaves the original
 two-device resurrection ("delete on A, edit note on B") unfixed, which is the
 whole reason carry-forward exists.
 
-### Recommendation
+### Resolution (Option 1, shipped)
 
-Adopt **Option 1**: make `applyLocalMutation` (at minimum the `'inbox'` kind)
-preserve `meta.state` instead of setting it to `null`. Verify by:
+**Option 1 was adopted and landed in commit `7a5afcc`:** `applyLocalMutation`
+and `applyLocalMutationIfUnchanged` now carry `meta.state` forward (revision bump
+only) instead of writing `state: null`, and `reconcileOnStartup` was hardened to
+merge any existing tombstones when it rebuilds state from the domain. Verified:
 
-1. The `it.fails` resurrection test flips to passing (drop the `.fails`).
-2. The full existing suite (`npx vitest run`) stays green — in particular the
-   sync, deletion-tombstone, and concurrent-write guard tests.
+1. The resurrection test in `tests/sync/write-path-tombstone-loss.test.ts` is now
+   a plain passing `it` (the `.fails` marker was dropped).
+2. The full suite is green (`npx vitest run` → 499 passed) and `npm run compile`
+   is clean.
 
-Land this as its own commit *before* the quote-tags work. Once `meta.state` is
-durable, the tags plan proceeds essentially as written, with two edits:
+With `meta.state` durable, the tags plan proceeds essentially as written:
 
-- Delete the stale *"Where `prev` comes from"* reasoning; `prev` is now reliably
-  non-null because the inbox write no longer nulls it.
-- `setQuoteTags` / rename / delete-everywhere can keep firing `removeTags` +
-  `mutate` in either order, since the tombstone now survives in the preserved
-  `meta.state`.
+- The stale *"Where `prev` comes from"* reasoning no longer applies; `prev` is
+  reliably non-null because the inbox write preserves state.
+- `setQuoteTags` / rename / delete-everywhere can fire `removeTags` + `mutate` in
+  either order, since the tombstone now survives in the preserved `meta.state`.

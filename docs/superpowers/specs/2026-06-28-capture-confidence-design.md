@@ -88,8 +88,12 @@ Action mapping:
 
 ### B. Quote de-duplication (global, by normalized text)
 
-In `saveQuote`, compute `normalizeText(trimmed)` and scan existing quotes for a
-match (`normalizeText(q.text) === key`). `normalizeText` collapses whitespace,
+In `saveQuote`, compute `normalizeText(trimmed)` and, **inside the
+`mutateInboxSynced` mutator** (on the freshly-read inbox, the way `saveWord`'s
+`findIndex` already runs inside its mutator — `lib/capture.ts`), scan existing
+quotes for a match (`normalizeText(q.text) === key`). Computing the key inside
+the mutator avoids a TOCTOU race where a concurrent capture creates the quote
+between the scan and the write. `normalizeText` collapses whitespace,
 lowercases, and strips edge punctuation while preserving internal CJK
 punctuation — the right granularity for "the same sentence."
 
@@ -125,9 +129,12 @@ text, action, entry id, optional `occurrenceCapturedAt`).
   - Long quote text is truncated for display (e.g. ~40 chars + ellipsis).
 - **Injected function constraints** (per repo conventions): the renderer must be
   fully self-contained (no imported closure state — it is serialized into the
-  page). It reads its data from `executeScript` `args` and uses
-  `chrome.runtime.sendMessage` (available in the isolated content world) for
-  Undo.
+  page). It reads its data from `executeScript` `args`. The injected `func` runs
+  in the **isolated content world** (the `executeScript` default), where
+  `chrome.runtime.sendMessage` is available; it uses that to send the
+  `undo-capture` message for Undo. Note the capture path already proved the tab
+  scriptable via the earlier `readPageContext` injection, so the toast injection
+  reuses a known-good target.
 - **Localization**: the injected renderer can't import the app i18n module
   (serialization). Pass the already-resolved label strings as args, chosen in
   the background from the user's UI locale (`en` / `zh-CN`).
@@ -136,61 +143,132 @@ text, action, entry id, optional `occurrenceCapturedAt`).
 
 ### D. Undo (background reversal)
 
-The toast's Undo button sends a runtime message to the background:
+The toast's Undo button reverses the capture by issuing the **same mutations the
+rest of the app uses** — it does **not** introduce a bespoke handler. Undo is
+routed through the existing `requestSyncMutation` / `sync-mutation-handler`
+pipeline (`entrypoints/background/sync-mutation-handler.ts`). This matters for
+correctness, not just consistency: `writeKind` pairs every mutation with
+`scheduleDebouncedSync()`, so a deletion issued this way is actually flushed to
+the vault. A hand-rolled handler that called `applyDeletion` directly would
+write the tombstone but never schedule the flush, leaving the undo unsynced until
+an unrelated mutation or the 5-minute alarm fired.
+
+The toast (isolated world) sends a single runtime message; a thin `undo-capture`
+listener in the background translates it into the appropriate
+`requestSyncMutation(...)` call(s) and returns the ack:
 
 ```ts
-{ type: 'undo-capture', kind: 'word' | 'quote',
-  action: WordAction | QuoteAction, entryId: string,
-  occurrenceCapturedAt?: number }
+{ type: 'undo-capture',
+  kind: 'word' | 'quote',
+  action: WordAction | QuoteAction,
+  // For 'created' quote: entryId is the quote id.
+  // For 'created' word: normalized is required (see below); entryId is informational.
+  entryId: string,
+  normalized?: string,
+  // Full occurrence tuple needed to recompute the OR-Set element id (see below).
+  occurrence?: { sourceUrl: string; surrounding: string; capturedAt: number } }
 ```
 
-A new `onMessage` handler in `entrypoints/background/index.ts` (matching the
-existing message-listener pattern) reverses the action:
+Reversal by action:
 
-- `created` (word or quote) → delete the entry via the existing CRDT-tombstone
-  path `applyDeletion([<entityKey(entryId)>])`, so the deletion survives sync and
-  the entry is not resurrected on merge.
-- `occurrence-added` (word) → remove the just-added occurrence (matched by
-  `occurrenceCapturedAt`) from the word. Because `occurrences` is an add-wins
-  OR-Set, this goes through an OR-Set-aware removal that writes a remove
-  tombstone — a new `removeOccurrence` mutation modeled on the existing
-  `removeTags` path. (If the implementation plan needs to trim scope, the
-  documented fallback is to not offer Undo on `occurrence-added` and only
-  confirm it; `created` undo is the must-have.)
-- `duplicate` → no message is sent (Undo is not shown).
+- **`created` quote** → `requestSyncMutation('delete', ['quote:' + entryId])`.
+  Quotes are tombstoned by id; this matches the projection's suppression key
+  (`state.tombstones['quote:' + id]`, `lib/sync/project.ts`) and the dashboard's
+  existing quote-delete (`App.tsx`). Also drop the quote from `inbox.quotes` via
+  an `inbox` mutation, mirroring how the dashboard pairs a delete with the inbox
+  write.
+- **`created` word** → words are **not** keyed by id. The sync state keys a word
+  node — and its tombstone — by `word:<normalized>` (`wordKey`, and the
+  suppression check at `lib/sync/project.ts`). So undo must delete
+  `requestSyncMutation('delete', ['word:' + normalized])`, **not** `word:<id>`;
+  an id-based key would write a tombstone that never matches the projected key
+  and the word would resurrect on the next merge. The `normalized` value is
+  carried in the undo message (the toast already has it from the outcome's
+  entry). Also drop the word from `inbox.words`.
+- **`occurrence-added` (word)** → remove just the appended occurrence, leaving
+  the word (which, by definition of `occurrence-added`, pre-existed with ≥1 other
+  occurrence). This is an add-wins OR-Set removal that writes a remove tombstone,
+  added as a **new `removeOccurrence` kind** in `sync-mutation-handler.ts`,
+  modeled on the existing `removeTags` path (which already pairs a `tagTombstones`
+  write with the inbox write off a single snapshot — `useInbox.ts`). The OR-Set
+  infrastructure already exists: `WordNode.occurrenceTombstones`,
+  `mergeOccurrences`, and `mergeStampMap` (`lib/sync/types.ts`, `lib/sync/merge.ts`).
 
-Undo is best-effort and idempotent: if the entry is already gone, the handler
-is a no-op. The handler returns a small `{ ok }` ack the toast can use to switch
-to an "已撤销 / Undone" state before dismissing.
+  Critically, the occurrence's OR-Set element id is **derived, not stored**:
+  `legacyOccurrenceId(wordId, occ) = 'occ:' + fnv1a(wordId|sourceUrl|surrounding|capturedAt)`
+  (`lib/sync/project.ts`), and the local `Occurrence` type carries no id field
+  (`lib/types.ts`). So `capturedAt` alone is insufficient to key the tombstone —
+  the handler needs the full `{ sourceUrl, surrounding, capturedAt }` tuple plus
+  the word id to recompute the element id. The `removeOccurrence` mutation
+  therefore: reads the inbox, locates the word and the occurrence matching the
+  tuple, recomputes `legacyOccurrenceId`, writes that key into the word node's
+  `occurrenceTombstones`, **and** removes the occurrence from `inbox.words[…].occurrences`
+  — both off the same snapshot, exactly as `removeTags` does. (Matching an
+  occurrence by `capturedAt` is unambiguous in practice: `capturedAt` is
+  `Date.now()` at capture time, distinct per user action; the full tuple makes it
+  exact.)
+
+  Scope-trim fallback (documented): if `removeOccurrence` proves too large, drop
+  Undo on `occurrence-added` and only confirm it (no Undo button). `created`
+  undo is the must-have.
+- **`duplicate`** → no message is sent (Undo is not shown).
+
+Undo is best-effort and idempotent: if the entry/occurrence is already gone, the
+mutation is a no-op (the CRDT tombstone write and the inbox filter both tolerate
+a missing target). The `sync-mutation-handler` already resolves with `{ ok: true }`,
+which the toast uses to switch to an "已撤销 / Undone" state before dismissing.
 
 ### E. Popup manual-capture path
 
 The popup paste-fallback (`handleManualCapture`) runs while the popup is open,
 so it does not use a page toast. Instead, `handleManualCapture` returns the
 `CaptureOutcome` to the popup, and the popup renders an inline confirmation
-(captured text + type) with an **Undo** button that calls the same
-`undo-capture` flow. `duplicate` shows "已存在" without Undo.
+(captured text + type) with an **Undo** button. The popup is not in the
+background context, so rather than send an `undo-capture` message it calls
+`requestSyncMutation(...)` directly with the same `delete` / `removeOccurrence`
+kinds and key rules described in D (quote → `quote:<id>`, word → `word:<normalized>`).
+`duplicate` shows "已存在" without Undo.
 
 ### F. Restricted pages / injection failure
 
-If `executeScript` for the toast throws (chrome:// and other restricted pages),
-fall back to the existing badge only — no toast, no error surfaced to the user.
-The capture itself already has its own restricted-page handling and badge.
+Toast injection is only reached on a path that already captured successfully via
+scripting (`captureActiveTab` ran `readPageContext` on the same tab first), so the
+tab is proven scriptable and injection will essentially always succeed. The
+genuinely restricted cases never reach injection:
+
+- The context-menu handler's selectionText fallback (`handleContextMenuCapture`,
+  `entrypoints/background/capture-handler.ts`) fires only when
+  `captureActiveTab` returned `restricted-page`; that branch saves via
+  `saveSelectedText` and stays **badge-only** — no toast. It should still thread
+  the `CaptureOutcome` through (so the badge logic and any future use are
+  consistent), but it does not attempt injection.
+- Keyboard command / context-menu on a normal page → toast injected.
+
+Defensively, the toast `executeScript` is still wrapped in try/catch: on any
+throw, fall back to the badge only — no toast, no error surfaced. (Given the
+above, this catch is belt-and-suspenders rather than the primary restricted-page
+mechanism.)
 
 ## Data flow
 
 ```
 context menu / command
-  -> capture-handler.captureActiveTab(kind)
+  -> capture-handler.captureActiveTab(kind)        (keyboard cmd, + ctx-menu happy path)
        -> saveWord/saveQuote  => CaptureOutcome
-  -> setBadge(...)                         (unchanged)
+  -> setBadge(...)                                 (unchanged)
   -> if outcome and tab scriptable:
-       executeScript(renderToast, args=[type, label, text, action, entryId, occAt])
-            toast Undo click -> runtime.sendMessage({type:'undo-capture', ...})
-  background onMessage('undo-capture')
-       -> created: applyDeletion([key])
-       -> occurrence-added: removeOccurrence(wordId, occAt)
-       -> ack {ok}
+       executeScript(renderToast,
+         args=[type, label, text, action, entryId, normalized?, occurrence?])
+            toast Undo click (isolated world)
+              -> runtime.sendMessage({type:'undo-capture', ...})
+  background 'undo-capture' listener -> requestSyncMutation(...)  (-> sync-mutation-handler)
+       -> created quote:  delete ['quote:'+id]      + inbox (drop quote)
+       -> created word:   delete ['word:'+normalized] + inbox (drop word)
+       -> occurrence-added: removeOccurrence (recompute legacyOccurrenceId) + inbox
+       -> writeKind also schedules debounced sync; resolves {ok:true}
+
+ctx-menu restricted-page fallback (handleContextMenuCapture):
+  -> saveSelectedText => CaptureOutcome ; setBadge(...) only ; no toast
 ```
 
 ## Components touched
@@ -198,12 +276,21 @@ context menu / command
 - `lib/capture.ts` — outcome types; quote dedupe; word action reporting.
 - `lib/capture-toast.ts` (new) — self-contained injected toast renderer + the
   shared `CaptureOutcome`/message types and label selection helper.
-- `entrypoints/background/capture-handler.ts` — propagate outcome; inject toast
-  on success; keep badge; restricted-page fallback.
-- `entrypoints/background/index.ts` — `undo-capture` message handler.
+- `entrypoints/background/capture-handler.ts` — propagate outcome through both
+  `captureActiveTab` and the `handleContextMenuCapture` selectionText fallback;
+  inject toast on the scriptable success path; keep badge; restricted-page stays
+  badge-only.
+- `entrypoints/background/index.ts` — thin `undo-capture` message listener that
+  translates the message into `requestSyncMutation(...)` calls (must return a
+  promise so the toast receives the `{ ok }` ack).
+- `entrypoints/background/sync-mutation-handler.ts` — add `removeOccurrence` to
+  the `kind` union and `writeKind` (so it also gets `scheduleDebouncedSync`);
+  reuse the existing `delete` kind for entry deletion.
 - `lib/sync/mutations.ts` — `removeOccurrence` OR-Set removal (mirrors
-  `removeTags`); reuse `applyDeletion` for entry deletion.
-- `entrypoints/popup/Popup.tsx` — inline confirm + Undo for the manual path.
+  `applyTagRemoval`: recompute `legacyOccurrenceId`, write `occurrenceTombstones`,
+  drop from `inbox.words[…].occurrences` off one snapshot).
+- `entrypoints/popup/Popup.tsx` — inline confirm + Undo for the manual path,
+  calling `requestSyncMutation` directly (popup is not the background context).
 
 ## Testing
 
@@ -217,10 +304,19 @@ context menu / command
   - toast injected on success (spy `scripting.executeScript`); not injected /
     no throw on restricted page; badge still set in all paths.
 - Undo (new test):
-  - `created` → `applyDeletion` called with the entry key; entry removed.
-  - `occurrence-added` → occurrence with the given `capturedAt` removed; OR-Set
-    remove tombstone written.
-  - missing entry → no-op ack.
+  - `created` quote → tombstone written under `quote:<id>`; entry dropped from
+    inbox; quote suppressed after re-projection.
+  - `created` word → tombstone written under `word:<normalized>` (regression
+    guard: an id-based key must NOT suppress the word — assert the projected key
+    is the normalized one); entry dropped from inbox.
+  - `occurrence-added` → `removeOccurrence` recomputes `legacyOccurrenceId` from
+    the `{ sourceUrl, surrounding, capturedAt }` tuple + word id, writes that key
+    into `occurrenceTombstones`, and removes the occurrence from the inbox; the
+    occurrence is suppressed after re-projection while the word and its other
+    occurrences survive.
+  - missing entry / occurrence → no-op, still resolves `{ ok: true }`.
+  - undo routes through `sync-mutation-handler` so debounced sync is scheduled
+    (spy `scheduleDebouncedSync` / the alarm create).
 - Toast renderer: light unit test of the pure label-selection helper; DOM
   construction smoke-tested (Shadow root created, Undo present only when the
   action is undoable).
@@ -230,9 +326,22 @@ context menu / command
 
 ## Risks / considerations
 
-- **OR-Set occurrence removal** is the only piece touching the sync layer; it
-  mirrors `removeTags`. Fallback (drop `occurrence-added` undo) is documented.
+- **Tombstone key asymmetry** (highest-risk correctness item): quotes are keyed
+  by `quote:<id>` but words by `word:<normalized>`. Undo of a `created` word must
+  use the normalized key or the deletion silently no-ops and the word resurrects
+  on merge. Covered by a dedicated regression test.
+- **Derived occurrence id**: the OR-Set element id is
+  `legacyOccurrenceId(wordId, occ)`, not stored on the `Occurrence`; the undo
+  payload carries the full `{ sourceUrl, surrounding, capturedAt }` tuple so the
+  handler can recompute it.
+- **Routing through `sync-mutation-handler`**: undo must not call `applyDeletion`
+  directly from a bespoke handler — that would skip `scheduleDebouncedSync` and
+  leave the undo unflushed. Always go via `requestSyncMutation`.
+- **OR-Set occurrence removal** is the only piece adding to the sync layer; it
+  mirrors `applyTagRemoval` (dual write: tombstone + inbox, off one snapshot).
+  Fallback (drop `occurrence-added` undo) is documented.
 - **Injected renderer serialization**: the toast function must not close over
   imports; all data and localized strings arrive via `args`.
-- **No new permissions**: confirm the build manifest is unchanged.
+- **No new permissions**: `scripting` is already used by capture; undo uses
+  runtime messaging. Confirm the build manifest is unchanged.
 ```

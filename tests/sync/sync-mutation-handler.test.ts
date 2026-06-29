@@ -57,3 +57,17 @@ describe('applyTagRemoval', () => {
     expect(meta.state!.quotes.new.tagTombstones!.x).toBeDefined();
   });
 });
+
+describe('removeOccurrence kind', () => {
+  beforeEach(() => fakeBrowser.reset());
+
+  it('routes to applyOccurrenceRemoval and bumps the revision', async () => {
+    registerSyncMutationHandler();
+    await requestSyncMutation('removeOccurrence', {
+      removals: [{ normalized: '你好', occurrenceId: 'occ:abc' }],
+    });
+    const meta = await syncMetadataStorage.getValue();
+    expect(meta.revision).toBeGreaterThan(0);
+    expect(meta.state!.words['word:你好'].occurrenceTombstones['occ:abc']).toBeDefined();
+  });
+});

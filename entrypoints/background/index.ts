@@ -5,6 +5,8 @@ import {
   MENU_SAVE_WORD,
   MENU_SAVE_QUOTE,
 } from './capture-handler';
+import { undoCapture } from './capture-undo';
+import { UNDO_CAPTURE_MESSAGE, type UndoCaptureMessage } from '../../lib/capture';
 import { registerSyncMutationHandler, SYNC_DEBOUNCE_ALARM } from './sync-mutation-handler';
 import { reconcileOnStartup } from '../../lib/sync/mutations';
 import { registerSyncAlarms, SYNC_ALARM } from '../../lib/sync/connect';
@@ -81,8 +83,23 @@ async function triggerSync(reason: string) {
   }
 }
 
+export function registerUndoCaptureListener(): void {
+  browser.runtime.onMessage.addListener((message: unknown) => {
+    if (
+      message != null &&
+      typeof message === 'object' &&
+      'type' in message &&
+      (message as { type: unknown }).type === UNDO_CAPTURE_MESSAGE
+    ) {
+      return undoCapture(message as UndoCaptureMessage).then(() => ({ ok: true }));
+    }
+    return undefined;
+  });
+}
+
 export default defineBackground(() => {
   registerSyncMutationHandler();
+  registerUndoCaptureListener();
   void reconcileOnStartup();
   registerSyncAlarms();
 

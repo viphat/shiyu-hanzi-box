@@ -10,6 +10,9 @@ import {
   handleManualCapture,
   type CaptureResult,
 } from '@/entrypoints/background/capture-handler';
+import { undoCapture } from '@/entrypoints/background/capture-undo';
+import { captureToastHeadline, truncateForToast } from '@/lib/capture-toast';
+import type { TaggedOutcome, UndoCaptureMessage } from '@/lib/capture';
 
 export function Popup() {
   const [busy, setBusy] = useState<'word' | 'quote' | null>(null);
@@ -17,6 +20,9 @@ export function Popup() {
   const [manualText, setManualText] = useState('');
   const [manualKind, setManualKind] = useState<'word' | 'quote' | null>(null);
   const [locale, setLocale] = useState<UiLocale>('zh-CN');
+  const [confirm, setConfirm] = useState<
+    { outcome: TaggedOutcome; undo: UndoCaptureMessage | null } | null
+  >(null);
   const manualTextRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
@@ -91,13 +97,23 @@ export function Popup() {
   function applyResult(kind: 'word' | 'quote', result: CaptureResult) {
     if (result.ok) {
       setManualKind(null);
+      setMsg('');
+      if (result.outcome) {
+        setConfirm({ outcome: result.outcome, undo: result.undo });
+        return;
+      }
       setMsg(t(locale, 'popup.saved'));
       setTimeout(() => window.close(), 700);
       return;
     }
-
     setManualKind(kind);
     setMsg(failureMessage(result.reason, locale));
+  }
+
+  async function onUndo() {
+    if (confirm?.undo) await undoCapture(confirm.undo);
+    setConfirm(null);
+    window.close();
   }
 
   return (
@@ -172,6 +188,22 @@ export function Popup() {
         </div>
       )}
       {msg && <p className="text-center text-xs text-muted tracking-[1px]">{msg}</p>}
+      {confirm && (
+        <div className="space-y-2 rounded-sm border border-border bg-paper-light p-2">
+          <p className="text-[11px] tracking-[1px] text-cinnabar">
+            {captureToastHeadline(confirm.outcome.kind, confirm.outcome.action, locale).headline}
+          </p>
+          <p className="text-sm leading-5 text-ink">{truncateForToast(confirm.outcome.entry.text)}</p>
+          {confirm.undo && (
+            <button
+              onClick={onUndo}
+              className="w-full rounded-sm border border-border bg-transparent px-3 py-2 text-xs font-medium text-ink-secondary tracking-[1px] transition hover:border-border-hover hover:bg-paper-input"
+            >
+              {t(locale, 'toast.undo')}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

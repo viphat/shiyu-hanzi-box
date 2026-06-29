@@ -1,21 +1,55 @@
 import type { Browser } from 'wxt/browser';
-import { saveWord, saveQuote, type SourceInfo } from '@/lib/capture';
+import {
+  saveWord,
+  saveQuote,
+  type SourceInfo,
+  type TaggedOutcome,
+  type UndoCaptureMessage,
+} from '@/lib/capture';
 import { readPageContext, readPageMetadata } from '@/lib/page-context';
+import { getSettings } from '@/lib/settings';
+import { t } from '@/lib/i18n';
+import {
+  captureToastHeadline,
+  truncateForToast,
+  buildUndoMessage,
+  renderCaptureToast,
+  type CaptureToastArgs,
+} from '@/lib/capture-toast';
 
 export const MENU_SAVE_WORD = 'save-word-menu';
 export const MENU_SAVE_QUOTE = 'save-quote-menu';
 export const MENU_OPEN_DASHBOARD = 'open-dashboard';
 
 export type CaptureResult =
-  | { ok: true }
+  | { ok: true; outcome: TaggedOutcome | null; undo: UndoCaptureMessage | null }
   | { ok: false; reason: 'no-active-tab' | 'restricted-page' | 'no-selection' };
 
 type ContextMenuInfo = Pick<Browser.contextMenus.OnClickData, 'selectionText'>;
 type CaptureTab = Pick<Browser.tabs.Tab, 'title' | 'url'>;
 
-async function captureActiveTab(kind: 'word' | 'quote'): Promise<CaptureResult> {
+async function capture(
+  kind: 'word' | 'quote',
+  text: string,
+  src: SourceInfo,
+): Promise<TaggedOutcome | null> {
+  if (kind === 'word') {
+    const o = await saveWord(text, src);
+    return o ? { kind: 'word', ...o } : null;
+  }
+  const o = await saveQuote(text, src);
+  return o ? { kind: 'quote', ...o } : null;
+}
+
+function okResult(outcome: TaggedOutcome | null, src: SourceInfo): CaptureResult {
+  return { ok: true, outcome, undo: outcome ? buildUndoMessage(outcome, src) : null };
+}
+
+async function captureActiveTab(
+  kind: 'word' | 'quote',
+): Promise<{ result: CaptureResult; tabId: number | null; src: SourceInfo | null }> {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id) return { ok: false, reason: 'no-active-tab' };
+  if (!tab?.id) return { result: { ok: false, reason: 'no-active-tab' }, tabId: null, src: null };
 
   let ctx: Awaited<ReturnType<typeof readPageContext>> | null = null;
   try {
@@ -24,11 +58,13 @@ async function captureActiveTab(kind: 'word' | 'quote'): Promise<CaptureResult> 
       func: readPageContext,
     });
     ctx = res?.result ?? null;
-  } catch (e) {
-    return { ok: false, reason: 'restricted-page' };
+  } catch {
+    return { result: { ok: false, reason: 'restricted-page' }, tabId: tab.id, src: null };
   }
 
-  if (!ctx || ctx.text.length === 0) return { ok: false, reason: 'no-selection' };
+  if (!ctx || ctx.text.length === 0) {
+    return { result: { ok: false, reason: 'no-selection' }, tabId: tab.id, src: null };
+  }
 
   const src: SourceInfo = {
     sourceTitle: ctx.sourceTitle,
@@ -37,16 +73,43 @@ async function captureActiveTab(kind: 'word' | 'quote'): Promise<CaptureResult> 
     surrounding: ctx.surrounding,
     capturedAt: Date.now(),
   };
+  const outcome = await capture(kind, ctx.text, src);
+  return { result: okResult(outcome, src), tabId: tab.id, src };
+}
 
-  if (kind === 'word') await saveWord(ctx.text, src);
-  else await saveQuote(ctx.text, src);
-
-  return { ok: true };
+async function maybeShowToast(
+  tabId: number,
+  outcome: TaggedOutcome | null,
+  undo: UndoCaptureMessage | null,
+): Promise<void> {
+  if (!outcome) return;
+  const locale = (await getSettings()).uiLocale;
+  const { headline, undoable } = captureToastHeadline(outcome.kind, outcome.action, locale);
+  const args: CaptureToastArgs = {
+    headline,
+    text: truncateForToast(outcome.entry.text),
+    undoLabel: t(locale, 'toast.undo'),
+    undoneLabel: t(locale, 'toast.undone'),
+    undoable,
+    undoMessage: undoable ? undo : null,
+  };
+  try {
+    await browser.scripting.executeScript({
+      target: { tabId },
+      func: renderCaptureToast,
+      args: [args],
+    });
+  } catch {
+    // Restricted page / injection failure — the badge is already shown.
+  }
 }
 
 export async function handleCapture(kind: 'word' | 'quote'): Promise<CaptureResult> {
-  const result = await captureActiveTab(kind);
+  const { result, tabId } = await captureActiveTab(kind);
   await setBadge(result.ok ? (kind === 'word' ? 'WORD' : 'QTE') : 'FAIL', result.ok);
+  if (result.ok && tabId != null) {
+    await maybeShowToast(tabId, result.outcome, result.undo);
+  }
   return result;
 }
 
@@ -55,9 +118,14 @@ export async function handleContextMenuCapture(
   info: ContextMenuInfo,
   tab?: CaptureTab,
 ): Promise<CaptureResult> {
-  const result = await captureActiveTab(kind);
-  if (result.ok || result.reason !== 'restricted-page') {
-    await setBadge(result.ok ? (kind === 'word' ? 'WORD' : 'QTE') : 'FAIL', result.ok);
+  const { result, tabId } = await captureActiveTab(kind);
+  if (result.ok) {
+    await setBadge(kind === 'word' ? 'WORD' : 'QTE', true);
+    if (tabId != null) await maybeShowToast(tabId, result.outcome, result.undo);
+    return result;
+  }
+  if (result.reason !== 'restricted-page') {
+    await setBadge('FAIL', false);
     return result;
   }
 
@@ -67,15 +135,16 @@ export async function handleContextMenuCapture(
     return result;
   }
 
-  await saveSelectedText(kind, text, {
+  const src: SourceInfo = {
     sourceTitle: tab?.title ?? '',
     sourceUrl: tab?.url ?? '',
     sourceDomain: domainFromUrl(tab?.url),
     surrounding: '',
     capturedAt: Date.now(),
-  });
+  };
+  const outcome = await capture(kind, text, src);
   await setBadge(kind === 'word' ? 'WORD' : 'QTE', true);
-  return { ok: true };
+  return okResult(outcome, src); // badge-only; restricted pages cannot host a toast
 }
 
 export async function handleManualCapture(
@@ -95,15 +164,10 @@ export async function handleManualCapture(
   }
 
   const metadata = await pageMetadataForTab(tab);
-  await saveSelectedText(kind, text, {
-    sourceTitle: metadata.sourceTitle,
-    sourceUrl: metadata.sourceUrl,
-    sourceDomain: metadata.sourceDomain,
-    surrounding: '',
-    capturedAt: Date.now(),
-  });
+  const src: SourceInfo = { ...metadata, surrounding: '', capturedAt: Date.now() };
+  const outcome = await capture(kind, text, src);
   await setBadge(kind === 'word' ? 'WORD' : 'QTE', true);
-  return { ok: true };
+  return okResult(outcome, src);
 }
 
 async function pageMetadataForTab(
@@ -126,15 +190,6 @@ async function pageMetadataForTab(
     sourceUrl: tab.url ?? '',
     sourceDomain: domainFromUrl(tab.url),
   };
-}
-
-async function saveSelectedText(
-  kind: 'word' | 'quote',
-  text: string,
-  src: SourceInfo,
-): Promise<void> {
-  if (kind === 'word') await saveWord(text, src);
-  else await saveQuote(text, src);
 }
 
 function domainFromUrl(url: string | undefined): string {

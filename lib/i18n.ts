@@ -196,6 +196,12 @@ export const messages = {
     'cloud.delete': 'Delete tag {tag} everywhere',
     'cloud.renamePrompt': 'Rename tag "{tag}" to:',
     'cloud.deleteConfirm': 'Delete the tag "{tag}" from all quotes?',
+    'toast.savedWord': 'Saved as word',
+    'toast.savedOccurrence': 'New occurrence recorded',
+    'toast.savedQuote': 'Saved as quote',
+    'toast.duplicate': 'Already saved',
+    'toast.undo': 'Undo',
+    'toast.undone': 'Undone',
   },
   'zh-CN': {
     'app.loading': '正在翻开收藏箱...',
@@ -392,6 +398,12 @@ export const messages = {
     'cloud.delete': '在所有句子中删除标签 {tag}',
     'cloud.renamePrompt': '将标签"{tag}"重命名为：',
     'cloud.deleteConfirm': '从所有句子中删除标签"{tag}"？',
+    'toast.savedWord': '已保存为词',
+    'toast.savedOccurrence': '已记录新出处',
+    'toast.savedQuote': '已保存为句',
+    'toast.duplicate': '已存在',
+    'toast.undo': '撤销',
+    'toast.undone': '已撤销',
   },
 } as const;
 

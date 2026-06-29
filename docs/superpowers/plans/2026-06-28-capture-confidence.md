@@ -446,6 +446,24 @@ describe('renderCaptureToast', () => {
     const host = document.getElementById('shiyu-capture-toast');
     expect(host!.shadowRoot!.querySelector('[data-undo]')).toBeNull();
   });
+
+  it('on Undo click: sends the message via chrome.runtime, swaps to the undone label, removes the button', () => {
+    // The injected renderer uses the `chrome` global (not the wxt `browser`
+    // polyfill, which would be a closure ref). Stub it with the callback form.
+    const sent: unknown[] = [];
+    (globalThis as unknown as { chrome: unknown }).chrome = {
+      runtime: { sendMessage: (msg: unknown, cb?: () => void) => { sent.push(msg); cb?.(); } },
+    };
+
+    renderCaptureToast(baseArgs);
+    const host = document.getElementById('shiyu-capture-toast')!;
+    const undo = host.shadowRoot!.querySelector<HTMLButtonElement>('[data-undo]')!;
+    undo.click();
+
+    expect(sent).toEqual([baseArgs.undoMessage]);
+    expect(host.shadowRoot!.querySelector('[data-undo]')).toBeNull();
+    expect(host.shadowRoot!.textContent).toContain(baseArgs.undoneLabel);
+  });
 });
 ```
 
@@ -683,6 +701,17 @@ Expected: FAIL with "applyOccurrenceRemoval is not a function" (not exported).
 - [ ] **Step 3: Add `applyOccurrenceRemoval` to `lib/sync/mutations.ts`**
 
 Add `import { wordKey } from './project';` to the existing imports. Then add this function (mirrors `applyTagRemoval`), after `applyTagRemoval`:
+
+> Note on the minimal-node branch: like `applyTagRemoval`, when the word node is
+> missing we create a stub with `fields: {}`. This branch is **defensive only** —
+> the real undo path always operates on a word that exists (an occurrence was just
+> added to it). Such a stub would not be suppressed by `materialize`
+> (`isSuppressed(undefined, …)` is `false`), but it carries no `text`/`status`, so
+> do **not** assert it materializes to a clean word. In practice it never reaches
+> `materialize`: the next `reconcileOnStartup` rebuilds `state.words` from the inbox
+> (where `新词` is absent), dropping the stub and its tombstone. The "creates a
+> minimal word node" test therefore asserts only the tombstone write, matching the
+> established tag-removal behavior.
 
 ```ts
 export async function applyOccurrenceRemoval(
@@ -1060,6 +1089,14 @@ Add `renderCaptureToast` to the imports at the top of the test file:
 import { renderCaptureToast } from '../lib/capture-toast';
 ```
 
+> These tests reuse the file's existing fixtures: `GOOD_CTX` (the page-context
+> object defined at the top of `tests/capture-handler.test.ts`) and the default
+> `beforeEach`, which spies `fakeBrowser.scripting.executeScript` to resolve
+> `[{ result: GOOD_CTX }]`. That default makes the first `executeScript`
+> (`readPageContext`) succeed so the capture reaches `maybeShowToast`; the toast
+> injection is the *second* `executeScript` call, located by `func === renderCaptureToast`.
+> Do not add a new `beforeEach` — rely on the existing one.
+
 - [ ] **Step 3: Run the tests to verify they fail**
 
 Run: `npx vitest run tests/capture-handler.test.ts`
@@ -1395,6 +1432,7 @@ Create `tests/popup-confirm.test.tsx`:
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { messages } from '../lib/i18n';
 
 const undoCapture = vi.fn().mockResolvedValue(undefined);
 const handleManualCapture = vi.fn();
@@ -1416,47 +1454,86 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   container = document.createElement('div');
-  document.body.appendChild(container);
+  document.body.append(container);
   root = createRoot(container);
 });
 
-afterEach(() => {
-  act(() => root.unmount());
+afterEach(async () => {
+  await act(async () => { root.unmount(); });
   container.remove();
   vi.clearAllMocks();
 });
 
-describe('popup manual confirmation', () => {
-  it('shows captured text + Undo and calls undoCapture on click', async () => {
-    const undoMsg = { type: 'undo-capture', kind: 'word', action: 'created', entryId: 'w1', normalized: '你好' };
-    handleManualCapture.mockResolvedValue({
+/** Find a rendered <button> whose text contains `label`. */
+function findButton(label: string): HTMLButtonElement {
+  const btn = [...container.querySelectorAll('button')].find(
+    (b) => (b.textContent ?? '').includes(label),
+  );
+  if (!btn) throw new Error(`button not found: ${label}`);
+  return btn as HTMLButtonElement;
+}
+
+describe('popup capture confirmation', () => {
+  it('shows the headline + captured text + Undo, and calls undoCapture on click', async () => {
+    const undo = {
+      type: 'undo-capture', kind: 'word', action: 'created',
+      entryId: 'w1', normalized: '你好',
+    };
+    // The top "Save as word" button calls go() -> handleCapture().
+    handleCapture.mockResolvedValue({
       ok: true,
       outcome: { kind: 'word', action: 'created', entry: { id: 'w1', text: '你好' } },
-      undo: undoMsg,
+      undo,
     });
 
     await act(async () => { root.render(<Popup />); });
-    // open the manual panel and trigger a manual save
-    const wordBtn = [...container.querySelectorAll('button')].find((b) => /word/i.test(b.textContent ?? ''));
-    // Simulate manual save path directly via the exposed flow:
-    await act(async () => {
-      container.querySelector<HTMLTextAreaElement>('textarea');
+    await act(async () => {}); // flush the settings effect -> locale 'en'
+
+    await act(async () => { findButton(messages.en['popup.saveWord']).click(); });
+
+    // Confirmation surface: headline + captured text + Undo button.
+    expect(container.textContent).toContain(messages.en['toast.savedWord']);
+    expect(container.textContent).toContain('你好');
+    const undoBtn = findButton(messages.en['toast.undo']);
+
+    // Undo routes to the shared undoCapture with the exact undo message.
+    await act(async () => { undoBtn.click(); });
+    expect(undoCapture).toHaveBeenCalledWith(undo);
+  });
+
+  it('renders no Undo affordance for a duplicate (undo === null)', async () => {
+    handleCapture.mockResolvedValue({
+      ok: true,
+      outcome: { kind: 'quote', action: 'duplicate', entry: { id: 'q1', text: '学而时习之' } },
+      undo: null,
     });
 
-    // Drive saveManual by clicking the primary save button after entering text.
-    // (Render assertion focuses on the confirmation surface.)
-    expect(wordBtn).toBeTruthy();
+    await act(async () => { root.render(<Popup />); });
+    await act(async () => {});
+    await act(async () => { findButton(messages.en['popup.saveWord']).click(); });
+
+    expect(container.textContent).toContain(messages.en['toast.duplicate']);
+    const undoBtn = [...container.querySelectorAll('button')].find(
+      (b) => (b.textContent ?? '').includes(messages.en['toast.undo']),
+    );
+    expect(undoBtn).toBeUndefined();
   });
 });
 ```
 
-> Note: the popup wires capture through `handleManualCapture`. The test above mocks the module boundary; assert the confirmation surface (captured text node and a button labelled with `messages.en['toast.undo']`) appears after a manual save, and that clicking it calls `undoCapture` with the `undo` message. Fill in the interaction using the same `act`/DOM-query pattern as `tests/quote-list.test.tsx`.
+> The popup surfaces the confirmation through the shared `applyResult` path, so either
+> capture entry point exercises it; this test drives the top "Save as word" button
+> (`go()` → `handleCapture()`) because it needs no prior `manualKind` state. The
+> `IS_REACT_ACT_ENVIRONMENT` flag and the `act`/DOM-query pattern mirror
+> `tests/quote-list.test.tsx`. `onUndo` calls `window.close()` after `undoCapture`;
+> happy-dom's `window.close()` is a harmless no-op, so no stub is needed.
 
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run tests/popup-confirm.test.tsx`
-Expected: FAIL — the popup currently closes on success and renders no Undo affordance.
+Expected: FAIL — `applyResult` currently sets `popup.saved` and calls `window.close()` on success, so no confirmation headline, captured text, or Undo button is rendered. Both assertions (`toContain(messages.en['toast.savedWord'])` and the `undoCapture` call) fail before the feature exists.
 
 - [ ] **Step 3: Add confirmation state + UI to `Popup.tsx`**
 
@@ -1546,11 +1623,14 @@ git commit -m "feat(popup): inline capture confirmation with Undo for the manual
 Run: `npm run compile && npm test`
 Expected: PASS — no type errors, all suites green (including `tests/i18n-source.test.ts` parity and the pre-existing sync suite).
 
-- [ ] **Step 2: Capture the current manifest hash before building** (baseline for the no-new-permissions check)
+- [ ] **Step 2: Confirm the permission source of truth is untouched** (baseline for the no-new-permissions check)
 
-Run: `git stash list >/dev/null; npx wxt prepare >/dev/null 2>&1 || true; true`
+Manifest permissions are declared in `wxt.config.ts` (`permissions`, `optional_host_permissions`), not hand-edited in a built file — so the real gate is that this branch did not change them.
 
-(If a prior build manifest exists under `.output/`, note its `permissions`/`host_permissions` arrays.)
+Run: `git diff master -- wxt.config.ts`
+Expected: empty diff (no permission lines added/removed). Also record the current declared arrays for the Step 3 comparison:
+
+Run: `sed -n '/permissions:/,/]/p' wxt.config.ts`
 
 - [ ] **Step 3: Build and confirm the manifest is unchanged**
 

@@ -7,6 +7,7 @@ import {
 } from '../entrypoints/background/capture-handler';
 import { getInbox } from '../lib/storage';
 import { readPageContext, readPageMetadata } from '../lib/page-context';
+import { renderCaptureToast } from '../lib/capture-toast';
 
 const GOOD_CTX = {
   text: '你好',
@@ -30,7 +31,7 @@ describe('handleCapture - word path', () => {
   it('saves the selection as a word', async () => {
     const result = await handleCapture('word');
     const inbox = await getInbox();
-    expect(result).toEqual({ ok: true });
+    expect(result.ok).toBe(true);
     expect(inbox.words).toHaveLength(1);
     expect(inbox.words[0].text).toBe('你好');
     expect(fakeBrowser.scripting.executeScript).toHaveBeenCalledWith({
@@ -84,7 +85,7 @@ describe('handleContextMenuCapture', () => {
     );
 
     const inbox = await getInbox();
-    expect(result).toEqual({ ok: true });
+    expect(result.ok).toBe(true);
     expect(inbox.words).toHaveLength(1);
     expect(inbox.words[0].text).toBe('学习');
     expect(inbox.words[0].occurrences[0].sourceTitle).toBe('Threads');
@@ -116,7 +117,7 @@ describe('handleManualCapture', () => {
     const result = await handleManualCapture('word', ' 中文 ');
 
     const inbox = await getInbox();
-    expect(result).toEqual({ ok: true });
+    expect(result.ok).toBe(true);
     expect(inbox.words).toHaveLength(1);
     expect(inbox.words[0].text).toBe('中文');
     expect(inbox.words[0].occurrences[0].sourceTitle).toBe('YouTube');
@@ -143,7 +144,7 @@ describe('handleManualCapture', () => {
     const result = await handleManualCapture('word', ' 中文 ');
 
     const inbox = await getInbox();
-    expect(result).toEqual({ ok: true });
+    expect(result.ok).toBe(true);
     expect(fakeBrowser.scripting.executeScript).toHaveBeenCalledWith({
       target: { tabId: 1 },
       func: readPageMetadata,
@@ -158,5 +159,26 @@ describe('handleManualCapture', () => {
 
     expect(result).toEqual({ ok: false, reason: 'no-selection' });
     expect((await getInbox()).words).toHaveLength(0);
+  });
+});
+
+describe('toast injection', () => {
+  it('injects renderCaptureToast on a successful keyboard capture', async () => {
+    await handleCapture('word');
+    const calls = (fakeBrowser.scripting.executeScript as any).mock.calls;
+    const toastCall = calls.find((c: any[]) => c[0].func === renderCaptureToast);
+    expect(toastCall).toBeTruthy();
+    expect(toastCall[0].target).toEqual({ tabId: 1 });
+    expect(Array.isArray(toastCall[0].args)).toBe(true);
+  });
+
+  it('still sets the badge and does not throw when toast injection fails', async () => {
+    // First executeScript (readPageContext) succeeds; the toast injection rejects.
+    (fakeBrowser.scripting.executeScript as any)
+      .mockResolvedValueOnce([{ result: GOOD_CTX } as any])
+      .mockRejectedValueOnce(new Error('restricted'));
+    const result = await handleCapture('word');
+    expect(result.ok).toBe(true);
+    expect((await getInbox()).words).toHaveLength(1);
   });
 });

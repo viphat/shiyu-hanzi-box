@@ -4,7 +4,7 @@ import { getSettings } from '../settings';
 import { aiSettingsStorage } from '../ai/settings';
 import { ensureReplicaId, mutateSyncConfig } from './local';
 import type { Inbox } from '../types';
-import { projectInbox } from './project';
+import { projectInbox, wordKey } from './project';
 import { deleteEntity } from './merge';
 import { mergeStampMap } from './registers';
 import { EMPTY_SYNC_STATE, type SyncState } from './types';
@@ -197,6 +197,50 @@ export async function applyTagRemoval(
   return run;
 }
 
+export async function applyOccurrenceRemoval(
+  removals: Array<{ normalized: string; occurrenceId: string }>,
+): Promise<void> {
+  const run = chain.then(async () => {
+    const replicaId = await ensureReplicaId();
+    const meta = await syncMetadataStorage.getValue();
+    const state: SyncState = meta.state ?? (JSON.parse(JSON.stringify(EMPTY_SYNC_STATE)) as SyncState);
+    const now = Date.now();
+    for (const { normalized, occurrenceId } of removals) {
+      const key = wordKey(normalized);
+      let node = state.words[key];
+      if (!node) {
+        node = {
+          normalized,
+          fields: {},
+          createdAt: { value: now, stamp: { wallTime: now, counter: 0, replicaId } },
+          occurrences: {},
+          occurrenceTombstones: {},
+          reviewEvents: {},
+        };
+        state.words[key] = node;
+      }
+      if (!node.occurrenceTombstones) node.occurrenceTombstones = {};
+      node.occurrenceTombstones[occurrenceId] = { wallTime: now, counter: 0, replicaId };
+    }
+    const nextRevision = meta.revision + 1;
+    await syncMetadataStorage.setValue({
+      revision: nextRevision,
+      state,
+      lastDigest: meta.lastDigest,
+      appSettingsUpdatedAt: meta.appSettingsUpdatedAt,
+      aiSettingsUpdatedAt: meta.aiSettingsUpdatedAt,
+    });
+    await mutateSyncConfig((cfg) => ({
+      ...cfg,
+      localRevision: nextRevision,
+      pending: true,
+      status: cfg.vaultId ? 'pending' : cfg.status,
+    }));
+  });
+  chain = run;
+  return run;
+}
+
 export async function reconcileOnStartup(): Promise<void> {
   const meta = await syncMetadataStorage.getValue();
   const cfg = await mutateSyncConfig((c) => c);
@@ -223,6 +267,19 @@ export async function reconcileOnStartup(): Promise<void> {
       const prevTombstones = meta.state.quotes[id]?.tagTombstones;
       if (prevTombstones) {
         node.tagTombstones = mergeStampMap(prevTombstones, node.tagTombstones ?? {});
+      }
+    }
+  }
+  // Per-word occurrence removals live only in each word node's
+  // `occurrenceTombstones` map (projection resets it to {}), so they need the
+  // same carry-forward as tagTombstones — otherwise a `removeOccurrence`
+  // written just before an interrupted inbox edit is lost on rebuild and a
+  // remote replica still holding the occurrence resurrects it.
+  if (meta.state?.words) {
+    for (const [id, node] of Object.entries(state.words)) {
+      const prevTombstones = meta.state.words[id]?.occurrenceTombstones;
+      if (prevTombstones) {
+        node.occurrenceTombstones = mergeStampMap(prevTombstones, node.occurrenceTombstones ?? {});
       }
     }
   }

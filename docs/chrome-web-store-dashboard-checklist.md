@@ -1,9 +1,9 @@
 # Chrome Web Store Dashboard Checklist
 
-Last updated: 2026-06-28
+Last updated: 2026-06-29
 
 Use this when completing the Chrome Developer Dashboard fields after uploading
-`.output/shiyu-hanzi-box-0.2.0-chrome.zip`.
+`.output/shiyu-hanzi-box-0.2.1-chrome.zip`.
 
 ## Store Listing
 
@@ -46,7 +46,7 @@ Core features:
 - Export daily Markdown notes, and back up/restore local data (inbox-only or full backup with settings and AI key).
 - Optionally sync between browser profiles through an encrypted, provider-neutral folder.
 - Optionally import a local Kaikki JSONL dictionary fallback.
-- Optionally use BYO-key AI insight with DeepSeek, OpenAI, OpenRouter, Google Gemini, Qwen, Moonshot (Kimi), or Zhipu (GLM). Claude is available through OpenRouter.
+- Optionally use bring-your-own-key AI insight with a supported provider; AI is off by default and runs only when you enable it and trigger an action.
 ```
 
 Suggested category:

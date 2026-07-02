@@ -42,7 +42,7 @@ export function TagCloud({
             type="button"
             onClick={() => onSelect(tag)}
             style={{ fontSize: `${sizeFor(count)}rem` }}
-            className={`leading-none transition hover:text-cinnabar ${selectedTags.has(tag) ? 'text-cinnabar' : 'text-ink'}`}
+            className={`leading-none transition hover:text-accent-deep ${selectedTags.has(tag) ? 'text-accent-deep' : 'text-ink'}`}
           >
             {tag}
           </button>
@@ -63,7 +63,7 @@ export function TagCloud({
             onClick={() => {
               if (window.confirm(formatMessage(locale, 'cloud.deleteConfirm', { tag }))) onDelete(tag);
             }}
-            className="text-xs text-muted opacity-0 transition hover:text-cinnabar group-hover:opacity-100"
+            className="text-xs text-muted opacity-0 transition hover:text-accent-deep group-hover:opacity-100"
           >
             ×
           </button>

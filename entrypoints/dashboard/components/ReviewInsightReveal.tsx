@@ -22,7 +22,7 @@ export function ReviewInsightReveal({
     return (
       <button
         onClick={() => setRevealed(true)}
-        className="mt-3 inline-flex items-center gap-1 rounded-sm border border-border bg-paper-input px-2 py-1 text-xs text-muted transition hover:border-cinnabar-border hover:text-cinnabar"
+        className="mt-3 inline-flex items-center gap-1 rounded-sm border border-border bg-paper-input px-2 py-1 text-xs text-muted transition hover:border-accent-border hover:text-accent-deep"
       >
         {t(locale, 'review.showDefinitions')}
       </button>
@@ -57,8 +57,8 @@ function RevealedReviewInsight({ word, locale }: { word: WordEntry; locale: UiLo
       )}
       <SourceExamples examples={topExamples} externalLinks={[]} locale={locale} />
       {word.aiInsight && (
-        <div className="space-y-1.5 rounded-sm border border-cinnabar-fade bg-paper-light p-3">
-          <p className="text-[11px] font-medium uppercase tracking-[2px] text-cinnabar">AI 释义</p>
+        <div className="space-y-1.5 rounded-sm border border-accent-fade bg-paper-light p-3">
+          <p className="text-[11px] font-medium uppercase tracking-[2px] text-accent-deep">AI 释义</p>
           <p className="text-sm text-ink">{word.aiInsight.summary}</p>
           {word.aiInsight.definitions.map((definition) => (
             <p key={definition} className="text-xs text-ink-secondary">

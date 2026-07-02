@@ -24,7 +24,7 @@ const RATINGS: Array<{
     | 'review.hardTitle'
     | 'review.goodTitle'
     | 'review.easyTitle';
-  tone: 'muted' | 'cinnabar' | 'good' | 'easy';
+  tone: 'muted' | 'accent' | 'good' | 'easy';
 }> = [
   {
     rating: 'again',
@@ -36,7 +36,7 @@ const RATINGS: Array<{
     rating: 'hard',
     labelKey: 'review.hard',
     titleKey: 'review.hardTitle',
-    tone: 'cinnabar',
+    tone: 'accent',
   },
   {
     rating: 'good',
@@ -226,7 +226,7 @@ export function ReviewCard({
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-          <span className="inline-flex items-center gap-1 rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-1 font-medium text-cinnabar tracking-[1px]">
+          <span className="inline-flex items-center gap-1 rounded-sm border border-accent-border bg-accent-light px-2 py-1 font-medium text-accent-deep tracking-[1px]">
             {entry.kind === 'word' ? (
               <WholeWord className="h-3.5 w-3.5" />
             ) : (
@@ -246,7 +246,7 @@ export function ReviewCard({
               {entry.tags.map((tag) => (
                 <span
                   key={tag}
-                  className="rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-1 text-cinnabar"
+                  className="rounded-sm border border-accent-border bg-accent-light px-2 py-1 text-accent-deep"
                 >
                   #{tag}
                 </span>
@@ -281,18 +281,18 @@ export function ReviewCard({
         <div className="flex flex-1 flex-col justify-center py-8">
           <blockquote
             tabIndex={-1}
-            className="relative border-l-[3px] border-cinnabar-fade py-3 pl-7 pr-5 text-2xl leading-[2] text-ink tracking-[2px] sm:text-3xl"
+            className="relative border-l-[3px] border-accent-fade py-3 pl-7 pr-5 text-2xl leading-[2] text-ink tracking-[2px] sm:text-3xl"
           >
             <span
               aria-hidden="true"
-              className="absolute left-2 top-1 text-2xl text-cinnabar/40"
+              className="absolute left-2 top-1 text-2xl text-accent-deep/40"
             >
               「
             </span>
             <span>{entry.text}</span>
             <span
               aria-hidden="true"
-              className="absolute bottom-0 right-1 text-2xl text-cinnabar/40"
+              className="absolute bottom-0 right-1 text-2xl text-accent-deep/40"
             >
               」
             </span>
@@ -336,7 +336,7 @@ export function ReviewCard({
               onClick={() => setRevealed(true)}
               disabled={busy}
               title={t(locale, 'review.revealTitle')}
-              className="inline-flex items-center gap-1 rounded-sm bg-cinnabar px-4 py-2.5 text-sm font-medium text-white shadow-sm tracking-[2px] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-sm bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm tracking-[2px] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Eye className="h-4 w-4" />
               {t(locale, 'review.reveal')}
@@ -397,11 +397,11 @@ function ClozeQuoteBody({
       <div className="flex flex-1 flex-col justify-center py-8">
         <blockquote
           tabIndex={-1}
-          className="relative border-l-[3px] border-cinnabar-fade py-3 pl-7 pr-5 text-2xl leading-[2] text-ink tracking-[2px] sm:text-3xl"
+          className="relative border-l-[3px] border-accent-fade py-3 pl-7 pr-5 text-2xl leading-[2] text-ink tracking-[2px] sm:text-3xl"
         >
-          <span aria-hidden="true" className="absolute left-2 top-1 text-2xl text-cinnabar/40">「</span>
+          <span aria-hidden="true" className="absolute left-2 top-1 text-2xl text-accent-deep/40">「</span>
           <span>{text}</span>
-          <span aria-hidden="true" className="absolute bottom-0 right-1 text-2xl text-cinnabar/40">」</span>
+          <span aria-hidden="true" className="absolute bottom-0 right-1 text-2xl text-accent-deep/40">」</span>
         </blockquote>
         {quote.note && revealed && (
           <p className="mt-5 rounded-sm border border-border bg-paper-input px-4 py-3 text-sm leading-7 text-ink-secondary">
@@ -432,23 +432,23 @@ function ClozeQuoteBody({
       <div className="flex flex-1 flex-col justify-center py-8">
         <blockquote
           tabIndex={-1}
-          className="relative border-l-[3px] border-cinnabar-fade py-3 pl-7 pr-5 text-2xl leading-[2] text-ink tracking-[2px] sm:text-3xl"
+          className="relative border-l-[3px] border-accent-fade py-3 pl-7 pr-5 text-2xl leading-[2] text-ink tracking-[2px] sm:text-3xl"
         >
-          <span aria-hidden="true" className="absolute left-2 top-1 text-2xl text-cinnabar/40">「</span>
+          <span aria-hidden="true" className="absolute left-2 top-1 text-2xl text-accent-deep/40">「</span>
           <span>
             {before}
-            <span className="rounded-sm bg-cinnabar/15 px-0.5 text-cinnabar font-medium">
+            <span className="rounded-sm bg-accent/15 px-0.5 text-accent-deep font-medium">
               {answer}
             </span>
             {after}
           </span>
-          <span aria-hidden="true" className="absolute bottom-0 right-1 text-2xl text-cinnabar/40">」</span>
+          <span aria-hidden="true" className="absolute bottom-0 right-1 text-2xl text-accent-deep/40">」</span>
         </blockquote>
         <div className="mt-3 flex items-center gap-2">
           <span className="text-sm text-muted tracking-[1px]">
             {t(locale, 'review.answer')}:
           </span>
-          <span className="text-base font-medium text-cinnabar">
+          <span className="text-base font-medium text-accent-deep">
             {toPinyin(answer)}
           </span>
           <SpeakButton text={text} locale={locale} />
@@ -466,15 +466,15 @@ function ClozeQuoteBody({
     <div className="flex flex-1 flex-col justify-center py-8">
       <blockquote
         tabIndex={-1}
-        className="relative border-l-[3px] border-cinnabar-fade py-3 pl-7 pr-5 text-2xl leading-[2] text-ink tracking-[2px] sm:text-3xl"
+        className="relative border-l-[3px] border-accent-fade py-3 pl-7 pr-5 text-2xl leading-[2] text-ink tracking-[2px] sm:text-3xl"
       >
-        <span aria-hidden="true" className="absolute left-2 top-1 text-2xl text-cinnabar/40">「</span>
+        <span aria-hidden="true" className="absolute left-2 top-1 text-2xl text-accent-deep/40">「</span>
         <span>
           {before}
           <ClozeBlank cloze={activeCloze} answer={answer} locale={locale} />
           {after}
         </span>
-        <span aria-hidden="true" className="absolute bottom-0 right-1 text-2xl text-cinnabar/40">」</span>
+        <span aria-hidden="true" className="absolute bottom-0 right-1 text-2xl text-accent-deep/40">」</span>
       </blockquote>
       {quote.note && showNote && (
         <p className="mt-5 rounded-sm border border-border bg-paper-input px-4 py-3 text-sm leading-7 text-ink-secondary">
@@ -507,7 +507,7 @@ function ClozeBlank({
           <span
             key={i}
             data-cloze-box
-            className="inline-block h-6 w-6 rounded-sm border-2 border-cinnabar/40 bg-cinnabar/5"
+            className="inline-block h-6 w-6 rounded-sm border-2 border-accent/40 bg-accent/5"
           />
         ))}
       </span>
@@ -521,7 +521,7 @@ function ClozeBlank({
         <span className="text-xs text-muted leading-none pb-0.5">{py}</span>
         <span
           aria-label={ariaLabel}
-          className="text-cinnabar/60 font-medium tracking-widest"
+          className="text-accent-deep/60 font-medium tracking-widest"
         >
           ____
         </span>
@@ -533,7 +533,7 @@ function ClozeBlank({
   return (
     <span
       aria-label={ariaLabel}
-      className="text-cinnabar/60 font-medium tracking-widest"
+      className="text-accent-deep/60 font-medium tracking-widest"
     >
       ____
     </span>
@@ -564,17 +564,17 @@ function PostponeButton({
 }
 
 function toneClasses(
-  tone: 'muted' | 'cinnabar' | 'good' | 'easy',
+  tone: 'muted' | 'accent' | 'good' | 'easy',
 ): string {
   switch (tone) {
     case 'muted':
       return 'border border-border bg-transparent text-ink-secondary hover:border-border-hover hover:bg-paper-input';
-    case 'cinnabar':
-      return 'border border-cinnabar-border bg-cinnabar-light text-cinnabar hover:bg-cinnabar hover:text-white';
+    case 'accent':
+      return 'border border-accent-border bg-accent-light text-accent-deep hover:bg-accent hover:text-white';
     case 'good':
-      return 'bg-cinnabar text-white shadow-sm hover:brightness-95';
+      return 'bg-accent text-white shadow-sm hover:brightness-95';
     case 'easy':
-      return 'border border-border bg-paper-input text-ink hover:border-cinnabar-fade';
+      return 'border border-border bg-paper-input text-ink hover:border-accent-fade';
   }
 }
 

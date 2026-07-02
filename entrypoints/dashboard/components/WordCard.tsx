@@ -35,13 +35,19 @@ export function WordCard({
   const latestLabel = latest ? occurrenceSourceLabel(latest) : '';
 
   return (
-    <div className="rounded-sm border border-border bg-paper-light p-4 shadow-sm transition hover:border-border-hover hover:shadow-md">
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_1px_3px_rgba(90,75,50,0.06)] transition hover:border-border-hover hover:shadow-[0_4px_14px_rgba(90,75,50,0.09)]">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-wash text-sm font-semibold text-accent-deep"
+            >
+              词
+            </span>
             <button
               onClick={() => setExpanded(!expanded)}
-              className="rounded-sm p-1 text-muted transition hover:bg-paper-input hover:text-ink-secondary"
+              className="rounded-full p-1 text-muted transition hover:bg-accent-tint hover:text-ink-secondary"
             >
               {expanded ? (
                 <ChevronDown className="h-4 w-4" />
@@ -66,19 +72,19 @@ export function WordCard({
               locale={locale}
             />
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-7">
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-11">
             {occurrences.length > 0 && (
-              <span className="rounded-sm border border-border bg-paper-input px-2 py-0.5 text-xs text-muted">
+              <span className="rounded-full border border-border bg-card-soft px-2.5 py-0.5 text-xs text-muted">
                 {occurrences.length} {t(locale, 'word.encounters')}
               </span>
             )}
             {latestLabel && (
-              <span className="truncate rounded-sm border border-border bg-paper-input px-2 py-0.5 text-xs text-muted">
+              <span className="truncate rounded-full border border-border bg-card-soft px-2.5 py-0.5 text-xs text-muted">
                 {latestLabel}
               </span>
             )}
             {showTraditional && word.traditionalText && (
-              <span className="text-xs italic text-cinnabar">{word.traditionalText}</span>
+              <span className="text-xs italic text-accent-deep">{word.traditionalText}</span>
             )}
           </div>
         </div>
@@ -87,7 +93,7 @@ export function WordCard({
             <button
               title={t(locale, 'word.openAiInsight')}
               onClick={() => setExpanded(true)}
-              className="inline-flex h-7 items-center justify-center gap-1 rounded-sm border border-border bg-paper-input px-2 text-xs font-semibold text-muted transition hover:border-cinnabar-border hover:text-cinnabar"
+              className="inline-flex h-7 items-center justify-center gap-1 rounded-full border border-border bg-card-soft px-2.5 text-xs font-semibold text-muted transition hover:border-accent-border hover:text-accent-deep"
             >
               <Sparkles className="h-3 w-3" />
               AI
@@ -97,7 +103,7 @@ export function WordCard({
             <button
               title={t(locale, 'word.markReviewed')}
               onClick={() => onUpdate({ status: 'reviewed' })}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-cinnabar-border bg-cinnabar-light text-xs font-semibold text-cinnabar transition hover:bg-cinnabar hover:text-white"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-accent-border bg-accent-light text-xs font-semibold text-accent-deep transition hover:bg-accent hover:text-white"
             >
               {t(locale, 'word.markReviewedShort')}
             </button>
@@ -106,7 +112,7 @@ export function WordCard({
             <button
               title={t(locale, 'word.archive')}
               onClick={() => onUpdate({ status: 'archived' })}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-border bg-transparent text-xs font-semibold text-muted transition hover:border-border-hover hover:bg-paper-input hover:text-ink-secondary"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-transparent text-xs font-semibold text-muted transition hover:border-border-hover hover:bg-paper-input hover:text-ink-secondary"
             >
               {t(locale, 'word.archiveShort')}
             </button>
@@ -114,7 +120,7 @@ export function WordCard({
           <button
             title={t(locale, 'word.delete')}
             onClick={onDelete}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-border bg-transparent text-xs font-semibold text-muted transition hover:border-cinnabar-border hover:bg-cinnabar-light hover:text-cinnabar"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-transparent text-xs font-semibold text-muted transition hover:border-accent-border hover:bg-accent-light hover:text-accent-deep"
           >
             {t(locale, 'word.deleteShort')}
           </button>
@@ -140,7 +146,7 @@ export function WordCard({
                           href={occurrence.sourceUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="hover:text-cinnabar"
+                          className="hover:text-accent-deep"
                         >
                           {label}
                         </a>
@@ -162,7 +168,7 @@ export function WordCard({
             onChange={(event) => setNote(event.target.value)}
             onBlur={() => note !== word.note && onUpdate({ note })}
             placeholder={t(locale, 'word.notePlaceholder')}
-            className="w-full resize-none rounded-sm border border-border bg-paper-input p-2 text-xs text-ink outline-none transition placeholder:text-muted focus:border-cinnabar-fade"
+            className="w-full resize-none rounded-sm border border-border bg-paper-input p-2 text-xs text-ink outline-none transition placeholder:text-muted focus:border-accent-fade"
             rows={2}
           />
         </div>

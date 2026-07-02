@@ -5,6 +5,12 @@ export const messages = {
     'app.loading': 'Opening your collection...',
     'app.todayPrefix': 'Today',
     'app.subtitle': 'Save Chinese words and sentences from the web into a light reading notebook.',
+    'greeting.morning': 'Good morning',
+    'greeting.afternoon': 'Good afternoon',
+    'greeting.evening': 'Good evening',
+    'greeting.subMorning': "The light's just right — bring home a new word?",
+    'greeting.subAfternoon': "A quiet afternoon — leaf through today's finds.",
+    'greeting.subEvening': 'The evening is calm — revisit a few characters?',
     'app.reviewToday': 'Review today',
     'app.inbox': 'Inbox',
     'app.reviewed': 'Reviewing',
@@ -207,6 +213,12 @@ export const messages = {
     'app.loading': '正在翻开收藏箱...',
     'app.todayPrefix': '今日拾语',
     'app.subtitle': '把网页里遇见的词语和句子收进一本轻巧的中文阅读手帐。',
+    'greeting.morning': '早安',
+    'greeting.afternoon': '午安',
+    'greeting.evening': '晚安',
+    'greeting.subMorning': '晨光刚好，捡一个词回来？',
+    'greeting.subAfternoon': '午后小憩，翻翻今天的收藏吧。',
+    'greeting.subEvening': '夜色正好，与几个字温故一下？',
     'app.reviewToday': '今日复习',
     'app.inbox': '待整理',
     'app.reviewed': '复习中',
@@ -408,6 +420,18 @@ export const messages = {
 } as const;
 
 export type MessageKey = keyof typeof messages.en;
+
+export type GreetingPeriod = 'morning' | 'afternoon' | 'evening';
+
+/**
+ * Map a 0–23 hour to a greeting period.
+ * Boundaries: 5→morning, 11→afternoon, 18→evening (wrapping past midnight).
+ */
+export function greetingPeriod(hour: number): GreetingPeriod {
+  if (hour >= 5 && hour < 11) return 'morning';
+  if (hour >= 11 && hour < 18) return 'afternoon';
+  return 'evening';
+}
 
 export function t(locale: UiLocale, key: MessageKey): string {
   return messages[locale][key] ?? String(key);

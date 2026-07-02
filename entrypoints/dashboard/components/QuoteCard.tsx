@@ -42,22 +42,30 @@ export function QuoteCard({
   const quoteTextRef = useRef<HTMLSpanElement>(null);
 
   return (
-    <div className="rounded-sm border border-border bg-paper-light p-4 shadow-sm transition hover:border-border-hover hover:shadow-md">
-      <blockquote className="relative border-l-[3px] border-cinnabar-fade py-1 pl-5 pr-4 text-base leading-8 text-ink tracking-[1px]">
-        <span aria-hidden="true" className="absolute left-2 top-0 text-xl text-cinnabar/40">
-          「
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_1px_3px_rgba(90,75,50,0.06)] transition hover:border-border-hover hover:shadow-[0_4px_14px_rgba(90,75,50,0.09)]">
+      <div className="flex gap-3">
+        <span
+          aria-hidden="true"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-peach text-sm font-semibold text-peach-deep"
+        >
+          摘
         </span>
-        <span ref={quoteTextRef} data-quote-text>{quote.text}</span>
-        <span aria-hidden="true" className="absolute bottom-0 right-1 text-xl text-cinnabar/40">
-          」
-        </span>
-      </blockquote>
+        <blockquote className="relative min-w-0 flex-1 border-l-[3px] border-peach py-1 pl-5 pr-4 text-base leading-8 text-ink tracking-[1px]">
+          <span aria-hidden="true" className="absolute left-2 top-0 text-xl text-peach-deep/50">
+            「
+          </span>
+          <span ref={quoteTextRef} data-quote-text>{quote.text}</span>
+          <span aria-hidden="true" className="absolute bottom-0 right-1 text-xl text-peach-deep/50">
+            」
+          </span>
+        </blockquote>
+      </div>
       {showTraditional && quote.traditionalText && (
-        <p className="mt-2 pl-5 text-sm italic text-cinnabar">{quote.traditionalText}</p>
+        <p className="mt-2 pl-5 text-sm italic text-accent-deep">{quote.traditionalText}</p>
       )}
       {showParkedMarker && (
         <div className="mt-2 flex items-center gap-2">
-          <span className="inline-flex items-center rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-0.5 text-[11px] font-semibold text-cinnabar tracking-[1px]">
+          <span className="inline-flex items-center rounded-full border border-accent-border bg-accent-tint px-2.5 py-0.5 text-[11px] font-semibold text-accent-deep tracking-[1px]">
             {t(locale, 'cloze.parked')}
           </span>
           <span className="text-xs text-muted">{t(locale, 'cloze.addBlank')}</span>
@@ -67,14 +75,14 @@ export function QuoteCard({
         {quote.tags.map((tag) => (
           <span
             key={tag}
-            className="inline-flex items-center gap-1 rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-1 text-cinnabar"
+            className="inline-flex items-center gap-1 rounded-full border border-accent-border bg-accent-tint px-2.5 py-1 text-accent-deep"
           >
             #{tag}
             <button
               type="button"
               aria-label={formatMessage(locale, 'quote.removeTag', { tag })}
               onClick={() => onSetTags(removeTag(quote.tags, tag))}
-              className="text-cinnabar/70 transition hover:text-cinnabar"
+              className="text-accent-deep/70 transition hover:text-accent-deep"
             >
               ×
             </button>
@@ -92,7 +100,7 @@ export function QuoteCard({
           }}
           onBlur={commitTag}
           placeholder={t(locale, 'quote.addTag')}
-          className="w-24 rounded-sm border border-border bg-paper-input px-2 py-1 text-ink outline-none transition focus:border-cinnabar-fade"
+          className="w-24 rounded-sm border border-border bg-paper-input px-2 py-1 text-ink outline-none transition focus:border-accent-fade"
         />
         <datalist id={listId}>
           {suggestions.map((tag) => (
@@ -104,7 +112,7 @@ export function QuoteCard({
             href={quote.sourceUrl}
             target="_blank"
             rel="noreferrer"
-            className="rounded-sm border border-border bg-paper-input px-2 py-1 hover:text-cinnabar"
+            className="rounded-full border border-border bg-card-soft px-2.5 py-1 hover:text-accent-deep"
           >
             {quote.sourceTitle || quote.sourceDomain}
           </a>
@@ -124,7 +132,7 @@ export function QuoteCard({
         onBlur={() => note !== quote.note && onUpdate({ note })}
         placeholder={t(locale, 'quote.notePlaceholder')}
         rows={2}
-        className="mt-3 w-full resize-none rounded-sm border border-border bg-paper-input p-2 text-xs text-ink outline-none transition placeholder:text-muted focus:border-cinnabar-fade"
+        className="mt-3 w-full resize-none rounded-sm border border-border bg-paper-input p-2 text-xs text-ink outline-none transition placeholder:text-muted focus:border-accent-fade"
       />
       <ClozeEditor
         quote={quote}
@@ -138,7 +146,7 @@ export function QuoteCard({
           <button
             onClick={() => onUpdate({ status: 'reviewed' })}
             title={t(locale, 'word.markReviewed')}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-cinnabar-border bg-cinnabar-light text-xs font-semibold text-cinnabar transition hover:bg-cinnabar hover:text-white"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-accent-border bg-accent-light text-xs font-semibold text-accent-deep transition hover:bg-accent hover:text-white"
           >
             {t(locale, 'word.markReviewedShort')}
           </button>
@@ -147,7 +155,7 @@ export function QuoteCard({
           <button
             onClick={() => onUpdate({ status: 'archived' })}
             title={t(locale, 'word.archive')}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-border bg-transparent text-xs font-semibold text-muted transition hover:border-border-hover hover:bg-paper-input hover:text-ink-secondary"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-transparent text-xs font-semibold text-muted transition hover:border-border-hover hover:bg-paper-input hover:text-ink-secondary"
           >
             {t(locale, 'word.archiveShort')}
           </button>
@@ -155,7 +163,7 @@ export function QuoteCard({
         <button
           onClick={onDelete}
           title={t(locale, 'word.delete')}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-border bg-transparent text-xs font-semibold text-muted transition hover:border-cinnabar-border hover:bg-cinnabar-light hover:text-cinnabar"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-transparent text-xs font-semibold text-muted transition hover:border-accent-border hover:bg-accent-light hover:text-accent-deep"
         >
           {t(locale, 'word.deleteShort')}
         </button>

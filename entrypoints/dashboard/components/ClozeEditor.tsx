@@ -129,14 +129,14 @@ export function ClozeEditor({ quote, onChange, onUpdate, locale, quoteTextRef }:
             value={markup}
             onChange={(e) => setMarkup(e.target.value)}
             rows={3}
-            className="w-full resize-none rounded-sm border border-border bg-paper-light p-2 text-sm text-ink outline-none focus:border-cinnabar-fade"
+            className="w-full resize-none rounded-sm border border-border bg-paper-light p-2 text-sm text-ink outline-none focus:border-accent-fade"
           />
           <p className="text-[11px] text-muted">{t(locale, 'cloze.markupHelp')}</p>
-          {markupError && <p className="text-[11px] text-cinnabar">{markupError}</p>}
+          {markupError && <p className="text-[11px] text-accent-deep">{markupError}</p>}
           <button
             type="button"
             onClick={applyMarkup}
-            className="rounded-sm border border-cinnabar-border bg-cinnabar px-2 py-0.5 text-xs text-white transition hover:bg-cinnabar/80"
+            className="rounded-sm border border-accent-border bg-accent px-2 py-0.5 text-xs text-white transition hover:bg-accent/80"
           >
             {t(locale, 'cloze.applyMarks')}
           </button>
@@ -145,7 +145,7 @@ export function ClozeEditor({ quote, onChange, onUpdate, locale, quoteTextRef }:
 
       {/* AI candidate panel */}
       {ai.candidates !== null && (
-        <div className="rounded-sm border border-cinnabar-border bg-cinnabar-light p-2">
+        <div className="rounded-sm border border-accent-border bg-accent-light p-2">
           {ai.candidates.length === 0 ? (
             <p className="text-xs text-muted">{t(locale, 'cloze.aiNoSuggestions')}</p>
           ) : (
@@ -154,14 +154,14 @@ export function ClozeEditor({ quote, onChange, onUpdate, locale, quoteTextRef }:
                 <div key={cand.cloze.id} className="flex items-center gap-1">
                   <span
                     title={cand.reason}
-                    className="rounded-sm border border-cinnabar-border px-2 py-0.5 text-xs text-cinnabar"
+                    className="rounded-sm border border-accent-border px-2 py-0.5 text-xs text-accent-deep"
                   >
                     {quote.text.slice(cand.cloze.start, cand.cloze.end)}
                   </span>
                   <button
                     type="button"
                     onClick={() => acceptCandidate(cand.cloze)}
-                    className="rounded-sm border border-cinnabar-border bg-cinnabar px-2 py-0.5 text-xs text-white transition hover:bg-cinnabar/80"
+                    className="rounded-sm border border-accent-border bg-accent px-2 py-0.5 text-xs text-white transition hover:bg-accent/80"
                   >
                     {t(locale, 'cloze.accept')}
                   </button>
@@ -171,7 +171,7 @@ export function ClozeEditor({ quote, onChange, onUpdate, locale, quoteTextRef }:
           )}
         </div>
       )}
-      {ai.state === 'error' && <p className="text-[11px] text-cinnabar">{ai.error}</p>}
+      {ai.state === 'error' && <p className="text-[11px] text-accent-deep">{ai.error}</p>}
 
       {/* Actions row */}
       <div className="flex flex-wrap gap-2">
@@ -179,14 +179,14 @@ export function ClozeEditor({ quote, onChange, onUpdate, locale, quoteTextRef }:
           type="button"
           title={t(locale, 'cloze.addBlank')}
           onClick={handleAddBlank}
-          className="rounded-sm border border-border bg-paper-input px-2 py-1 text-xs text-muted transition hover:border-cinnabar-border hover:text-cinnabar"
+          className="rounded-sm border border-border bg-paper-input px-2 py-1 text-xs text-muted transition hover:border-accent-border hover:text-accent-deep"
         >
           {t(locale, 'cloze.addBlank')}
         </button>
         <button
           type="button"
           onClick={showMarkup ? () => setShowMarkup(false) : openMarkup}
-          className="rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-1 text-xs text-cinnabar transition hover:bg-cinnabar hover:text-white"
+          className="rounded-sm border border-accent-border bg-accent-light px-2 py-1 text-xs text-accent-deep transition hover:bg-accent hover:text-white"
         >
           {t(locale, 'cloze.markBlanks')}
         </button>
@@ -206,7 +206,7 @@ export function ClozeEditor({ quote, onChange, onUpdate, locale, quoteTextRef }:
             type="button"
             onClick={ai.requestSuggestions}
             disabled={ai.state === 'loading'}
-            className="rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-1 text-xs text-cinnabar transition hover:bg-cinnabar hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-sm border border-accent-border bg-accent-light px-2 py-1 text-xs text-accent-deep transition hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             {ai.state === 'loading'
               ? t(locale, 'cloze.aiLoading')
@@ -240,12 +240,12 @@ function ClozeChip({
   const spanText = text.slice(cloze.start, cloze.end);
 
   return (
-    <div className="flex items-center gap-1 rounded-sm border border-cinnabar-border bg-cinnabar-light px-2 py-1">
-      <span className="text-xs font-medium text-cinnabar">{spanText}</span>
+    <div className="flex items-center gap-1 rounded-sm border border-accent-border bg-accent-light px-2 py-1">
+      <span className="text-xs font-medium text-accent-deep">{spanText}</span>
       <select
         value={cloze.hint ?? 'none'}
         onChange={(e) => onChangeHint(e.target.value as Cloze['hint'])}
-        className="rounded-sm border border-cinnabar-border bg-paper-input px-1 py-0.5 text-xs text-ink outline-none"
+        className="rounded-sm border border-accent-border bg-paper-input px-1 py-0.5 text-xs text-ink outline-none"
       >
         <option value="none">{t(locale, 'cloze.hintNone')}</option>
         <option value="pinyin">{t(locale, 'cloze.hintPinyin')}</option>
@@ -256,7 +256,7 @@ function ClozeChip({
         title={t(locale, 'cloze.removeBlank')}
         data-cloze-id={cloze.id}
         onClick={onRemove}
-        className="ml-1 rounded-sm px-1 text-xs text-muted transition hover:text-cinnabar"
+        className="ml-1 rounded-sm px-1 text-xs text-muted transition hover:text-accent-deep"
       >
         {t(locale, 'cloze.removeBlank')}
       </button>

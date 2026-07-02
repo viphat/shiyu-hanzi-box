@@ -41,7 +41,7 @@ export function FolderSyncView(props: FolderSyncViewProps) {
   return (
     <section className="rounded-sm border border-border bg-paper-light p-4 shadow-sm">
       <div className="mb-3 flex items-center gap-2">
-        <FolderSyncIcon className="h-4 w-4 text-cinnabar" aria-hidden="true" />
+        <FolderSyncIcon className="h-4 w-4 text-accent-deep" aria-hidden="true" />
         <h2 className="text-sm font-semibold tracking-[2px]">
           {t(locale, 'sync.section.title')}
         </h2>
@@ -90,7 +90,7 @@ function FolderSyncDisconnectedView({
         <button
           type="button"
           onClick={onCreateVault}
-          className="inline-flex items-center gap-1 rounded-sm bg-cinnabar px-3 py-2 text-xs font-medium text-white shadow-sm tracking-[1px] transition hover:brightness-95"
+          className="inline-flex items-center gap-1 rounded-sm bg-accent px-3 py-2 text-xs font-medium text-white shadow-sm tracking-[1px] transition hover:brightness-95"
         >
           {t(locale, 'sync.action.createVault')}
         </button>
@@ -176,7 +176,7 @@ function FolderSyncConnectedView({
       </dl>
 
       {config.lastError && (
-        <p className="mb-3 rounded-sm border border-cinnabar-border bg-cinnabar-light px-3 py-2 text-xs text-cinnabar">
+        <p className="mb-3 rounded-sm border border-accent-border bg-accent-light px-3 py-2 text-xs text-accent-deep">
           {config.lastError.code}
           {config.lastError.replica ? ` (${config.lastError.replica})` : ''}
         </p>
@@ -186,7 +186,7 @@ function FolderSyncConnectedView({
         <button
           type="button"
           onClick={onSyncNow}
-          className="inline-flex items-center gap-1 rounded-sm bg-cinnabar px-3 py-2 text-xs font-medium text-white shadow-sm tracking-[1px] transition hover:brightness-95"
+          className="inline-flex items-center gap-1 rounded-sm bg-accent px-3 py-2 text-xs font-medium text-white shadow-sm tracking-[1px] transition hover:brightness-95"
         >
           {t(locale, 'sync.action.syncNow')}
         </button>
@@ -207,7 +207,7 @@ function FolderSyncConnectedView({
         <button
           type="button"
           onClick={onDisconnect}
-          className="inline-flex items-center gap-1 rounded-sm border border-border px-3 py-2 text-xs font-medium text-cinnabar tracking-[1px] transition hover:border-cinnabar-border hover:bg-cinnabar-light"
+          className="inline-flex items-center gap-1 rounded-sm border border-border px-3 py-2 text-xs font-medium text-accent-deep tracking-[1px] transition hover:border-accent-border hover:bg-accent-light"
         >
           {t(locale, 'sync.action.disconnect')}
         </button>
@@ -272,7 +272,7 @@ export function PassphraseDialog({
                 type="checkbox"
                 checked={confirmed}
                 onChange={(e) => setConfirmed(e.target.checked)}
-                className="accent-cinnabar"
+                className="accent-accent"
               />
               {t(locale, 'sync.dialog.iUnderstand')}
             </label>
@@ -286,7 +286,7 @@ export function PassphraseDialog({
               type="password"
               value={passphrase}
               onChange={(e) => setPassphrase(e.target.value)}
-              className="mt-1 w-full rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs text-ink outline-none focus:border-cinnabar-fade"
+              className="mt-1 w-full rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs text-ink outline-none focus:border-accent-fade"
               autoFocus
             />
           </label>
@@ -297,10 +297,10 @@ export function PassphraseDialog({
                 type="password"
                 value={confirmPassphrase}
                 onChange={(e) => setConfirmPassphrase(e.target.value)}
-                className="mt-1 w-full rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs text-ink outline-none focus:border-cinnabar-fade"
+                className="mt-1 w-full rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs text-ink outline-none focus:border-accent-fade"
               />
               {mismatch && (
-                <span className="mt-1 block text-[11px] text-cinnabar">
+                <span className="mt-1 block text-[11px] text-accent-deep">
                   {t(locale, 'sync.dialog.passphraseMismatch')}
                 </span>
               )}
@@ -313,7 +313,7 @@ export function PassphraseDialog({
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder={t(locale, 'sync.dialog.deviceLabelPlaceholder')}
-              className="mt-1 w-full rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs text-ink outline-none focus:border-cinnabar-fade"
+              className="mt-1 w-full rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs text-ink outline-none focus:border-accent-fade"
             />
           </label>
         </div>
@@ -330,7 +330,7 @@ export function PassphraseDialog({
             type="button"
             disabled={isSubmitDisabled}
             onClick={() => onConfirm(passphrase, label)}
-            className="rounded-sm bg-cinnabar px-3 py-1.5 text-xs font-medium text-white tracking-[1px] transition hover:brightness-95 disabled:opacity-50"
+            className="rounded-sm bg-accent px-3 py-1.5 text-xs font-medium text-white tracking-[1px] transition hover:brightness-95 disabled:opacity-50"
           >
             {confirmLabel}
           </button>
@@ -465,7 +465,7 @@ export function FolderSync({ locale = 'zh-CN' }: { locale?: UiLocale }) {
       <FolderSyncView {...viewProps} />
 
       {error && (
-        <p className="text-xs text-cinnabar tracking-[1px]">{error}</p>
+        <p className="text-xs text-accent-deep tracking-[1px]">{error}</p>
       )}
 
       {dialog === 'create' && (

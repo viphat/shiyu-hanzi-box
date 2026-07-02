@@ -13,6 +13,7 @@ import {
 import { undoCapture } from '@/entrypoints/background/capture-undo';
 import { captureToastHeadline, truncateForToast } from '@/lib/capture-toast';
 import type { TaggedOutcome, UndoCaptureMessage } from '@/lib/capture';
+import { Sprig } from '@/components/Foliage';
 
 export function Popup() {
   const [busy, setBusy] = useState<'word' | 'quote' | null>(null);
@@ -117,12 +118,13 @@ export function Popup() {
   }
 
   return (
-    <div className="space-y-3 text-ink">
-      <div className="flex items-center gap-2">
+    <div className="relative space-y-3 text-ink">
+      <Sprig className="pointer-events-none absolute -right-1 -top-1 h-11 w-11 opacity-40" />
+      <div className="relative flex items-center gap-2">
         <img
           src={iconUrl}
           alt=""
-          className="h-8 w-8 rounded-sm"
+          className="h-8 w-8 rounded-[10px]"
           aria-hidden="true"
         />
         <h1 className="text-lg font-bold leading-none text-ink tracking-[4px]">
@@ -134,7 +136,7 @@ export function Popup() {
         <button
           onClick={() => go('word')}
           disabled={!!busy}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-sm bg-cinnabar px-3 py-3 text-xs font-medium text-white shadow-sm tracking-[2px] transition hover:brightness-95 disabled:opacity-50"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-accent px-3 py-3 text-xs font-medium text-on-accent shadow-sm tracking-[2px] transition hover:brightness-95 disabled:opacity-50"
         >
           {busy === 'word' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Type className="h-4 w-4" />}
           {t(locale, 'popup.saveWord')}
@@ -142,7 +144,7 @@ export function Popup() {
         <button
           onClick={() => go('quote')}
           disabled={!!busy}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-sm border border-border bg-transparent px-3 py-3 text-xs font-medium text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input disabled:opacity-50"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-border bg-transparent px-3 py-3 text-xs font-medium text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input disabled:opacity-50"
         >
           {busy === 'quote' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Quote className="h-4 w-4" />}
           {t(locale, 'popup.saveQuote')}
@@ -150,14 +152,14 @@ export function Popup() {
         <button
           onClick={openDashboard}
           disabled={!!busy}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-sm border border-border bg-paper-light px-3 py-3 text-xs font-medium text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input disabled:opacity-50"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-border bg-card px-3 py-3 text-xs font-medium text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input disabled:opacity-50"
         >
           <LayoutDashboard className="h-4 w-4" />
           {t(locale, 'popup.openDashboard')}
         </button>
       </div>
       {manualKind && (
-        <div className="space-y-2 rounded-sm border border-border bg-paper-light p-2">
+        <div className="space-y-2 rounded-2xl border border-border bg-card-soft p-2">
           <p className="text-xs leading-5 text-muted">
             {t(locale, 'popup.manualHint')}
           </p>
@@ -168,12 +170,12 @@ export function Popup() {
             placeholder={t(locale, 'popup.manualPlaceholder')}
             autoFocus
             rows={3}
-            className="w-full resize-none rounded-sm border border-border bg-paper-input p-2 text-xs text-ink outline-none transition placeholder:text-muted focus:border-cinnabar-fade"
+            className="w-full resize-none rounded-md border border-border bg-card-soft p-2 text-xs text-ink outline-none transition placeholder:text-muted focus:border-accent-fade"
           />
           <button
             onClick={() => pasteAndSave(manualKind)}
             disabled={!!busy}
-            className="inline-flex w-full items-center justify-center gap-1 rounded-sm border border-border bg-transparent px-3 py-2 text-xs font-medium text-ink-secondary tracking-[1px] transition hover:border-border-hover hover:bg-paper-input disabled:opacity-50"
+            className="inline-flex w-full items-center justify-center gap-1 rounded-full border border-border bg-transparent px-3 py-2 text-xs font-medium text-ink-secondary tracking-[1px] transition hover:border-border-hover hover:bg-paper-input disabled:opacity-50"
           >
             <ClipboardPaste className="h-3.5 w-3.5" />
             {t(locale, 'popup.pasteAndSave')}
@@ -181,7 +183,7 @@ export function Popup() {
           <button
             onClick={() => saveManual(manualKind)}
             disabled={!!busy || manualText.trim().length === 0}
-            className="w-full rounded-sm bg-cinnabar px-3 py-2 text-xs font-medium text-white shadow-sm tracking-[1px] transition hover:brightness-95 disabled:opacity-50"
+            className="w-full rounded-full bg-accent px-3 py-2 text-xs font-medium text-on-accent shadow-sm tracking-[1px] transition hover:brightness-95 disabled:opacity-50"
           >
             {manualKind === 'word' ? t(locale, 'popup.savePastedWord') : t(locale, 'popup.savePastedQuote')}
           </button>
@@ -189,15 +191,15 @@ export function Popup() {
       )}
       {msg && <p className="text-center text-xs text-muted tracking-[1px]">{msg}</p>}
       {confirm && (
-        <div className="space-y-2 rounded-sm border border-border bg-paper-light p-2">
-          <p className="text-[11px] tracking-[1px] text-cinnabar">
+        <div className="space-y-2 rounded-2xl border border-border bg-card-soft p-2">
+          <p className="text-[11px] tracking-[1px] text-accent-deep">
             {captureToastHeadline(confirm.outcome.kind, confirm.outcome.action, locale).headline}
           </p>
           <p className="text-sm leading-5 text-ink">{truncateForToast(confirm.outcome.entry.text)}</p>
           {confirm.undo && (
             <button
               onClick={onUndo}
-              className="w-full rounded-sm border border-border bg-transparent px-3 py-2 text-xs font-medium text-ink-secondary tracking-[1px] transition hover:border-border-hover hover:bg-paper-input"
+              className="w-full rounded-full border border-border bg-transparent px-3 py-2 text-xs font-medium text-ink-secondary tracking-[1px] transition hover:border-border-hover hover:bg-paper-input"
             >
               {t(locale, 'toast.undo')}
             </button>

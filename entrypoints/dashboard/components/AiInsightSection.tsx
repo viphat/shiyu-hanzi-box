@@ -9,15 +9,15 @@ export function AiInsightSection({
   onRegenerate: () => void;
 }) {
   return (
-    <div className="space-y-2 rounded-sm border border-cinnabar-fade bg-paper-light p-3">
+    <div className="space-y-2 rounded-sm border border-accent-fade bg-paper-light p-3">
       <div className="flex items-center justify-between">
-        <p className="text-[11px] font-medium uppercase tracking-[2px] text-cinnabar">
+        <p className="text-[11px] font-medium uppercase tracking-[2px] text-accent-deep">
           AI 释义
         </p>
         <button
           onClick={onRegenerate}
           title="重新生成"
-          className="rounded-sm p-1 text-muted transition hover:bg-paper-input hover:text-cinnabar"
+          className="rounded-sm p-1 text-muted transition hover:bg-paper-input hover:text-accent-deep"
         >
           <RefreshCw className="h-3 w-3" />
         </button>

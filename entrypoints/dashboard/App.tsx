@@ -14,7 +14,8 @@ import {
   type SrsQueueItem,
   type SrsStats,
 } from '@/lib/srs';
-import { t } from '@/lib/i18n';
+import { greetingPeriod, t, type MessageKey } from '@/lib/i18n';
+import { AutumnBranch, SageBranch } from '@/components/Foliage';
 import type {
   AiSettings,
   Entry,
@@ -88,11 +89,22 @@ export function App() {
     return () => window.clearTimeout(timer);
   }, [nextSrsWakeAt]);
 
+  const now = new Date();
   const today = new Intl.DateTimeFormat(locale, {
     month: 'long',
     day: 'numeric',
     weekday: 'long',
-  }).format(new Date());
+  }).format(now);
+  const period = greetingPeriod(now.getHours());
+  const greeting = t(locale, `greeting.${period}` as MessageKey);
+  const greetingSub = t(
+    locale,
+    period === 'morning'
+      ? 'greeting.subMorning'
+      : period === 'afternoon'
+        ? 'greeting.subAfternoon'
+        : 'greeting.subEvening',
+  );
 
   const matches = useMemo(() => {
     const byStatus = (status: Status) =>
@@ -283,48 +295,55 @@ export function App() {
 
   return (
     <div className="min-h-screen text-ink">
-      <header className="cinnabar-header-accent border-b-2 border-border-strong bg-paper-light">
-        <div className="mx-auto max-w-5xl px-5 py-6">
-          <div className="grid gap-5 md:grid-cols-[1fr_auto] md:items-end">
-            <div>
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-muted tracking-[2px]">
-                  {t(locale, 'app.todayPrefix')} · {today}
+      <header className="px-5 pt-6">
+        <div className="mx-auto max-w-5xl">
+          <div className="relative overflow-hidden rounded-2xl border border-border-soft bg-banner p-6 shadow-[0_1px_3px_rgba(90,75,50,0.06)]">
+            <SageBranch className="absolute -bottom-10 -left-8 hidden h-44 w-44 opacity-45 sm:block" />
+            <AutumnBranch className="absolute -right-6 -top-10 hidden h-36 w-36 opacity-40 sm:block" />
+            <div className="relative">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-medium text-muted tracking-[1px]">
+                  拾语汉字box · {today}
                 </p>
                 <SyncStatusBadge locale={locale} />
               </div>
-              <div className="mt-2 flex items-center gap-3">
-                <img
-                  src={iconUrl}
-                  alt=""
-                  className="h-11 w-11 rounded-sm"
-                  aria-hidden="true"
-                />
-                <h1 className="text-[26px] font-bold leading-none text-ink tracking-[6px]">
-                  拾语汉字box
-                </h1>
+              <div className="mt-3 flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <h1 className="text-[28px] font-bold leading-tight text-ink tracking-[3px]">
+                    {greeting}
+                  </h1>
+                  <p className="mt-1.5 max-w-md text-sm leading-6 text-ink-secondary tracking-[0.5px]">
+                    {greetingSub}
+                  </p>
+                </div>
+                <div className="shrink-0 rounded-2xl bg-card p-2 shadow-[0_1px_3px_rgba(90,75,50,0.06)]">
+                  <img
+                    src={iconUrl}
+                    alt=""
+                    className="h-12 w-12 rounded-[12px]"
+                    aria-hidden="true"
+                  />
+                </div>
               </div>
-              <p className="mt-2 max-w-xl text-xs leading-6 text-muted tracking-[2px]">
-                {t(locale, 'app.subtitle')}
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
-              <StatCard
-                icon={<BookOpen className="h-4 w-4" />}
-                label={t(locale, 'app.reviewToday')}
-                value={stats.review}
-              />
-              <StatCard icon={<Inbox className="h-4 w-4" />} label={t(locale, 'app.inbox')} value={stats.inbox} />
-              <StatCard
-                icon={<CheckCircle2 className="h-4 w-4" />}
-                label={t(locale, 'app.reviewed')}
-                value={stats.reviewed}
-              />
-              <StatCard
-                icon={<ScrollText className="h-4 w-4" />}
-                label={t(locale, 'app.archived')}
-                value={stats.archived}
-              />
+              <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <StatChip
+                  icon={<BookOpen className="h-4 w-4" />}
+                  label={t(locale, 'app.reviewToday')}
+                  value={stats.review}
+                  emphasize
+                />
+                <StatChip icon={<Inbox className="h-4 w-4" />} label={t(locale, 'app.inbox')} value={stats.inbox} />
+                <StatChip
+                  icon={<CheckCircle2 className="h-4 w-4" />}
+                  label={t(locale, 'app.reviewed')}
+                  value={stats.reviewed}
+                />
+                <StatChip
+                  icon={<ScrollText className="h-4 w-4" />}
+                  label={t(locale, 'app.archived')}
+                  value={stats.archived}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -346,50 +365,48 @@ export function App() {
 
         <SrsStatsPanel stats={srsStats} locale={locale} />
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-strong pb-3">
-          <div className="flex gap-1">
-            {(['review', 'words', 'quotes'] as Tab[]).map((nextTab) => (
-              <button
-                key={nextTab}
-                onClick={() => setTab(nextTab)}
-                className={`relative px-4 py-2 text-[13px] tracking-[2px] transition ${
-                  tab === nextTab
-                    ? "font-semibold text-ink after:absolute after:-bottom-[13px] after:left-1/2 after:h-0.5 after:w-9 after:-translate-x-1/2 after:bg-cinnabar-fade after:content-['']"
-                    : 'text-muted hover:text-ink-secondary'
-                }`}
-              >
-                {getTabLabel(nextTab, {
-                  review: reviewDueCount,
-                  words: inbox.words.length,
-                  quotes: inbox.quotes.length,
-                }, locale)}
-              </button>
-            ))}
-          </div>
-          {tab === 'review' ? (
-            <div className="inline-flex items-center gap-2 rounded-sm border border-border bg-paper-light px-3 py-2 text-sm text-muted shadow-sm">
-              <BookOpen className="h-4 w-4 text-cinnabar" />
-              {t(locale, 'app.reviewToday')}
+        <div className="rounded-2xl border border-border bg-card-soft p-3 shadow-[0_1px_3px_rgba(90,75,50,0.06)]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="inline-flex gap-1 rounded-full bg-chip p-1">
+              {(['review', 'words', 'quotes'] as Tab[]).map((nextTab) => (
+                <button
+                  key={nextTab}
+                  onClick={() => setTab(nextTab)}
+                  className={`rounded-full px-4 py-1.5 text-[13px] tracking-[1px] transition ${
+                    tab === nextTab
+                      ? 'bg-accent font-semibold text-on-accent shadow-sm'
+                      : 'text-muted hover:text-ink-secondary'
+                  }`}
+                >
+                  {getTabLabel(nextTab, {
+                    review: reviewDueCount,
+                    words: inbox.words.length,
+                    quotes: inbox.quotes.length,
+                  }, locale)}
+                </button>
+              ))}
             </div>
-          ) : (
-            <label className="inline-flex items-center gap-2 text-sm text-muted">
-              <BookOpen className="h-4 w-4 text-cinnabar" />
-              <select
-                value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-                className="rounded-sm border border-border bg-paper-input px-3 py-2 text-sm text-ink shadow-sm outline-none transition focus:border-cinnabar-fade"
-              >
-                <option value="inbox">{t(locale, 'app.inbox')}</option>
-                <option value="reviewed">{t(locale, 'app.reviewed')}</option>
-                <option value="archived">{t(locale, 'app.archived')}</option>
-                <option value="all">{t(locale, 'filter.all')}</option>
-              </select>
-            </label>
-          )}
-        </div>
-
-        <div className="bamboo-divider" aria-hidden="true">
-          ◇ ◇ ◇
+            {tab === 'review' ? (
+              <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-sm text-muted">
+                <BookOpen className="h-4 w-4 text-accent-deep" />
+                {t(locale, 'app.reviewToday')}
+              </div>
+            ) : (
+              <label className="inline-flex items-center gap-2 text-sm text-muted">
+                <BookOpen className="h-4 w-4 text-accent-deep" />
+                <select
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+                  className="rounded-full border border-border bg-card px-3 py-1.5 text-sm text-ink outline-none transition focus:border-accent-fade"
+                >
+                  <option value="inbox">{t(locale, 'app.inbox')}</option>
+                  <option value="reviewed">{t(locale, 'app.reviewed')}</option>
+                  <option value="archived">{t(locale, 'app.archived')}</option>
+                  <option value="all">{t(locale, 'filter.all')}</option>
+                </select>
+              </label>
+            )}
+          </div>
         </div>
 
         <section>
@@ -468,22 +485,26 @@ function getTabLabel(tab: Tab, counts: Record<Tab, number>, locale: UiLocale): s
   return `${t(locale, 'tab.quotes')} (${counts.quotes})`;
 }
 
-function StatCard({
+function StatChip({
   icon,
   label,
   value,
+  emphasize = false,
 }: {
   icon: ReactNode;
   label: string;
   value: number;
+  emphasize?: boolean;
 }) {
   return (
-    <div className="rounded-sm border border-border bg-paper-light px-4 py-3 text-ink">
-      <div className="mx-auto flex w-fit items-center gap-1 text-muted">
-        {icon}
-        <span className="text-[11px] tracking-[1px]">{label}</span>
+    <div className="flex items-center gap-2.5 rounded-[14px] border border-border-soft bg-[#fdfaf2] px-3 py-2.5">
+      <span className="shrink-0 text-accent-deep">{icon}</span>
+      <div className="min-w-0">
+        <div className="truncate text-[11px] tracking-[1px] text-muted">{label}</div>
+        <div className={`text-xl font-bold leading-tight ${emphasize ? 'text-accent-strong' : 'text-ink'}`}>
+          {value}
+        </div>
       </div>
-      <div className="mt-1 text-2xl font-bold">{value}</div>
     </div>
   );
 }
@@ -509,11 +530,11 @@ function SrsStatsPanel({
   ] as const;
 
   return (
-    <dl className="grid gap-2 rounded-sm border border-border bg-paper-light p-3 text-center sm:grid-cols-5">
+    <dl className="grid grid-cols-2 gap-2 rounded-2xl border border-border bg-card-soft p-3 shadow-[0_1px_3px_rgba(90,75,50,0.06)] sm:grid-cols-5">
       {items.map(([label, value]) => (
         <div
           key={label}
-          className="rounded-sm bg-paper-input px-2 py-2"
+          className="rounded-[14px] border border-border-soft bg-[#fdfaf2] px-3 py-2.5 text-center"
         >
           <dt className="text-[11px] tracking-[1px] text-muted">
             {label}

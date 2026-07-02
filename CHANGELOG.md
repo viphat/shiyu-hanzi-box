@@ -5,6 +5,33 @@ All notable changes to 拾语汉字box are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5] - 2026-07-02
+
+### Changed
+
+- **Watercolor UI redesign.** The whole extension moves from the "scholarly ink
+  & cinnabar" look to a cozy reading-journal aesthetic: a warm cream palette,
+  sage-green accents, large rounded corners, soft low shadows, and hand-drawn
+  watercolor foliage. This is purely presentational — no behavior, data, sync,
+  or SRS logic changed.
+  - **Design tokens.** `styles.css` is rebuilt around cream surfaces
+    (`paper`/`card`/`banner`), a sage `accent` scale (replacing every
+    `cinnabar-*` token), and a real radius scale (soft cards, pill controls).
+    The grid-paper texture is replaced by gentle radial washes, global
+    letter-spacing is relaxed, and text selection is sage-tinted.
+  - **Dashboard.** The header becomes a greeting hero banner — a time-of-day
+    greeting (早安 / 午安 / 晚安 with a friendly sub-line), the localized date,
+    the icon as a mascot tile, and the four stat cards folded in as soft chips.
+    Tabs become a sage pill segmented control, the toolbar search becomes a
+    pill, cards gain round word/quote avatars and pill badges, and the bamboo
+    `◇ ◇ ◇` divider is removed.
+  - **Popup, settings, and capture toast** inherit the new palette: pill
+    buttons, rounded cream cards, a small leaf sprig on the popup, and a
+    sage/cream in-page toast.
+- **Foliage decoration.** New inline-SVG botanical ornaments (`Foliage.tsx`) —
+  sage and autumn branches plus a small sprig — decorate the dashboard hero and
+  popup. They are non-interactive, low-opacity, and hidden on narrow viewports.
+
 ## [0.2.2] - 2026-07-02
 
 ### Fixed

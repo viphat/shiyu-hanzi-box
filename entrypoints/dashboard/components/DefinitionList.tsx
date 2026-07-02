@@ -23,9 +23,9 @@ export function DefinitionList({
         {entries.map((entry) => (
           <li key={`${entry.source ?? 'dictionary'}:${entry.index}`} className="rounded-sm border border-border bg-paper-input px-2 py-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              {entry.pinyin && <span className="text-xs text-cinnabar">{entry.pinyin}</span>}
+              {entry.pinyin && <span className="text-xs text-accent-deep">{entry.pinyin}</span>}
               {entry.source === 'kaikki' && (
-                <span className="rounded-sm border border-cinnabar-border bg-cinnabar-light px-1.5 py-0.5 text-[10px] text-cinnabar">
+                <span className="rounded-sm border border-accent-border bg-accent-light px-1.5 py-0.5 text-[10px] text-accent-deep">
                   {t(locale, 'dictionary.kaikkiBadge')}
                 </span>
               )}

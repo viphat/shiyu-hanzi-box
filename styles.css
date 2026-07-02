@@ -1,32 +1,58 @@
 @import "tailwindcss";
 
 @theme {
-  --color-paper: #f5f0e8;
-  --color-paper-light: rgba(255, 252, 245, 0.5);
-  --color-paper-input: rgba(255, 252, 245, 0.8);
-  --color-ink: #1a1a1a;
-  --color-ink-secondary: #4a3f35;
-  --color-muted: #8a7e6e;
-  --color-border: rgba(50, 50, 50, 0.1);
-  --color-border-hover: rgba(50, 50, 50, 0.2);
-  --color-border-strong: rgba(50, 50, 50, 0.15);
-  --color-cinnabar: #b4321e;
-  --color-cinnabar-light: rgba(180, 50, 30, 0.06);
-  --color-cinnabar-border: rgba(180, 50, 30, 0.12);
-  --color-cinnabar-fade: rgba(180, 50, 30, 0.5);
-  --color-cinnabar-subtle: rgba(180, 50, 30, 0.25);
+  /* Surfaces — warm cream palette */
+  --color-paper: #f4eee1;
+  --color-paper-light: #fdfbf4;
+  --color-paper-input: #fbf7ec;
+  --color-card: #fdfbf4;
+  --color-card-soft: #fbf7ec;
+  --color-banner: #f9f3e4;
+  --color-chip: #f4eddb;
+  --color-chip-border: #e3d8bd;
+
+  /* Text */
+  --color-ink: #40392f;
+  --color-ink-secondary: #5c5442;
+  --color-muted: #8b8068;
+  --color-faint: #9a8f76;
+
+  /* Borders — warm hairlines */
+  --color-border: #e8dfca;
+  --color-border-hover: #ddd0b3;
+  --color-border-strong: #e0d5bd;
+  --color-border-soft: #e6dcc6;
+
+  /* Sage-green accent (replaces cinnabar) */
+  --color-accent: #7d9070;
+  --color-accent-deep: #54704a;
+  --color-accent-strong: #5d7752;
+  --color-accent-tint: #eef2e6;
+  --color-accent-wash: #dfe7d4;
+  --color-accent-light: #eef2e6;
+  --color-accent-border: #d3ddc4;
+  --color-accent-fade: rgba(125, 144, 112, 0.55);
+  --color-accent-subtle: rgba(125, 144, 112, 0.28);
+
+  /* Secondary warm tint (quote touches) */
+  --color-peach: #f3e0c8;
+  --color-peach-tint: #f8ecdb;
+  --color-peach-deep: #8f6b3d;
+
+  /* Text on solid sage fills */
+  --color-on-accent: #f7f5ec;
 
   --font-serif: "Songti SC", "Source Han Serif SC", "Noto Serif CJK SC",
     "SimSun", "STSong", serif;
   --font-sans: var(--font-serif);
 
-  --radius-xs: 2px;
-  --radius-sm: 2px;
-  --radius-md: 2px;
-  --radius-lg: 2px;
-  --radius-xl: 2px;
-  --radius-2xl: 2px;
-  --radius-full: 2px;
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius-md: 14px;
+  --radius-lg: 16px;
+  --radius-xl: 18px;
+  --radius-2xl: 18px;
+  --radius-full: 999px;
 }
 
 html {
@@ -36,26 +62,12 @@ html {
 body {
   min-width: 0;
   background:
-    repeating-linear-gradient(
-      0deg,
-      rgba(180, 160, 130, 0.06) 0,
-      rgba(180, 160, 130, 0.06) 1px,
-      transparent 1px,
-      transparent 28px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      rgba(180, 160, 130, 0.05) 0,
-      rgba(180, 160, 130, 0.05) 1px,
-      transparent 1px,
-      transparent 29px
-    ),
-    radial-gradient(circle at 18% 12%, rgba(255, 250, 235, 0.7), transparent 36%),
-    radial-gradient(circle at 88% 82%, rgba(210, 188, 150, 0.2), transparent 40%),
-    linear-gradient(135deg, #f5f0e8, #ede6d8, #f2ece2, #e8e0d0);
+    radial-gradient(circle at 12% 8%, rgba(232, 240, 220, 0.55), transparent 42%),
+    radial-gradient(circle at 90% 92%, rgba(243, 224, 200, 0.4), transparent 46%),
+    var(--color-paper);
   color: var(--color-ink);
   font-family: var(--font-serif);
-  letter-spacing: 1px;
+  letter-spacing: 0.3px;
 }
 
 button,
@@ -66,29 +78,8 @@ textarea {
 }
 
 ::selection {
-  background: var(--color-cinnabar-subtle);
+  background: var(--color-accent-subtle);
   color: var(--color-ink);
-}
-
-.bamboo-divider {
-  color: var(--color-border-strong);
-  font-size: 12px;
-  letter-spacing: 12px;
-  text-align: center;
-}
-
-.cinnabar-header-accent {
-  position: relative;
-}
-
-.cinnabar-header-accent::after {
-  position: absolute;
-  bottom: -2px;
-  left: 0;
-  width: 50px;
-  height: 2px;
-  background: var(--color-cinnabar-fade);
-  content: "";
 }
 
 @keyframes review-card-enter {

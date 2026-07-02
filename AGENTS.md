@@ -27,11 +27,12 @@ The implementation plans and specs are in `docs/superpowers/`:
 - `plans/2026-06-26-cloze-input-redesign.md`
 - `specs/2026-06-27-quote-tags-system-design.md`
 - `plans/2026-06-27-quote-tags-system.md`
+- `specs/2026-07-02-watercolor-ui-redesign-design.md`
 
 Tasks 0 through 15, Traditional Chinese conversion, TTS, the real FSRS system,
 the focused single-card review experience, cloze-deletion quote review, the
-versioned full backup (settings + AI key), encrypted folder sync, and the
-first-class quote tags system have landed.
+versioned full backup (settings + AI key), encrypted folder sync, the
+first-class quote tags system, and the watercolor UI redesign have landed.
 
 ## Commands
 

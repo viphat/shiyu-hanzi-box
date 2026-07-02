@@ -28,7 +28,7 @@ export function TraditionalButton({
         title={shown ? t(locale, 'traditional.hide') : t(locale, 'traditional.show')}
         className={`inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-xs transition ${
           shown
-            ? 'border-cinnabar-border bg-cinnabar-light text-cinnabar'
+            ? 'border-accent-border bg-accent-light text-accent-deep'
             : 'border-border bg-transparent text-muted hover:border-border-hover hover:text-ink-secondary'
         }`}
       >
@@ -43,7 +43,7 @@ export function TraditionalButton({
         event.stopPropagation();
         onGenerated(toTraditionalTaiwan(text));
       }}
-      className="inline-flex items-center gap-1 text-xs text-muted transition hover:text-cinnabar"
+      className="inline-flex items-center gap-1 text-xs text-muted transition hover:text-accent-deep"
     >
       <Sparkles className="h-3 w-3" />
       {t(locale, 'traditional.generate')}

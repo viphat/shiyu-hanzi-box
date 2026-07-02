@@ -190,6 +190,38 @@ export async function joinVault(
   return { vaultId: result.vaultId };
 }
 
+export interface ReauthorizeDeps {
+  loadHandle: () => Promise<FileSystemDirectoryHandle | null>;
+  saveHandle: (handle: FileSystemDirectoryHandle) => Promise<void>;
+  pickDirectory: () => Promise<FileSystemDirectoryHandle>;
+}
+
+/**
+ * Re-grants read-write access to the sync folder from a user gesture.
+ *
+ * File System Access permissions lapse at each browser-session boundary, so the
+ * gesture-less background alarm can only flag `needs-reauthorization`. This runs
+ * from a click: it first asks the *already-stored* handle for permission (one
+ * click, no folder re-pick — silent when Chrome's persistent permissions apply).
+ * Only if there is no stored handle, or that request does not resolve to
+ * 'granted', does it fall back to the folder picker. An aborted picker throws.
+ */
+export async function reauthorizeFolder(deps: ReauthorizeDeps): Promise<void> {
+  const stored = await deps.loadHandle();
+  if (stored) {
+    // Cast: requestPermission is available at runtime but not always typed.
+    const perm = await (stored as FileSystemDirectoryHandle & {
+      requestPermission(desc: { mode: string }): Promise<string>;
+    }).requestPermission({ mode: 'readwrite' });
+    if (perm === 'granted') {
+      await deps.saveHandle(stored);
+      return;
+    }
+  }
+  const picked = await deps.pickDirectory();
+  await deps.saveHandle(picked);
+}
+
 /**
  * Disconnects from the vault: clears directory handle, vault association, and remembered key.
  * Preserves local data and the files in the sync folder.

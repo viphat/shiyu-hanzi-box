@@ -405,9 +405,18 @@ export function FolderSync({ locale = 'zh-CN' }: { locale?: UiLocale }) {
   async function handleReauthorize() {
     setError(null);
     try {
-      const dir = await showDirectoryPicker();
-      const { saveDirectoryHandle } = await import('@/lib/sync/local');
-      await saveDirectoryHandle(dir);
+      const { reauthorizeFolder } = await import('@/lib/sync/connect');
+      const { loadDirectoryHandle, saveDirectoryHandle } = await import('@/lib/sync/local');
+      await reauthorizeFolder({
+        loadHandle: loadDirectoryHandle,
+        saveHandle: saveDirectoryHandle,
+        pickDirectory: showDirectoryPicker,
+      });
+      // Permission is granted again — run a sync immediately so the status
+      // recovers now instead of waiting for the next periodic alarm.
+      browser.runtime.sendMessage({ type: SYNC_NOW_MESSAGE }).catch(() => {
+        // Background may not be listening; the periodic alarm will pick it up.
+      });
       const next = await getSyncConfig();
       setConfig(next);
     } catch (err) {

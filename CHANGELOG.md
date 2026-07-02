@@ -5,6 +5,22 @@ All notable changes to 拾语汉字box are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-07-02
+
+### Fixed
+
+- **Folder sync reauthorization is now one click.** File System Access
+  read-write permissions lapse at each browser-session boundary (a browser
+  restart or reboot), so folder sync would periodically flip to "Needs
+  attention" with `needs-reauthorization` — the gesture-less background alarm
+  can detect the lapsed permission but cannot re-grant it. The **Reauthorize**
+  button previously forced a full folder re-pick every time; it now asks the
+  already-selected folder for permission first (a single click, and silent
+  when the browser's persistent permissions apply), falling back to the folder
+  picker only when no folder is remembered or the request is denied. On success
+  it triggers an immediate sync so the status clears without waiting for the
+  next periodic pass.
+
 ## [0.2.1] - 2026-06-29
 
 ### Added

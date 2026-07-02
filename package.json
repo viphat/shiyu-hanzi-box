@@ -2,7 +2,7 @@
   "name": "shiyu-hanzi-box",
   "description": "Capture Chinese words and quotes while reading; export daily Markdown notes.",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.2.2",
   "type": "module",
   "scripts": {
     "dev": "wxt",

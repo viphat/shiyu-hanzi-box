@@ -93,7 +93,8 @@ Implemented:
   configuration, and optional dictionary controls.
 - Optional runtime Kaikki JSONL import/download into local IndexedDB storage for
   extra dictionary fallback entries without growing the packed extension.
-- Jade/ink Tailwind theme tokens and CJK font stack.
+- Warm watercolor cream/sage Tailwind theme tokens — soft rounded cards, pill
+  controls, hand-drawn inline-SVG foliage, and a CJK font stack.
 - Unit tests for normalization, capture/dedupe, background capture paths,
   pinyin, Markdown rendering, export generation, and backup restore validation.
 
@@ -346,6 +347,9 @@ and are not deduped.
 ## Project Layout
 
 ```text
+styles.css               # Tailwind theme tokens (cream/sage palette) + base styles
+components/
+  Foliage.tsx            # shared inline-SVG watercolor foliage ornaments
 entrypoints/
   background/
     index.ts             # registers context menus and commands

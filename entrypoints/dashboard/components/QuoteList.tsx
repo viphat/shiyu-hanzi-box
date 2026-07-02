@@ -42,13 +42,13 @@ export function QuoteList({
       <div className="flex items-center gap-2">
         <button
           onClick={() => setView('list')}
-          className={`rounded-sm border px-3 py-1.5 text-xs font-medium transition ${view === 'list' ? 'border-cinnabar-border bg-cinnabar text-white' : 'border-border bg-paper-input text-muted hover:text-ink'}`}
+          className={`rounded-sm border px-3 py-1.5 text-xs font-medium transition ${view === 'list' ? 'border-accent-border bg-accent text-white' : 'border-border bg-paper-input text-muted hover:text-ink'}`}
         >
           {t(locale, 'quote.viewList')}
         </button>
         <button
           onClick={() => setView('cloud')}
-          className={`rounded-sm border px-3 py-1.5 text-xs font-medium transition ${view === 'cloud' ? 'border-cinnabar-border bg-cinnabar text-white' : 'border-border bg-paper-input text-muted hover:text-ink'}`}
+          className={`rounded-sm border px-3 py-1.5 text-xs font-medium transition ${view === 'cloud' ? 'border-accent-border bg-accent text-white' : 'border-border bg-paper-input text-muted hover:text-ink'}`}
         >
           {t(locale, 'quote.viewCloud')}
         </button>
@@ -79,7 +79,7 @@ export function QuoteList({
                 <button
                   key={tag}
                   onClick={() => onToggleTag(tag)}
-                  className="inline-flex items-center gap-1 rounded-sm border border-cinnabar-border bg-cinnabar px-2 py-1 text-xs text-white"
+                  className="inline-flex items-center gap-1 rounded-sm border border-accent-border bg-accent px-2 py-1 text-xs text-white"
                 >
                   #{tag} ×
                 </button>
@@ -92,8 +92,8 @@ export function QuoteList({
                 onClick={() => setShowParkedOnly((v) => !v)}
                 className={`inline-flex items-center gap-1.5 rounded-sm border px-3 py-1.5 text-xs font-medium transition ${
                   showParkedOnly
-                    ? 'border-cinnabar-border bg-cinnabar text-white'
-                    : 'border-cinnabar-border bg-cinnabar-light text-cinnabar hover:bg-cinnabar hover:text-white'
+                    ? 'border-accent-border bg-accent text-white'
+                    : 'border-accent-border bg-accent-light text-accent-deep hover:bg-accent hover:text-white'
                 }`}
               >
                 {t(locale, 'cloze.parked')}

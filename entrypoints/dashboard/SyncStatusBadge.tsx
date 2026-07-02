@@ -47,7 +47,7 @@ export function SyncStatusBadgeView({
   const baseClass =
     'inline-flex items-center gap-1 rounded-sm border px-2 py-1 text-[11px] tracking-[1px]';
   const colorClass = isAttention
-    ? 'border-cinnabar-border bg-cinnabar-light text-cinnabar'
+    ? 'border-accent-border bg-accent-light text-accent-deep'
     : 'border-border bg-paper-input text-muted';
 
   return (
@@ -91,7 +91,7 @@ export function SyncStatusBadge({ locale }: { locale: UiLocale }) {
       type="button"
       onClick={openSettings}
       title={t(locale, 'sync.section.title')}
-      className="cursor-pointer appearance-none border-0 bg-transparent p-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-cinnabar"
+      className="cursor-pointer appearance-none border-0 bg-transparent p-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <SyncStatusBadgeView status={config.status} locale={locale} />
     </button>

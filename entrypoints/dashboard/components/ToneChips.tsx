@@ -4,8 +4,8 @@ const TONE_TAILWIND: Record<number, string> = {
   0: 'border-border text-muted',
   1: 'border-border text-ink',
   2: 'border-border text-ink',
-  3: 'border-cinnabar-border text-cinnabar',
-  4: 'border-cinnabar-border text-cinnabar',
+  3: 'border-accent-border text-accent-deep',
+  4: 'border-accent-border text-accent-deep',
 };
 
 export function ToneChips({ chips }: { chips: ToneChipData[] }) {

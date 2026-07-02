@@ -16,7 +16,7 @@ export function PinyinButton({
   locale: UiLocale;
 }) {
   const [busy, setBusy] = useState(false);
-  if (existing) return <span className="text-xs italic text-cinnabar">{existing}</span>;
+  if (existing) return <span className="text-xs italic text-accent-deep">{existing}</span>;
 
   return (
     <button
@@ -27,7 +27,7 @@ export function PinyinButton({
         onGenerated(pinyin);
         setBusy(false);
       }}
-      className="inline-flex items-center gap-1 text-xs text-muted transition hover:text-cinnabar"
+      className="inline-flex items-center gap-1 text-xs text-muted transition hover:text-accent-deep"
     >
       {busy ? (
         <Loader2 className="h-3 w-3 animate-spin" />

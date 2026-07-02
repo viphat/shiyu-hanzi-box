@@ -45,7 +45,7 @@ export function AiSettingsPanel({
     <section className="rounded-sm border border-border bg-paper-light p-4 shadow-sm">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-cinnabar" aria-hidden="true" />
+          <Sparkles className="h-4 w-4 text-accent-deep" aria-hidden="true" />
           <p className="text-sm font-medium text-ink tracking-[2px]">AI 设置</p>
         </div>
         {onClose ? (
@@ -75,7 +75,7 @@ export function AiSettingsPanel({
           <select
             value={draft.provider}
             onChange={(event) => handleProviderChange(event.target.value)}
-            className="w-full rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs text-ink outline-none focus:border-cinnabar-fade"
+            className="w-full rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs text-ink outline-none focus:border-accent-fade"
           >
             {PROVIDER_PRESETS.map((preset) => (
               <option key={preset.provider} value={preset.provider}>
@@ -93,7 +93,7 @@ export function AiSettingsPanel({
               value={draft.apiKey}
               onChange={(event) => setDraft({ ...draft, apiKey: event.target.value })}
               placeholder="sk-..."
-              className="flex-1 rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs text-ink outline-none focus:border-cinnabar-fade"
+              className="flex-1 rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs text-ink outline-none focus:border-accent-fade"
             />
             <button
               type="button"
@@ -115,7 +115,7 @@ export function AiSettingsPanel({
             value={draft.baseUrl}
             onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })}
             placeholder="https://api.deepseek.com"
-            className="w-full rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs text-ink outline-none focus:border-cinnabar-fade"
+            className="w-full rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs text-ink outline-none focus:border-accent-fade"
           />
         </div>
 
@@ -126,7 +126,7 @@ export function AiSettingsPanel({
             value={draft.model}
             onChange={(event) => setDraft({ ...draft, model: event.target.value })}
             placeholder="deepseek-v4-flash"
-            className="w-full rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs text-ink outline-none focus:border-cinnabar-fade"
+            className="w-full rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs text-ink outline-none focus:border-accent-fade"
           />
         </div>
 
@@ -134,7 +134,7 @@ export function AiSettingsPanel({
           <button
             type="button"
             onClick={() => void handleSave()}
-            className="inline-flex items-center gap-1 rounded-sm bg-cinnabar px-3 py-1.5 text-xs font-medium text-white shadow-sm tracking-[1px] transition hover:brightness-95"
+            className="inline-flex items-center gap-1 rounded-sm bg-accent px-3 py-1.5 text-xs font-medium text-white shadow-sm tracking-[1px] transition hover:brightness-95"
           >
             <Save className="h-3 w-3" /> 保存
           </button>
@@ -154,11 +154,11 @@ export function AiSettingsPanel({
             测试连接
           </button>
           {testResult && (
-            <span className={`text-[11px] ${testResult.ok ? 'text-ink-secondary' : 'text-cinnabar'}`}>
+            <span className={`text-[11px] ${testResult.ok ? 'text-ink-secondary' : 'text-accent-deep'}`}>
               {testResult.message}
             </span>
           )}
-          {saveError && <span className="text-[11px] text-cinnabar">{saveError}</span>}
+          {saveError && <span className="text-[11px] text-accent-deep">{saveError}</span>}
         </div>
       </div>
     </section>

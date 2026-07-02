@@ -23,7 +23,7 @@ export function SourceExamples({
               href={link.url}
               target="_blank"
               rel="noreferrer"
-              className="rounded-sm border border-border bg-paper-input px-2 py-1 text-xs text-muted transition hover:border-cinnabar-border hover:text-cinnabar"
+              className="rounded-sm border border-border bg-paper-input px-2 py-1 text-xs text-muted transition hover:border-accent-border hover:text-accent-deep"
             >
               {link.label} ↗
             </a>
@@ -49,7 +49,7 @@ function HighlightedLine({ example, locale }: { example: HighlightedExample; loc
           href={example.sourceUrl}
           target="_blank"
           rel="noreferrer"
-          className="mt-1 inline-block text-[11px] text-muted hover:text-cinnabar"
+          className="mt-1 inline-block text-[11px] text-muted hover:text-accent-deep"
         >
           {sourceLabel} ↗
         </a>
@@ -75,7 +75,7 @@ function renderWithRanges(snippet: string, ranges: HighlightedExample['ranges'])
     typeof part === 'string' ? (
       <span key={`s${i}`}>{part}</span>
     ) : (
-      <mark key={part.key} className="rounded-sm bg-cinnabar/20 px-0.5 text-cinnabar">
+      <mark key={part.key} className="rounded-sm bg-accent/20 px-0.5 text-accent-deep">
         {part.text}
       </mark>
     ),

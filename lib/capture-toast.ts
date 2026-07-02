@@ -80,16 +80,16 @@ export function renderCaptureToast(args: CaptureToastArgs): void {
 
   const style = document.createElement('style');
   style.textContent = [
-    '.card{font-family:system-ui,-apple-system,sans-serif;background:#faf6ef;color:#2b2b2b;',
-    'border:1px solid #e5ddcf;border-left:4px solid #16a34a;border-radius:6px;',
-    'box-shadow:0 6px 24px rgba(0,0,0,.18);padding:12px 14px;max-width:320px;',
+    '.card{font-family:system-ui,-apple-system,sans-serif;background:#fdfbf4;color:#40392f;',
+    'border:1px solid #e8dfca;border-left:4px solid #7d9070;border-radius:14px;',
+    'box-shadow:0 6px 24px rgba(90,75,50,.16);padding:12px 14px;max-width:320px;',
     'display:flex;flex-direction:column;gap:6px;animation:shiyuIn .18s ease-out}',
-    '.headline{font-size:12px;letter-spacing:.5px;color:#9c4221;font-weight:600}',
+    '.headline{font-size:12px;letter-spacing:.5px;color:#54704a;font-weight:600}',
     '.text{font-size:14px;line-height:1.4;word-break:break-word}',
     '.actions{display:flex;justify-content:flex-end;margin-top:2px}',
-    'button{font:inherit;font-size:12px;cursor:pointer;border:1px solid #d6ccb8;',
-    'background:transparent;color:#9c4221;border-radius:4px;padding:4px 10px}',
-    'button:hover{background:#f0e9dd}',
+    'button{font:inherit;font-size:12px;cursor:pointer;border:1px solid #d3ddc4;',
+    'background:transparent;color:#54704a;border-radius:999px;padding:4px 12px}',
+    'button:hover{background:#eef2e6}',
     '@keyframes shiyuIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}',
   ].join('');
   root.appendChild(style);

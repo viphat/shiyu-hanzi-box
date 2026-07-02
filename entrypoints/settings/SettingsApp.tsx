@@ -249,17 +249,17 @@ export function SettingsApp() {
 
   return (
     <div className="min-h-screen text-ink">
-      <header className="cinnabar-header-accent border-b-2 border-border-strong bg-paper-light">
+      <header className="border-b border-border-soft bg-banner">
         <div className="mx-auto max-w-4xl px-5 py-6">
           <a
             href={browser.runtime.getURL('/dashboard.html')}
-            className="mb-5 inline-flex items-center gap-1 text-xs text-muted hover:text-cinnabar"
+            className="mb-5 inline-flex items-center gap-1 text-xs text-muted hover:text-accent-deep"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             {t(locale, 'settings.back')}
           </a>
           <div className="flex items-center gap-3">
-            <img src={iconUrl} alt="" className="h-11 w-11 rounded-sm" aria-hidden="true" />
+            <img src={iconUrl} alt="" className="h-11 w-11 rounded-[14px]" aria-hidden="true" />
             <div>
               <h1 className="text-[26px] font-bold leading-none text-ink tracking-[5px]">
                 {t(locale, 'settings.title')}
@@ -273,24 +273,24 @@ export function SettingsApp() {
       </header>
 
       <main className="mx-auto max-w-4xl space-y-5 px-5 py-6">
-        <section className="rounded-sm border border-border bg-paper-light p-4 shadow-sm">
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-[0_1px_3px_rgba(90,75,50,0.06)]">
           <div className="mb-3 flex items-center gap-2">
-            <Globe2 className="h-4 w-4 text-cinnabar" />
+            <Globe2 className="h-4 w-4 text-accent-deep" />
             <h2 className="text-sm font-semibold tracking-[2px]">{t(locale, 'settings.language')}</h2>
           </div>
           <select
             value={locale}
             onChange={(event) => updateLocale(event.target.value as UiLocale)}
-            className="rounded-sm border border-border bg-paper-input px-3 py-2 text-sm text-ink outline-none transition focus:border-cinnabar-fade"
+            className="rounded-md border border-border bg-paper-input px-3 py-2 text-sm text-ink outline-none transition focus:border-accent-fade"
           >
             <option value="zh-CN">简体中文</option>
             <option value="en">English</option>
           </select>
         </section>
 
-        <section className="rounded-sm border border-border bg-paper-light p-4 shadow-sm">
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-[0_1px_3px_rgba(90,75,50,0.06)]">
           <div className="mb-3 flex items-center gap-2">
-            <Database className="h-4 w-4 text-cinnabar" />
+            <Database className="h-4 w-4 text-accent-deep" />
             <h2 className="text-sm font-semibold tracking-[2px]">{t(locale, 'settings.defaultDictionary')}</h2>
           </div>
           <p className="text-xs leading-6 text-muted">{t(locale, 'settings.defaultDictionaryBody')}</p>
@@ -298,19 +298,19 @@ export function SettingsApp() {
             href="https://www.mdbg.net/chinese/dictionary?page=cc-cedict"
             target="_blank"
             rel="noreferrer"
-            className="mt-2 inline-block text-xs text-muted hover:text-cinnabar"
+            className="mt-2 inline-block text-xs text-muted hover:text-accent-deep"
           >
             {t(locale, 'dictionary.ccCedict')}
           </a>
         </section>
 
-        <section className="rounded-sm border border-border bg-paper-light p-4 shadow-sm">
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-[0_1px_3px_rgba(90,75,50,0.06)]">
           <div className="mb-3 flex items-center gap-2">
-            <Database className="h-4 w-4 text-cinnabar" />
+            <Database className="h-4 w-4 text-accent-deep" />
             <h2 className="text-sm font-semibold tracking-[2px]">{t(locale, 'dictionary.kaikki')}</h2>
           </div>
           <p className="mb-3 text-xs leading-6 text-muted">{t(locale, 'settings.kaikkiBody')}</p>
-          <p className="mb-3 rounded-sm border border-cinnabar-border bg-cinnabar-light px-3 py-2 text-xs leading-5 text-cinnabar">
+          <p className="mb-3 rounded-md border border-accent-border bg-accent-tint px-3 py-2 text-xs leading-5 text-accent-deep">
             {t(locale, 'settings.kaikkiImportNotice')}
           </p>
           <label className="mb-3 flex items-center gap-2 text-sm text-ink-secondary">
@@ -318,7 +318,7 @@ export function SettingsApp() {
               type="checkbox"
               checked={settings.kaikki.enabled}
               onChange={(event) => updateKaikkiEnabled(event.target.checked)}
-              className="h-4 w-4 accent-cinnabar"
+              className="h-4 w-4 accent-accent"
             />
             {t(locale, 'settings.enableKaikki')}
           </label>
@@ -327,7 +327,7 @@ export function SettingsApp() {
             <input
               value={sourceUrl}
               onChange={(event) => setSourceUrl(event.target.value)}
-              className="mt-1 w-full rounded-sm border border-border bg-paper-input px-3 py-2 text-sm text-ink outline-none transition focus:border-cinnabar-fade"
+              className="mt-1 w-full rounded-md border border-border bg-paper-input px-3 py-2 text-sm text-ink outline-none transition focus:border-accent-fade"
             />
           </label>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -341,7 +341,7 @@ export function SettingsApp() {
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={busy}
-              className="inline-flex items-center gap-1 rounded-sm border border-border bg-transparent px-3 py-2.5 text-sm text-ink-secondary tracking-[1px] transition hover:border-border-hover hover:bg-paper-input disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-transparent px-3 py-2.5 text-sm text-ink-secondary tracking-[1px] transition hover:border-border-hover hover:bg-paper-input disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Upload className="h-4 w-4" />
               {t(locale, 'settings.importFile')}
@@ -349,7 +349,7 @@ export function SettingsApp() {
             <button
               onClick={downloadKaikki}
               disabled={busy}
-              className="inline-flex items-center gap-1 rounded-sm bg-cinnabar px-3 py-2.5 text-sm text-white shadow-sm tracking-[1px] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-1 rounded-full bg-accent px-3 py-2.5 text-sm text-white shadow-sm tracking-[1px] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Download className="h-4 w-4" />
               {t(locale, 'settings.download')}
@@ -357,7 +357,7 @@ export function SettingsApp() {
             <button
               onClick={removeKaikki}
               disabled={busy || !settings.kaikki.hash}
-              className="inline-flex items-center gap-1 rounded-sm border border-border bg-transparent px-3 py-2.5 text-sm text-ink-secondary tracking-[1px] transition hover:border-cinnabar-border hover:bg-cinnabar-light hover:text-cinnabar disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-transparent px-3 py-2.5 text-sm text-ink-secondary tracking-[1px] transition hover:border-accent-border hover:bg-accent-light hover:text-accent-deep disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Trash2 className="h-4 w-4" />
               {t(locale, 'settings.removeKaikki')}
@@ -377,7 +377,7 @@ export function SettingsApp() {
               </div>
               <div className="h-2 overflow-hidden rounded-sm bg-border">
                 <div
-                  className="h-full bg-cinnabar transition-all"
+                  className="h-full bg-accent transition-all"
                   style={{ width: `${importProgress.percent}%` }}
                 />
               </div>
@@ -388,7 +388,7 @@ export function SettingsApp() {
                 <button
                   type="button"
                   onClick={cancelKaikkiImport}
-                  className="rounded-sm border border-border bg-transparent px-2 py-1 text-xs text-ink-secondary transition hover:border-cinnabar-border hover:bg-cinnabar-light hover:text-cinnabar"
+                  className="rounded-sm border border-border bg-transparent px-2 py-1 text-xs text-ink-secondary transition hover:border-accent-border hover:bg-accent-light hover:text-accent-deep"
                 >
                   {t(locale, 'settings.cancelImport')}
                 </button>
@@ -415,9 +415,9 @@ export function SettingsApp() {
           </dl>
         </section>
 
-        <section className="rounded-sm border border-border bg-paper-light p-4 shadow-sm">
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-[0_1px_3px_rgba(90,75,50,0.06)]">
           <div className="mb-3 flex items-center gap-2">
-            <Gauge className="h-4 w-4 text-cinnabar" />
+            <Gauge className="h-4 w-4 text-accent-deep" />
             <h2 className="text-sm font-semibold tracking-[2px]">
               {t(locale, 'settings.srs')}
             </h2>
@@ -438,7 +438,7 @@ export function SettingsApp() {
                   }),
                 )
               }
-              className="mt-1 w-full rounded-sm border border-border bg-paper-input px-3 py-2 text-sm text-ink outline-none transition focus:border-cinnabar-fade"
+              className="mt-1 w-full rounded-md border border-border bg-paper-input px-3 py-2 text-sm text-ink outline-none transition focus:border-accent-fade"
             >
               {[0.8, 0.85, 0.9, 0.92, 0.95, 0.97].map((value) => (
                 <option key={value} value={value}>
@@ -466,7 +466,7 @@ export function SettingsApp() {
                   }),
                 )
               }
-              className="mt-1 w-full rounded-sm border border-border bg-paper-input px-3 py-2 text-sm text-ink outline-none transition focus:border-cinnabar-fade"
+              className="mt-1 w-full rounded-md border border-border bg-paper-input px-3 py-2 text-sm text-ink outline-none transition focus:border-accent-fade"
             />
           </label>
 
@@ -487,7 +487,7 @@ export function SettingsApp() {
                   }),
                 )
               }
-              className="mt-1 w-full rounded-sm border border-border bg-paper-input px-3 py-2 text-sm text-ink outline-none transition focus:border-cinnabar-fade"
+              className="mt-1 w-full rounded-md border border-border bg-paper-input px-3 py-2 text-sm text-ink outline-none transition focus:border-accent-fade"
             />
           </label>
         </section>
@@ -505,7 +505,7 @@ export function SettingsApp() {
         {message ? (
           <p
             role="status"
-            className={`text-xs tracking-[1px] ${message.tone === 'error' ? 'text-cinnabar' : 'text-ink-secondary'}`}
+            className={`text-xs tracking-[1px] ${message.tone === 'error' ? 'text-accent-deep' : 'text-ink-secondary'}`}
           >
             {message.text}
           </p>

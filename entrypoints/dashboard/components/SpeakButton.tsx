@@ -43,8 +43,8 @@ export function SpeakButton({ text, locale }: { text: string; locale: UiLocale }
       aria-pressed={isSpeakingThisText}
       className={`rounded-sm p-1 transition ${
         isSpeakingThisText
-          ? 'animate-pulse text-cinnabar'
-          : 'text-muted hover:bg-paper-input hover:text-cinnabar'
+          ? 'animate-pulse text-accent-deep'
+          : 'text-muted hover:bg-paper-input hover:text-accent-deep'
       }`}
     >
       <Volume2 className="h-3.5 w-3.5" />

@@ -52,7 +52,7 @@ export function WordInsightPanel({ word, locale }: { word: WordEntry; locale: Ui
         href="https://www.mdbg.net/chinese/dictionary?page=cc-cedict"
         target="_blank"
         rel="noreferrer"
-        className="inline-block text-[10px] text-muted hover:text-cinnabar"
+        className="inline-block text-[10px] text-muted hover:text-accent-deep"
       >
         {t(locale, 'dictionary.ccCedict')}
       </a>

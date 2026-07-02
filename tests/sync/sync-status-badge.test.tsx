@@ -11,7 +11,7 @@ describe('SyncStatusBadgeView', () => {
 
     expect(html).toContain(t('en', 'sync.status.synced'));
     // Must NOT carry attention/warning styling when routine success
-    expect(html).not.toContain('text-cinnabar');
+    expect(html).not.toContain('text-accent');
     expect(html).not.toContain('attention');
   });
 
@@ -22,7 +22,7 @@ describe('SyncStatusBadgeView', () => {
 
     expect(html).toContain(t('en', 'sync.status.needsAttention'));
     // Must carry attention styling
-    expect(html).toContain('text-cinnabar');
+    expect(html).toContain('text-accent');
   });
 
   it('renders nothing (or disabled) when vaultId is absent (disabled)', () => {
@@ -31,7 +31,7 @@ describe('SyncStatusBadgeView', () => {
     );
 
     // Should not be loud — either empty or minimal
-    expect(html).not.toContain('text-cinnabar');
+    expect(html).not.toContain('text-accent');
   });
 
   it('works with zh-CN locale for synced', () => {

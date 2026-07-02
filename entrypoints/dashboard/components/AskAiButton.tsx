@@ -42,8 +42,8 @@ export function AskAiButton({
         disabled={!canClick}
         className={`inline-flex items-center gap-1.5 rounded-sm border px-2 py-1.5 text-xs transition ${
           state === 'error'
-            ? 'border-cinnabar-border bg-cinnabar-light text-cinnabar hover:bg-cinnabar hover:text-white'
-            : 'border-border bg-paper-input text-muted hover:border-cinnabar-border hover:text-cinnabar'
+            ? 'border-accent-border bg-accent-light text-accent-deep hover:bg-accent hover:text-white'
+            : 'border-border bg-paper-input text-muted hover:border-accent-border hover:text-accent-deep'
         } disabled:cursor-not-allowed disabled:opacity-50`}
       >
         {state === 'loading' ? (
@@ -53,7 +53,7 @@ export function AskAiButton({
         )}
         {state === 'loading' ? '正在生成...' : state === 'error' ? '重试' : 'Ask AI'}
       </button>
-      {state === 'error' && <p className="text-[11px] text-cinnabar">{error}</p>}
+      {state === 'error' && <p className="text-[11px] text-accent-deep">{error}</p>}
     </div>
   );
 }

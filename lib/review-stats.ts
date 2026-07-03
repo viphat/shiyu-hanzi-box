@@ -1,5 +1,5 @@
 import type { Inbox, ReviewState } from './types';
-import { localDayKey } from './srs';
+import { localDayKey, startOfDay } from './srs';
 
 /**
  * Pure, deterministic habit metrics derived on-read from the loaded Inbox.
@@ -138,4 +138,22 @@ export function computeStreak(
   }
 
   return { current, longest, state };
+}
+
+export function buildHeatmap(
+  dayCounts: Map<string, number>,
+  now: number,
+  days = HEATMAP_DAYS,
+): DayCount[] {
+  const base = new Date(startOfDay(now));
+  const year = base.getFullYear();
+  const month = base.getMonth();
+  const date = base.getDate();
+  const cells: DayCount[] = [];
+  for (let i = days - 1; i >= 0; i -= 1) {
+    // new Date(y, m, d - i) normalizes across month/DST boundaries.
+    const key = localDayKey(new Date(year, month, date - i).getTime());
+    cells.push({ date: key, count: dayCounts.get(key) ?? 0 });
+  }
+  return cells;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { collectReviewStates, reviewDayCounts, computeStreak } from '../lib/review-stats';
+import { buildHeatmap, collectReviewStates, reviewDayCounts, computeStreak, HEATMAP_DAYS } from '../lib/review-stats';
 import type { Cloze, Inbox, QuoteEntry, ReviewLogEntry, ReviewState, WordEntry } from '../lib/types';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -131,5 +131,31 @@ describe('computeStreak (freeze rule)', () => {
     );
     expect(r.current).toBe(1);
     expect(r.longest).toBe(5);
+  });
+});
+
+describe('buildHeatmap', () => {
+  const now = new Date('2026-07-03T09:00:00').getTime();
+
+  it('has length 84 by default, oldest first, ending today', () => {
+    const h = buildHeatmap(new Map(), now);
+    expect(h).toHaveLength(HEATMAP_DAYS);
+    expect(h[h.length - 1].date).toBe('2026-07-03');
+    // 83 days before 2026-07-03 is 2026-04-11
+    expect(h[0].date).toBe('2026-04-11');
+  });
+
+  it('zero-fills days with no reviews', () => {
+    const h = buildHeatmap(new Map([['2026-07-02', 4]]), now, 3);
+    expect(h.map((c) => [c.date, c.count])).toEqual([
+      ['2026-07-01', 0],
+      ['2026-07-02', 4],
+      ['2026-07-03', 0],
+    ]);
+  });
+
+  it('final cell equals today\'s review count', () => {
+    const h = buildHeatmap(new Map([['2026-07-03', 7]]), now);
+    expect(h[h.length - 1]).toEqual({ date: '2026-07-03', count: 7 });
   });
 });

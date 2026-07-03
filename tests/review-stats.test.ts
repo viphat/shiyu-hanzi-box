@@ -132,6 +132,14 @@ describe('computeStreak (freeze rule)', () => {
     expect(r.current).toBe(1);
     expect(r.longest).toBe(5);
   });
+
+  it('future-dated days do not inflate longest', () => {
+    // today active, plus two future days that (unguarded) would form a run of 3
+    const r = computeStreak(active('2026-07-03', '2026-07-04', '2026-07-05'), today);
+    expect(r.longest).toBe(1);
+    expect(r.current).toBe(1);
+    expect(r.state).toBe('safe');
+  });
 });
 
 describe('buildHeatmap', () => {
@@ -241,5 +249,12 @@ describe('computeReviewStats', () => {
     const stats = computeReviewStats(inbox([w], []), now);
     expect(stats.reviewedToday).toBe(1);
     expect(stats.heatmap[stats.heatmap.length - 1].count).toBe(1);
+  });
+
+  it('totalReviews counts archived words and cloze entries', () => {
+    const w = word({ status: 'archived', review: review({ reviewLog: [log(at('2026-07-01T09:00:00')), log(at('2026-07-02T09:00:00'))] }) });
+    const q = quote([{ id: 'c1', start: 0, end: 1, review: review({ reviewLog: [log(at('2026-07-02T10:00:00'))] }) }]);
+    const stats = computeReviewStats(inbox([w], [q]), now);
+    expect(stats.totalReviews).toBe(3);
   });
 });

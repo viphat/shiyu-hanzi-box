@@ -94,17 +94,18 @@ export function computeStreak(
     .map(dayKeyToOrdinal)
     .sort((a, b) => a - b);
 
+  const todayOrd = dayKeyToOrdinal(today);
+
   // Longest tolerant run across all history.
   let longest = 0;
   let run = 0;
   let prev: number | null = null;
   for (const ord of ordinals) {
+    if (ord > todayOrd) continue;
     run = prev !== null && continuesRun(ord, prev) ? run + 1 : 1;
     longest = Math.max(longest, run);
     prev = ord;
   }
-
-  const todayOrd = dayKeyToOrdinal(today);
 
   // Most recent active day at or before today.
   let lastActive: number | null = null;

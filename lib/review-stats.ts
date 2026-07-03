@@ -192,3 +192,23 @@ export function buildForecast(
 
   return buckets;
 }
+
+export function computeReviewStats(inbox: Inbox, now = Date.now()): ReviewStats {
+  const states = collectReviewStates(inbox);
+  const dayCounts = reviewDayCounts(states);
+  const today = localDayKey(now);
+  const { current, longest, state } = computeStreak(dayCounts, today);
+
+  let totalReviews = 0;
+  for (const s of states) totalReviews += s.reviewLog?.length ?? 0;
+
+  return {
+    totalReviews,
+    currentStreak: current,
+    longestStreak: longest,
+    streakState: state,
+    reviewedToday: dayCounts.get(today) ?? 0,
+    heatmap: buildHeatmap(dayCounts, now, HEATMAP_DAYS),
+    forecast: buildForecast(states, now, FORECAST_DAYS),
+  };
+}

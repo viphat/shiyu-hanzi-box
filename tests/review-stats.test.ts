@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildHeatmap, collectReviewStates, reviewDayCounts, computeStreak, HEATMAP_DAYS, buildForecast, FORECAST_DAYS } from '../lib/review-stats';
+import { buildHeatmap, collectReviewStates, reviewDayCounts, computeStreak, HEATMAP_DAYS, buildForecast, FORECAST_DAYS, computeReviewStats } from '../lib/review-stats';
 import type { Cloze, Inbox, QuoteEntry, ReviewLogEntry, ReviewState, WordEntry } from '../lib/types';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -196,5 +196,50 @@ describe('buildForecast', () => {
     // collectReviewStates omits reviewless cards, so forecast never sees them.
     const states = collectReviewStates(inbox([word({ id: 'nw' })], []));
     expect(buildForecast(states, now).reduce((s, c) => s + c.count, 0)).toBe(0);
+  });
+});
+
+describe('computeReviewStats', () => {
+  const now = new Date('2026-07-03T09:00:00').getTime();
+  const at = (iso: string) => new Date(iso).getTime();
+
+  it('composes total, streak, heatmap, forecast, reviewedToday', () => {
+    const w = word({
+      review: review({
+        dueAt: at('2026-07-05T09:00:00'),
+        reviewLog: [log(at('2026-07-02T09:00:00')), log(at('2026-07-03T09:00:00'))],
+      }),
+    });
+    const stats = computeReviewStats(inbox([w], []), now);
+
+    expect(stats.totalReviews).toBe(2);
+    expect(stats.reviewedToday).toBe(1);
+    expect(stats.heatmap).toHaveLength(HEATMAP_DAYS);
+    expect(stats.heatmap[stats.heatmap.length - 1]).toEqual({ date: '2026-07-03', count: 1 });
+    expect(stats.forecast).toHaveLength(FORECAST_DAYS);
+    expect(stats.forecast[2].count).toBe(1); // due 07-05 == today+2
+    expect(stats.currentStreak).toBe(2);
+    expect(stats.streakState).toBe('safe');
+  });
+
+  it('empty inbox: all-zero, broken', () => {
+    const stats = computeReviewStats({ words: [], quotes: [] }, now);
+    expect(stats.totalReviews).toBe(0);
+    expect(stats.currentStreak).toBe(0);
+    expect(stats.longestStreak).toBe(0);
+    expect(stats.streakState).toBe('broken');
+    expect(stats.reviewedToday).toBe(0);
+    expect(stats.heatmap.every((c) => c.count === 0)).toBe(true);
+    expect(stats.forecast.every((c) => c.count === 0)).toBe(true);
+  });
+
+  it('reviewedToday equals the heatmap final cell (includes archived)', () => {
+    const w = word({
+      status: 'archived',
+      review: review({ reviewLog: [log(at('2026-07-03T10:00:00'))] }),
+    });
+    const stats = computeReviewStats(inbox([w], []), now);
+    expect(stats.reviewedToday).toBe(1);
+    expect(stats.heatmap[stats.heatmap.length - 1].count).toBe(1);
   });
 });

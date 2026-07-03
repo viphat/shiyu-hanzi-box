@@ -394,7 +394,7 @@ const STATE_RANK: Record<ReviewCardState, number> = {
   new: 2,
 };
 
-function startOfDay(time: number): number {
+export function startOfDay(time: number): number {
   const date = new Date(time);
   return new Date(
     date.getFullYear(),
@@ -414,6 +414,19 @@ export function startOfNextDay(time: number): number {
 
 function endOfDay(time: number): number {
   return startOfNextDay(time) - 1;
+}
+
+/**
+ * Local calendar day as 'YYYY-MM-DD'. Uses local date parts (NOT toISOString,
+ * which is UTC and would shift the day across the local-midnight boundary).
+ * This is the single definition of the day key shared with lib/review-stats.ts.
+ */
+export function localDayKey(time: number): string {
+  const date = new Date(time);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function countNewReviewedToday(entries: Entry[], now: number): number {

@@ -4,7 +4,7 @@
 
 **Goal:** Show new (and upgrading) users a dismissible, localized carousel of the extension's core features the first time the dashboard opens, reopenable any time.
 
-**Architecture:** A device-local `wxt/storage` boolean flag (`local:onboardingSeen`) drives a modal `OnboardingCarousel` rendered by the dashboard `App`. Slide data is a pure module reusing existing screenshots; a `useOnboarding` hook owns open/seen state; a Toolbar button reopens it manually.
+**Architecture:** A device-local `wxt/storage` boolean flag (`local:onboardingSeen`) drives a modal `OnboardingCarousel` rendered by the dashboard `App`. Slide data is a pure module reusing existing screenshots; a `useOnboarding` hook owns loading/open/seen state so the first-run modal does not flash in late; a Toolbar button reopens it manually.
 
 **Tech Stack:** WXT, React 19, TypeScript, Tailwind CSS v4, Vitest + happy-dom, `wxt/testing/fake-browser`, lucide-react icons.
 
@@ -16,7 +16,7 @@
 - **Image imports:** import PNGs from `@/assets/...` (the `@` alias resolves to project root, same as `@/lib/...`).
 - **Theme tokens:** reuse existing watercolor tokens (`bg-card`, `bg-card-soft`, `bg-banner`, `border-border`, `border-border-soft`, `border-border-hover`, `text-ink`, `text-ink-secondary`, `text-muted`, `bg-accent`, `text-on-accent`, `bg-paper-input`). Do not introduce new color tokens.
 - **Test style:** component/hook tests use `// @vitest-environment happy-dom`, `createRoot` + `act` from `react`/`react-dom/client`, and dispatch raw DOM events (no `@testing-library`). Storage tests import `fakeBrowser` from `wxt/testing/fake-browser` and call `fakeBrowser.reset()` in `beforeEach`.
-- **Version:** ship as **v0.3.0** (`package.json` + `CHANGELOG.md`).
+- **Version:** ship as **v0.3.0** (`package.json` + `package-lock.json` + `CHANGELOG.md`).
 
 ---
 
@@ -29,7 +29,7 @@
 - Modify: `lib/i18n.ts` — add `onboarding.*` and `toolbar.howItWorks` keys to `en` and `zh-CN`.
 - Modify: `entrypoints/dashboard/components/Toolbar.tsx` — add `onHowItWorks` prop + button.
 - Modify: `entrypoints/dashboard/App.tsx` — wire hook, render carousel, pass `onHowItWorks` to Toolbar.
-- Modify: `package.json`, `CHANGELOG.md` — version bump + entry.
+- Modify: `package.json`, `package-lock.json`, `CHANGELOG.md` — version bump + entry.
 - Create tests: `tests/onboarding.test.ts`, `tests/onboarding-slides.test.ts`, `tests/onboarding-carousel.test.tsx`, `tests/use-onboarding.test.tsx`.
 
 ---
@@ -134,7 +134,7 @@ Insert these entries just before the closing `},` of the `en` object (the line `
       'Collect Chinese words and sentences as you read, and turn them into a gentle daily review.',
     'onboarding.capture.title': 'Capture while reading',
     'onboarding.capture.body':
-      'Select text on any page, then open the popup to save it as a word or a quote. You can also use the right-click menu or the shortcut (Ctrl / ⌘ + Shift + S).',
+      'Select text on any page, then open the popup to save it as a word or a quote. You can also use the right-click menu, Ctrl / ⌘ + Shift + S for words, or Ctrl / ⌘ + Shift + Q for quotes.',
     'onboarding.word.title': 'Understand each word',
     'onboarding.word.body':
       'Every word gets pinyin, dictionary definitions, and an optional AI explanation with examples.',
@@ -143,7 +143,7 @@ Insert these entries just before the closing `},` of the `en` object (the line `
       'Tag your quotes and add cloze blanks so you can actively recall them during review.',
     'onboarding.review.title': 'Review and track',
     'onboarding.review.body':
-      'The dashboard schedules spaced-repetition reviews and shows your stats and streaks.',
+      'The dashboard schedules spaced-repetition reviews and shows due cards, today\'s reviews, and retention stats.',
     'onboarding.export.title': 'Export and sync',
     'onboarding.export.body':
       'Export your notes as daily Markdown, or back up and folder-sync your whole box.',
@@ -166,7 +166,7 @@ Insert these entries just before the closing `},` of the `zh-CN` object (the lin
       '边阅读边收集中文词语与句子，把它们变成每日的轻松复习。',
     'onboarding.capture.title': '边读边收',
     'onboarding.capture.body':
-      '在任意网页选中文字，打开弹窗即可保存为词语或句子。也可以使用右键菜单或快捷键（Ctrl / ⌘ + Shift + S）。',
+      '在任意网页选中文字，打开弹窗即可保存为词语或句子。也可以使用右键菜单、Ctrl / ⌘ + Shift + S 保存词语，或 Ctrl / ⌘ + Shift + Q 保存句子。',
     'onboarding.word.title': '看懂每个字',
     'onboarding.word.body':
       '每个词都会附上拼音、词典释义，以及可选的 AI 释义和例句。',
@@ -175,7 +175,7 @@ Insert these entries just before the closing `},` of the `zh-CN` object (the lin
       '为句子添加标签，并设置填空，让你在复习时主动回忆。',
     'onboarding.review.title': '复习与进度',
     'onboarding.review.body':
-      '案头会安排间隔复习，并展示你的统计数据与连续天数。',
+      '案头会安排间隔复习，并展示到期卡片、今日复习和记忆率。',
     'onboarding.export.title': '导出与同步',
     'onboarding.export.body':
       '把笔记导出为每日 Markdown，或备份并通过文件夹同步整个收藏箱。',
@@ -378,6 +378,25 @@ describe('OnboardingCarousel', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('traps Tab focus inside the dialog', async () => {
+    await render(<OnboardingCarousel locale="en" onClose={() => {}} />);
+    const buttons = [...container.querySelectorAll('button')] as HTMLButtonElement[];
+    const first = buttons[0];
+    const last = buttons[buttons.length - 1];
+
+    last.focus();
+    await act(async () =>
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true })),
+    );
+    expect(document.activeElement).toBe(first);
+
+    first.focus();
+    await act(async () =>
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true })),
+    );
+    expect(document.activeElement).toBe(last);
+  });
+
   it('closes when the backdrop is clicked but not when the dialog is clicked', async () => {
     const onClose = vi.fn();
     await render(<OnboardingCarousel locale="en" onClose={onClose} />);
@@ -449,11 +468,18 @@ export function OnboardingCarousel({
         const nodes = dialogRef.current.querySelectorAll<HTMLElement>(
           'button:not([disabled]), [href], input, [tabindex]:not([tabindex="-1"])',
         );
-        if (nodes.length === 0) return;
+        if (nodes.length === 0) {
+          event.preventDefault();
+          dialogRef.current.focus();
+          return;
+        }
         const first = nodes[0];
         const last = nodes[nodes.length - 1];
         const active = document.activeElement;
-        if (event.shiftKey && active === first) {
+        if (!dialogRef.current.contains(active) || active === dialogRef.current) {
+          event.preventDefault();
+          (event.shiftKey ? last : first).focus();
+        } else if (event.shiftKey && active === first) {
           event.preventDefault();
           last.focus();
         } else if (!event.shiftKey && active === last) {
@@ -556,7 +582,7 @@ export function OnboardingCarousel({
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run tests/onboarding-carousel.test.tsx`
-Expected: PASS (5 tests).
+Expected: PASS (6 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -575,8 +601,9 @@ git commit -m "feat(onboarding): add carousel modal component"
 
 **Interfaces:**
 - Consumes: `getOnboardingSeen`, `markOnboardingSeen` (Task 1).
-- Produces: `function useOnboarding(): { open: boolean; close: () => void; openManually: () => void }`.
+- Produces: `function useOnboarding(): { open: boolean; loading: boolean; close: () => void; openManually: () => void }`.
   - On mount: reads the flag; if not seen, sets `open = true`.
+  - `loading`: starts `true` and becomes `false` only after the flag read resolves.
   - `close()`: sets `open = false` and marks seen.
   - `openManually()`: sets `open = true` without touching the flag.
 
@@ -589,18 +616,25 @@ git commit -m "feat(onboarding): add carousel modal component"
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fakeBrowser } from 'wxt/testing/fake-browser';
+
+const onboardingMocks = vi.hoisted(() => ({
+  getOnboardingSeen: vi.fn<() => Promise<boolean>>(),
+  markOnboardingSeen: vi.fn<() => Promise<void>>(),
+}));
+
+vi.mock('@/lib/onboarding', () => onboardingMocks);
+
 import { useOnboarding } from '../entrypoints/dashboard/hooks/useOnboarding';
-import { getOnboardingSeen, markOnboardingSeen } from '../lib/onboarding';
 
 let container: HTMLDivElement;
 let root: Root;
 
 function Harness() {
-  const { open, close, openManually } = useOnboarding();
+  const { open, loading, close, openManually } = useOnboarding();
   return (
     <div>
       <span data-testid="open">{String(open)}</span>
+      <span data-testid="loading">{String(loading)}</span>
       <button data-testid="close" onClick={close}>close</button>
       <button data-testid="open-btn" onClick={openManually}>open</button>
     </div>
@@ -608,7 +642,10 @@ function Harness() {
 }
 
 beforeEach(() => {
-  fakeBrowser.reset();
+  onboardingMocks.getOnboardingSeen.mockReset();
+  onboardingMocks.markOnboardingSeen.mockReset();
+  onboardingMocks.getOnboardingSeen.mockResolvedValue(false);
+  onboardingMocks.markOnboardingSeen.mockResolvedValue(undefined);
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   container = document.createElement('div');
   document.body.append(container);
@@ -618,27 +655,53 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
-  vi.restoreAllMocks();
+  vi.clearAllMocks();
 });
 
 const openText = () => container.querySelector('[data-testid="open"]')!.textContent;
+const loadingText = () => container.querySelector('[data-testid="loading"]')!.textContent;
 const clickTestId = async (id: string) =>
   act(async () =>
     container.querySelector(`[data-testid="${id}"]`)!
       .dispatchEvent(new MouseEvent('click', { bubbles: true })),
   );
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 describe('useOnboarding', () => {
+  it('stays loading until the flag read resolves', async () => {
+    const pending = deferred<boolean>();
+    onboardingMocks.getOnboardingSeen.mockReturnValueOnce(pending.promise);
+    await act(async () => root.render(<Harness />));
+    expect(loadingText()).toBe('true');
+    expect(openText()).toBe('false');
+
+    await act(async () => {
+      pending.resolve(false);
+      await pending.promise;
+    });
+    expect(loadingText()).toBe('false');
+    expect(openText()).toBe('true');
+  });
+
   it('opens on mount when the flag is unseen', async () => {
     await act(async () => root.render(<Harness />));
     await act(async () => {}); // flush the async flag read
+    expect(loadingText()).toBe('false');
     expect(openText()).toBe('true');
   });
 
   it('stays closed on mount when already seen', async () => {
-    await markOnboardingSeen();
+    onboardingMocks.getOnboardingSeen.mockResolvedValueOnce(true);
     await act(async () => root.render(<Harness />));
     await act(async () => {});
+    expect(loadingText()).toBe('false');
     expect(openText()).toBe('false');
   });
 
@@ -647,16 +710,16 @@ describe('useOnboarding', () => {
     await act(async () => {});
     await clickTestId('close');
     expect(openText()).toBe('false');
-    expect(await getOnboardingSeen()).toBe(true);
+    expect(onboardingMocks.markOnboardingSeen).toHaveBeenCalledTimes(1);
   });
 
   it('openManually() opens without marking seen', async () => {
-    await markOnboardingSeen();
+    onboardingMocks.getOnboardingSeen.mockResolvedValueOnce(true);
     await act(async () => root.render(<Harness />));
     await act(async () => {});
     await clickTestId('open-btn');
     expect(openText()).toBe('true');
-    expect(await getOnboardingSeen()).toBe(true); // unchanged
+    expect(onboardingMocks.markOnboardingSeen).not.toHaveBeenCalled();
   });
 });
 ```
@@ -675,12 +738,20 @@ import { getOnboardingSeen, markOnboardingSeen } from '@/lib/onboarding';
 
 export function useOnboarding() {
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
-    getOnboardingSeen().then((seen) => {
-      if (mounted && !seen) setOpen(true);
-    });
+    void getOnboardingSeen()
+      .then((seen) => {
+        if (mounted && !seen) setOpen(true);
+      })
+      .catch(() => {
+        if (mounted) setOpen(true);
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
     return () => {
       mounted = false;
     };
@@ -695,14 +766,14 @@ export function useOnboarding() {
     setOpen(true);
   }, []);
 
-  return { open, close, openManually };
+  return { open, loading, close, openManually };
 }
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run tests/use-onboarding.test.tsx`
-Expected: PASS (4 tests).
+Expected: PASS (5 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -722,6 +793,7 @@ git commit -m "feat(onboarding): add useOnboarding hook"
 **Interfaces:**
 - Consumes: `useOnboarding` (Task 5); `OnboardingCarousel` (Task 4); `toolbar.howItWorks` key (Task 2).
 - Produces: `Toolbar` gains a required prop `onHowItWorks: () => void`.
+- Produces: `App` waits for `onboarding.loading` in the existing loading gate before rendering the dashboard or carousel.
 
 - [ ] **Step 1: Add the `onHowItWorks` prop and button to Toolbar**
 
@@ -783,6 +855,18 @@ Inside `App`, after `const { settings, loading: settingsLoading } = useSettings(
   const onboarding = useOnboarding();
 ```
 
+Update the existing loading guard (around line 160) from:
+
+```tsx
+  if (loading || settingsLoading) {
+```
+
+to:
+
+```tsx
+  if (loading || settingsLoading || onboarding.loading) {
+```
+
 Pass the callback to the existing `<Toolbar ... />` (add the prop alongside `aiSettings={aiSettings}` around line 363):
 
 ```tsx
@@ -830,6 +914,7 @@ git commit -m "feat(onboarding): show carousel on first dashboard open + How it 
 
 **Files:**
 - Modify: `package.json` (line 5: `"version"`)
+- Modify: `package-lock.json` (top-level `"version"` and `packages[""].version`)
 - Modify: `CHANGELOG.md`
 
 **Interfaces:** none.
@@ -842,25 +927,46 @@ In `package.json`, change `"version": "0.2.5"` to:
   "version": "0.3.0",
 ```
 
+In `package-lock.json`, change both root package version fields from `"0.1.0"` to `"0.3.0"`:
+
+```json
+  "version": "0.3.0",
+```
+
+and:
+
+```json
+      "version": "0.3.0",
+```
+
 - [ ] **Step 2: Add a changelog entry**
 
 Read the top of `CHANGELOG.md` to match its existing heading format, then add a new section above the most recent entry:
 
 ```markdown
-## 0.3.0
+## [0.3.0] - 2026-07-03
+
+### Added
 
 - Added a first-run onboarding carousel that introduces capture, word insight, quote practice, review, and export/sync. Reopen it any time from the "How it works" button on the dashboard.
 ```
 
 - [ ] **Step 3: Verify the version is consistent**
 
-Run: `node -p "require('./package.json').version"`
-Expected: `0.3.0`
+Run: `node -e "const pkg=require('./package.json'); const lock=require('./package-lock.json'); console.log([pkg.version, lock.version, lock.packages[''].version].join('\\n'))"`
+
+Expected:
+
+```text
+0.3.0
+0.3.0
+0.3.0
+```
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add package.json CHANGELOG.md
+git add package.json package-lock.json CHANGELOG.md
 git commit -m "chore: bump version to 0.3.0"
 ```
 
@@ -878,6 +984,6 @@ git commit -m "chore: bump version to 0.3.0"
 
 ## Self-Review Notes
 
-- **Spec coverage:** trigger/persistence → Task 1 + Task 5; slide sequence/images → Task 3; carousel component + a11y + keyboard → Task 4; dashboard wiring + re-access button → Task 6; i18n keys → Task 2; testing → Tasks 1,3,4,5 tests + manual steps; version → Task 7. All spec sections mapped.
-- **Type consistency:** `OnboardingSlide`/`ONBOARDING_SLIDES` names, `useOnboarding` return shape (`open`/`close`/`openManually`), and `onHowItWorks` prop are used identically across tasks. Message keys added in Task 2 are the exact keys referenced in Tasks 3/4/6.
+- **Spec coverage:** trigger/persistence/no-flash loading → Task 1 + Task 5 + Task 6; slide sequence/images → Task 3; carousel component + a11y + keyboard/focus trap → Task 4; dashboard wiring + re-access button → Task 6; i18n keys → Task 2; testing → Tasks 1,3,4,5 tests + manual steps; version → Task 7. The review slide copy describes the dashboard stats currently implemented in the app and does not advertise an absent streak UI.
+- **Type consistency:** `OnboardingSlide`/`ONBOARDING_SLIDES` names, `useOnboarding` return shape (`open`/`loading`/`close`/`openManually`), and `onHowItWorks` prop are used identically across tasks. Message keys added in Task 2 are the exact keys referenced in Tasks 3/4/6.
 - **No placeholders:** every code and copy step is concrete (full en/zh-CN strings, full component/test source).

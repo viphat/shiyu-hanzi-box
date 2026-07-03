@@ -157,3 +157,38 @@ export function buildHeatmap(
   }
   return cells;
 }
+
+export function buildForecast(
+  states: ReviewState[],
+  now: number,
+  days = FORECAST_DAYS,
+): DayCount[] {
+  const base = new Date(startOfDay(now));
+  const year = base.getFullYear();
+  const month = base.getMonth();
+  const date = base.getDate();
+
+  const buckets: DayCount[] = [];
+  const indexByKey = new Map<string, number>();
+  for (let i = 0; i < days; i += 1) {
+    const key = localDayKey(new Date(year, month, date + i).getTime());
+    indexByKey.set(key, i);
+    buckets.push({ date: key, count: 0 });
+  }
+
+  const todayStart = startOfDay(now);
+  const horizonEnd = new Date(year, month, date + days).getTime(); // start of day after window
+
+  for (const state of states) {
+    const due = state.dueAt;
+    if (due < todayStart) {
+      buckets[0].count += 1; // overdue -> today
+      continue;
+    }
+    if (due >= horizonEnd) continue; // beyond window
+    const idx = indexByKey.get(localDayKey(due));
+    if (idx !== undefined) buckets[idx].count += 1;
+  }
+
+  return buckets;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildHeatmap, collectReviewStates, reviewDayCounts, computeStreak, HEATMAP_DAYS } from '../lib/review-stats';
+import { buildHeatmap, collectReviewStates, reviewDayCounts, computeStreak, HEATMAP_DAYS, buildForecast, FORECAST_DAYS } from '../lib/review-stats';
 import type { Cloze, Inbox, QuoteEntry, ReviewLogEntry, ReviewState, WordEntry } from '../lib/types';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -157,5 +157,44 @@ describe('buildHeatmap', () => {
   it('final cell equals today\'s review count', () => {
     const h = buildHeatmap(new Map([['2026-07-03', 7]]), now);
     expect(h[h.length - 1]).toEqual({ date: '2026-07-03', count: 7 });
+  });
+});
+
+describe('buildForecast', () => {
+  const now = new Date('2026-07-03T09:00:00').getTime();
+  const at = (iso: string) => new Date(iso).getTime();
+
+  it('has length 7, today first', () => {
+    const f = buildForecast([], now);
+    expect(f).toHaveLength(FORECAST_DAYS);
+    expect(f[0].date).toBe('2026-07-03');
+    expect(f[6].date).toBe('2026-07-09');
+  });
+
+  it('buckets each due date into its local day', () => {
+    const states = [
+      review({ dueAt: at('2026-07-03T20:00:00') }), // today (later)
+      review({ dueAt: at('2026-07-05T08:00:00') }), // +2
+      review({ dueAt: at('2026-07-05T22:00:00') }), // +2
+    ];
+    const f = buildForecast(states, now);
+    expect(f[0].count).toBe(1);
+    expect(f[2].count).toBe(2);
+  });
+
+  it('folds overdue cards into today', () => {
+    const f = buildForecast([review({ dueAt: at('2026-06-20T00:00:00') })], now);
+    expect(f[0].count).toBe(1);
+  });
+
+  it('drops due dates beyond the 7-day window', () => {
+    const f = buildForecast([review({ dueAt: at('2026-07-30T00:00:00') })], now);
+    expect(f.reduce((sum, c) => sum + c.count, 0)).toBe(0);
+  });
+
+  it('excludes cards with no ReviewState (via collectReviewStates upstream)', () => {
+    // collectReviewStates omits reviewless cards, so forecast never sees them.
+    const states = collectReviewStates(inbox([word({ id: 'nw' })], []));
+    expect(buildForecast(states, now).reduce((s, c) => s + c.count, 0)).toBe(0);
   });
 });

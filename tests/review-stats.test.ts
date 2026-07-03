@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { collectReviewStates, reviewDayCounts } from '../lib/review-stats';
+import { collectReviewStates, reviewDayCounts, computeStreak } from '../lib/review-stats';
 import type { Cloze, Inbox, QuoteEntry, ReviewLogEntry, ReviewState, WordEntry } from '../lib/types';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -70,5 +70,66 @@ describe('reviewDayCounts', () => {
 
   it('returns an empty map when there are no logs', () => {
     expect(reviewDayCounts([review()]).size).toBe(0);
+  });
+});
+
+// Build an active-day map from 'YYYY-MM-DD' keys.
+function active(...days: string[]): Map<string, number> {
+  return new Map(days.map((d) => [d, 1]));
+}
+
+describe('computeStreak (freeze rule)', () => {
+  const today = '2026-07-03';
+
+  it('reviewed today: safe, counts today', () => {
+    const r = computeStreak(active('2026-07-01', '2026-07-02', '2026-07-03'), today);
+    expect(r).toEqual({ current: 3, longest: 3, state: 'safe' });
+  });
+
+  it('active yesterday only: safe, no +1 for today', () => {
+    const r = computeStreak(active('2026-07-01', '2026-07-02'), today);
+    expect(r.state).toBe('safe');
+    expect(r.current).toBe(2); // ends yesterday; today not counted
+  });
+
+  it('one missed day is forgiven (freeze): run continues', () => {
+    // active today, missed yesterday (07-02), active 07-01
+    const r = computeStreak(active('2026-06-30', '2026-07-01', '2026-07-03'), today);
+    expect(r.state).toBe('safe');
+    expect(r.current).toBe(3);
+  });
+
+  it('two consecutive misses: broken, resets to 0', () => {
+    // last active 06-30 => gap of 3 to today
+    const r = computeStreak(active('2026-06-29', '2026-06-30'), today);
+    expect(r.state).toBe('broken');
+    expect(r.current).toBe(0);
+  });
+
+  it('at-risk: gap == 2 (yesterday missed, today pending)', () => {
+    // last active 07-01 => gap 2
+    const r = computeStreak(active('2026-06-30', '2026-07-01'), today);
+    expect(r.state).toBe('at-risk');
+    expect(r.current).toBe(2); // run ending 07-01
+  });
+
+  it('never reviewed: 0, broken', () => {
+    expect(computeStreak(new Map(), today)).toEqual({ current: 0, longest: 0, state: 'broken' });
+  });
+
+  it('every-other-day pattern stays alive (accepted caveat)', () => {
+    const r = computeStreak(active('2026-06-29', '2026-07-01', '2026-07-03'), today);
+    expect(r.state).toBe('safe');
+    expect(r.current).toBe(3);
+  });
+
+  it('longest can exceed current', () => {
+    // long past run (5 consecutive) then broken, then a fresh 1-day current
+    const r = computeStreak(
+      active('2026-06-01', '2026-06-02', '2026-06-03', '2026-06-04', '2026-06-05', '2026-07-03'),
+      today,
+    );
+    expect(r.current).toBe(1);
+    expect(r.longest).toBe(5);
   });
 });

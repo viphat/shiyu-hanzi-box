@@ -69,3 +69,73 @@ export function reviewDayCounts(states: ReviewState[]): Map<string, number> {
   }
   return counts;
 }
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** Convert a 'YYYY-MM-DD' key to a monotonic integer day ordinal.
+ * Uses Date.UTC so ordinal differences are exact whole days (DST-proof). */
+function dayKeyToOrdinal(key: string): number {
+  const [y, m, d] = key.split('-').map(Number);
+  return Math.round(Date.UTC(y, m - 1, d) / MS_PER_DAY);
+}
+
+/** True when two active ordinals belong to the same tolerant run:
+ * gap 1 = consecutive, gap 2 = one missed day forgiven. gap >= 3 breaks. */
+function continuesRun(newer: number, older: number): boolean {
+  const gap = newer - older;
+  return gap === 1 || gap === 2;
+}
+
+export function computeStreak(
+  dayCounts: Map<string, number>,
+  today: string,
+): { current: number; longest: number; state: StreakState } {
+  const ordinals = [...dayCounts.keys()]
+    .map(dayKeyToOrdinal)
+    .sort((a, b) => a - b);
+
+  // Longest tolerant run across all history.
+  let longest = 0;
+  let run = 0;
+  let prev: number | null = null;
+  for (const ord of ordinals) {
+    run = prev !== null && continuesRun(ord, prev) ? run + 1 : 1;
+    longest = Math.max(longest, run);
+    prev = ord;
+  }
+
+  const todayOrd = dayKeyToOrdinal(today);
+
+  // Most recent active day at or before today.
+  let lastActive: number | null = null;
+  for (const ord of ordinals) {
+    if (ord <= todayOrd) lastActive = ord; // sorted asc => last write wins
+  }
+  if (lastActive === null) {
+    return { current: 0, longest, state: 'broken' };
+  }
+
+  const gap = todayOrd - lastActive;
+  let state: StreakState;
+  if (gap <= 1) state = 'safe';
+  else if (gap === 2) state = 'at-risk';
+  else return { current: 0, longest, state: 'broken' };
+
+  // Count the current run: walk active ordinals backward from lastActive.
+  let current = 0;
+  let cursor: number | null = null;
+  for (let i = ordinals.length - 1; i >= 0; i -= 1) {
+    const ord = ordinals[i];
+    if (ord > lastActive) continue;
+    if (cursor === null) {
+      current = 1;
+    } else if (continuesRun(cursor, ord)) {
+      current += 1;
+    } else {
+      break;
+    }
+    cursor = ord;
+  }
+
+  return { current, longest, state };
+}

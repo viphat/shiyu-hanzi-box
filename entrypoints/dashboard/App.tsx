@@ -34,6 +34,8 @@ import { Toolbar } from './components/Toolbar';
 import { WordList } from './components/WordList';
 import { useInbox } from './hooks/useInbox';
 import { useSettings } from './hooks/useSettings';
+import { useOnboarding } from './hooks/useOnboarding';
+import { OnboardingCarousel } from './components/onboarding/OnboardingCarousel';
 import { requestSyncMutation } from '../background/sync-mutation-handler';
 import { wordKey } from '@/lib/sync/project';
 import { addTag, planTagWrite, planTagRemovalAcrossQuotes, removeTag, normalizeTag, tagCounts, quoteMatchesTags } from '@/lib/tags';
@@ -44,6 +46,7 @@ type StatusFilter = 'all' | Status;
 export function App() {
   const { inbox, loading, mutate, mutateWithRemovals, replace } = useInbox();
   const { settings, loading: settingsLoading } = useSettings();
+  const onboarding = useOnboarding();
   const locale = settings.uiLocale;
   const [aiSettings, setAiSettingsState] = useState<AiSettings>(DEFAULT_AI_SETTINGS);
 
@@ -157,7 +160,7 @@ export function App() {
     };
   }, [inbox, reviewDueCount]);
 
-  if (loading || settingsLoading) {
+  if (loading || settingsLoading || onboarding.loading) {
     return (
       <div className="min-h-screen p-8 text-sm text-ink-secondary">
         {t(locale, 'app.loading')}
@@ -295,6 +298,9 @@ export function App() {
 
   return (
     <div className="min-h-screen text-ink">
+      {onboarding.open && (
+        <OnboardingCarousel locale={locale} onClose={onboarding.close} />
+      )}
       <header className="px-5 pt-6">
         <div className="mx-auto max-w-5xl">
           <div className="relative overflow-hidden rounded-2xl border border-border-soft bg-banner p-6 shadow-[0_1px_3px_rgba(90,75,50,0.06)]">
@@ -361,6 +367,7 @@ export function App() {
           locale={locale}
           settings={settings}
           aiSettings={aiSettings}
+          onHowItWorks={onboarding.openManually}
         />
 
         <SrsStatsPanel stats={srsStats} locale={locale} />

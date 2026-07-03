@@ -1,4 +1,4 @@
-import { Download, FileText, Search, Settings, Upload } from 'lucide-react';
+import { Download, FileText, HelpCircle, Search, Settings, Upload } from 'lucide-react';
 import { useRef, useState, type ChangeEvent } from 'react';
 import { browser } from 'wxt/browser';
 import { BackupParseError, restoreFullBackup, serializeFullBackup } from '@/lib/backup';
@@ -15,6 +15,7 @@ export function Toolbar({
   locale,
   settings,
   aiSettings,
+  onHowItWorks,
 }: {
   inbox: Inbox;
   query: string;
@@ -23,6 +24,7 @@ export function Toolbar({
   locale: UiLocale;
   settings: AppSettings;
   aiSettings: AiSettings;
+  onHowItWorks: () => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [restoring, setRestoring] = useState(false);
@@ -176,6 +178,12 @@ export function Toolbar({
           className="inline-flex items-center gap-1 rounded-full border border-border bg-transparent px-3 py-2.5 text-sm text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Upload className="h-4 w-4" /> {restoring ? t(locale, 'toolbar.restoring') : t(locale, 'toolbar.restore')}
+        </button>
+        <button
+          onClick={onHowItWorks}
+          className="inline-flex items-center gap-1 rounded-full border border-border bg-transparent px-3 py-2.5 text-sm text-ink-secondary tracking-[2px] transition hover:border-border-hover hover:bg-paper-input"
+        >
+          <HelpCircle className="h-4 w-4" /> {t(locale, 'toolbar.howItWorks')}
         </button>
         <button
           onClick={openSettings}

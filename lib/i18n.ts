@@ -208,6 +208,31 @@ export const messages = {
     'toast.duplicate': 'Already saved',
     'toast.undo': 'Undo',
     'toast.undone': 'Undone',
+    'onboarding.welcome.title': 'Welcome to 拾语汉字box',
+    'onboarding.welcome.body':
+      'Collect Chinese words and sentences as you read, and turn them into a gentle daily review.',
+    'onboarding.capture.title': 'Capture while reading',
+    'onboarding.capture.body':
+      'Select text on any page, then open the popup to save it as a word or a quote. You can also use the right-click menu, Ctrl / ⌘ + Shift + S for words, or Ctrl / ⌘ + Shift + Q for quotes.',
+    'onboarding.word.title': 'Understand each word',
+    'onboarding.word.body':
+      'Every word gets pinyin, dictionary definitions, and an optional AI explanation with examples.',
+    'onboarding.quotes.title': 'Turn quotes into practice',
+    'onboarding.quotes.body':
+      'Tag your quotes and add cloze blanks so you can actively recall them during review.',
+    'onboarding.review.title': 'Review and track',
+    'onboarding.review.body':
+      'The dashboard schedules spaced-repetition reviews and shows due cards, today\'s reviews, and retention stats.',
+    'onboarding.export.title': 'Export and sync',
+    'onboarding.export.body':
+      'Export your notes as daily Markdown, or back up and folder-sync your whole box.',
+    'onboarding.skip': 'Skip',
+    'onboarding.back': 'Back',
+    'onboarding.next': 'Next',
+    'onboarding.getStarted': 'Get started',
+    'onboarding.close': 'Close',
+    'onboarding.goToSlide': 'Go to slide {n}',
+    'toolbar.howItWorks': 'How it works',
   },
   'zh-CN': {
     'app.loading': '正在翻开收藏箱...',
@@ -416,6 +441,31 @@ export const messages = {
     'toast.duplicate': '已存在',
     'toast.undo': '撤销',
     'toast.undone': '已撤销',
+    'onboarding.welcome.title': '欢迎使用拾语汉字box',
+    'onboarding.welcome.body':
+      '边阅读边收集中文词语与句子，把它们变成每日的轻松复习。',
+    'onboarding.capture.title': '边读边收',
+    'onboarding.capture.body':
+      '在任意网页选中文字，打开弹窗即可保存为词语或句子。也可以使用右键菜单、Ctrl / ⌘ + Shift + S 保存词语，或 Ctrl / ⌘ + Shift + Q 保存句子。',
+    'onboarding.word.title': '看懂每个字',
+    'onboarding.word.body':
+      '每个词都会附上拼音、词典释义，以及可选的 AI 释义和例句。',
+    'onboarding.quotes.title': '句子变练习',
+    'onboarding.quotes.body':
+      '为句子添加标签，并设置填空，让你在复习时主动回忆。',
+    'onboarding.review.title': '复习与进度',
+    'onboarding.review.body':
+      '案头会安排间隔复习，并展示到期卡片、今日复习和记忆率。',
+    'onboarding.export.title': '导出与同步',
+    'onboarding.export.body':
+      '把笔记导出为每日 Markdown，或备份并通过文件夹同步整个收藏箱。',
+    'onboarding.skip': '跳过',
+    'onboarding.back': '上一步',
+    'onboarding.next': '下一步',
+    'onboarding.getStarted': '开始使用',
+    'onboarding.close': '关闭',
+    'onboarding.goToSlide': '跳到第 {n} 页',
+    'toolbar.howItWorks': '使用说明',
   },
 } as const;
 

@@ -29,6 +29,7 @@ import type {
 import { getAiSettings, aiSettingsStorage, DEFAULT_AI_SETTINGS } from '@/lib/ai/settings';
 import { QuoteList } from './components/QuoteList';
 import { ReviewQueue } from './components/ReviewQueue';
+import { ReviewStatsTab } from './components/ReviewStatsTab';
 import { SyncStatusBadge } from './SyncStatusBadge';
 import { Toolbar } from './components/Toolbar';
 import { WordList } from './components/WordList';
@@ -39,8 +40,9 @@ import { OnboardingCarousel } from './components/onboarding/OnboardingCarousel';
 import { requestSyncMutation } from '../background/sync-mutation-handler';
 import { wordKey } from '@/lib/sync/project';
 import { addTag, planTagWrite, planTagRemovalAcrossQuotes, removeTag, normalizeTag, tagCounts, quoteMatchesTags } from '@/lib/tags';
+import { computeReviewStats } from '@/lib/review-stats';
 
-type Tab = 'review' | 'words' | 'quotes';
+type Tab = 'review' | 'words' | 'quotes' | 'stats';
 type StatusFilter = 'all' | Status;
 
 export function App() {
@@ -139,6 +141,11 @@ export function App() {
 
   const allReviewItems: SrsQueueItem[] = srsSnapshot.items;
   const srsStats: SrsStats = srsSnapshot.stats;
+
+  const reviewStats = useMemo(
+    () => computeReviewStats(inbox, reviewNow),
+    [inbox, reviewNow],
+  );
 
   const reviewItems = useMemo(
     () =>
@@ -375,7 +382,7 @@ export function App() {
         <div className="rounded-2xl border border-border bg-card-soft p-3 shadow-[0_1px_3px_rgba(90,75,50,0.06)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="inline-flex gap-1 rounded-full bg-chip p-1">
-              {(['review', 'words', 'quotes'] as Tab[]).map((nextTab) => (
+              {(['review', 'words', 'quotes', 'stats'] as Tab[]).map((nextTab) => (
                 <button
                   key={nextTab}
                   onClick={() => setTab(nextTab)}
@@ -393,7 +400,7 @@ export function App() {
                 </button>
               ))}
             </div>
-            {tab === 'review' ? (
+            {tab === 'stats' ? null : tab === 'review' ? (
               <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-sm text-muted">
                 <BookOpen className="h-4 w-4 text-accent-deep" />
                 {t(locale, 'app.reviewToday')}
@@ -417,7 +424,9 @@ export function App() {
         </div>
 
         <section>
-          {tab === 'review' ? (
+          {tab === 'stats' ? (
+            <ReviewStatsTab stats={reviewStats} srsStats={srsStats} locale={locale} />
+          ) : tab === 'review' ? (
             <ReviewQueue
               items={reviewItems}
               onAnswer={answerEntry}
@@ -486,7 +495,12 @@ function entryMatchesQuery(entry: Entry, query: string): boolean {
     .includes(query);
 }
 
-function getTabLabel(tab: Tab, counts: Record<Tab, number>, locale: UiLocale): string {
+function getTabLabel(
+  tab: Tab,
+  counts: { review: number; words: number; quotes: number },
+  locale: UiLocale,
+): string {
+  if (tab === 'stats') return t(locale, 'tab.stats');
   if (tab === 'review') return `${t(locale, 'tab.review')} (${counts.review})`;
   if (tab === 'words') return `${t(locale, 'tab.words')} (${counts.words})`;
   return `${t(locale, 'tab.quotes')} (${counts.quotes})`;

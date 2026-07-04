@@ -71,6 +71,101 @@ describe('handleCapture - quote path', () => {
   });
 });
 
+describe('handleCapture - non-source pages leave the occurrence blank', () => {
+  const NEW_TAB_CTX = {
+    text: '你好',
+    surrounding: 'context',
+    sourceTitle: 'New Tab',
+    sourceUrl: 'chrome://newtab/',
+    sourceDomain: '',
+  };
+  const BLANK_CTX = {
+    text: '你好',
+    surrounding: 'context',
+    sourceTitle: '',
+    sourceUrl: 'about:blank',
+    sourceDomain: '',
+  };
+
+  it('still saves the word but blanks source + surrounding for the New Tab Page', async () => {
+    vi.mocked(fakeBrowser.scripting.executeScript).mockResolvedValue([
+      { result: NEW_TAB_CTX } as any,
+    ]);
+    const result = await handleCapture('word');
+    expect(result.ok).toBe(true);
+    const [word] = (await getInbox()).words;
+    expect(word.text).toBe('你好');
+    expect(word.occurrences).toHaveLength(1);
+    expect(word.occurrences[0].sourceTitle).toBe('');
+    expect(word.occurrences[0].sourceUrl).toBe('');
+    expect(word.occurrences[0].sourceDomain).toBe('');
+    expect(word.occurrences[0].surrounding).toBe('');
+  });
+
+  it('still saves the quote but blanks the source for a blank page', async () => {
+    vi.mocked(fakeBrowser.scripting.executeScript).mockResolvedValue([
+      { result: BLANK_CTX } as any,
+    ]);
+    await handleCapture('quote');
+    const [quote] = (await getInbox()).quotes;
+    expect(quote.text).toBe('你好');
+    expect(quote.sourceTitle).toBe('');
+    expect(quote.sourceUrl).toBe('');
+    expect(quote.sourceDomain).toBe('');
+    expect(quote.surrounding).toBe('');
+  });
+});
+
+describe('handleContextMenuCapture - non-source pages leave the occurrence blank', () => {
+  it('blanks tab metadata when the restricted page is the New Tab Page', async () => {
+    vi.mocked(fakeBrowser.scripting.executeScript).mockRejectedValue(new Error('cannot access'));
+
+    const result = await handleContextMenuCapture(
+      'word',
+      { selectionText: ' 学习 ' },
+      { title: 'New Tab', url: 'chrome://newtab/' },
+    );
+
+    const inbox = await getInbox();
+    expect(result.ok).toBe(true);
+    expect(inbox.words[0].text).toBe('学习');
+    expect(inbox.words[0].occurrences[0].sourceTitle).toBe('');
+    expect(inbox.words[0].occurrences[0].sourceUrl).toBe('');
+    expect(inbox.words[0].occurrences[0].sourceDomain).toBe('');
+  });
+});
+
+describe('handleManualCapture - non-source pages leave the occurrence blank', () => {
+  it('blanks source for pasted text captured on the extension dashboard', async () => {
+    vi.mocked(fakeBrowser.tabs.query).mockResolvedValue([
+      {
+        id: 1,
+        active: true,
+        title: '拾语汉字box',
+        url: 'chrome-extension://abcdef/dashboard.html',
+      } as any,
+    ]);
+    vi.mocked(fakeBrowser.scripting.executeScript).mockResolvedValue([
+      {
+        result: {
+          sourceTitle: '拾语汉字box',
+          sourceUrl: 'chrome-extension://abcdef/dashboard.html',
+          sourceDomain: '',
+        },
+      } as any,
+    ]);
+
+    const result = await handleManualCapture('word', ' 中文 ');
+
+    const inbox = await getInbox();
+    expect(result.ok).toBe(true);
+    expect(inbox.words[0].text).toBe('中文');
+    expect(inbox.words[0].occurrences[0].sourceTitle).toBe('');
+    expect(inbox.words[0].occurrences[0].sourceUrl).toBe('');
+    expect(inbox.words[0].occurrences[0].sourceDomain).toBe('');
+  });
+});
+
 describe('handleContextMenuCapture', () => {
   it('falls back to context menu selection text when scripting is restricted', async () => {
     vi.mocked(fakeBrowser.scripting.executeScript).mockRejectedValue(new Error('cannot access'));

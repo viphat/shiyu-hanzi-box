@@ -2,6 +2,7 @@ import type { Browser } from 'wxt/browser';
 import {
   saveWord,
   saveQuote,
+  sanitizeSource,
   type SourceInfo,
   type TaggedOutcome,
   type UndoCaptureMessage,
@@ -66,13 +67,13 @@ async function captureActiveTab(
     return { result: { ok: false, reason: 'no-selection' }, tabId: tab.id, src: null };
   }
 
-  const src: SourceInfo = {
+  const src: SourceInfo = sanitizeSource({
     sourceTitle: ctx.sourceTitle,
     sourceUrl: ctx.sourceUrl,
     sourceDomain: ctx.sourceDomain,
     surrounding: ctx.surrounding,
     capturedAt: Date.now(),
-  };
+  });
   const outcome = await capture(kind, ctx.text, src);
   return { result: okResult(outcome, src), tabId: tab.id, src };
 }
@@ -135,13 +136,13 @@ export async function handleContextMenuCapture(
     return result;
   }
 
-  const src: SourceInfo = {
+  const src: SourceInfo = sanitizeSource({
     sourceTitle: tab?.title ?? '',
     sourceUrl: tab?.url ?? '',
     sourceDomain: domainFromUrl(tab?.url),
     surrounding: '',
     capturedAt: Date.now(),
-  };
+  });
   const outcome = await capture(kind, text, src);
   await setBadge(kind === 'word' ? 'WORD' : 'QTE', true);
   return okResult(outcome, src); // badge-only; restricted pages cannot host a toast
@@ -164,7 +165,7 @@ export async function handleManualCapture(
   }
 
   const metadata = await pageMetadataForTab(tab);
-  const src: SourceInfo = { ...metadata, surrounding: '', capturedAt: Date.now() };
+  const src: SourceInfo = sanitizeSource({ ...metadata, surrounding: '', capturedAt: Date.now() });
   const outcome = await capture(kind, text, src);
   await setBadge(kind === 'word' ? 'WORD' : 'QTE', true);
   return okResult(outcome, src);

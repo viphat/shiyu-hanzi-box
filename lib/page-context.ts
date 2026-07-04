@@ -13,6 +13,38 @@ export interface PageMetadata {
 }
 
 /**
+ * URL scheme prefixes for pages that are not real web content: the blank page,
+ * New Tab Pages, browser internal/dashboard pages, and extension pages (our own
+ * dashboard included). Captures from these should not record a source — the
+ * "New Tab" title / `chrome://newtab/` URL is noise, not provenance.
+ */
+const NON_SOURCE_SCHEMES = [
+  'about:', // about:blank, about:newtab, about:home
+  'chrome:', // chrome://newtab, chrome://settings, ...
+  'chrome-search:', // legacy Chrome New Tab Page (local-ntp)
+  'chrome-extension:', // extension pages incl. our dashboard.html
+  'chrome-native:',
+  'chrome-untrusted:',
+  'edge:', // edge://newtab, edge://favorites, ...
+  'moz-extension:', // Firefox extension pages incl. our dashboard.html
+  'brave:',
+  'vivaldi:',
+  'opera:',
+];
+
+/**
+ * True when a capture originated from a blank page, a New Tab Page, or a
+ * browser/extension internal (dashboard) page — i.e. anything that should not
+ * be recorded as the source of a word or quote. An empty/unknown URL counts too.
+ */
+export function isBlankOrBrowserPage(url: string): boolean {
+  const trimmed = (url ?? '').trim();
+  if (!trimmed) return true;
+  const lower = trimmed.toLowerCase();
+  return NON_SOURCE_SCHEMES.some((scheme) => lower.startsWith(scheme));
+}
+
+/**
  * Runs in the PAGE context via scripting.executeScript({ func }).
  * Must not reference outer scope.
  */

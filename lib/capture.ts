@@ -1,5 +1,6 @@
 import { makeId } from './id';
 import { normalizeText } from './normalize';
+import { isBlankOrBrowserPage } from './page-context';
 import { mutateInboxSynced } from './sync/mutations';
 import type { Cloze, Occurrence, WordEntry, QuoteEntry } from './types';
 
@@ -9,6 +10,24 @@ export interface SourceInfo {
   sourceDomain: string;
   surrounding: string;
   capturedAt: number;
+}
+
+/**
+ * Blanks the source/surrounding of a capture that came from a blank page, a New
+ * Tab Page, or a browser/extension dashboard page. The word/quote is still
+ * saved; only the (meaningless) provenance is left empty so the occurrence is
+ * treated as blank by the display helpers. `capturedAt` is preserved so undo
+ * still matches the recorded occurrence.
+ */
+export function sanitizeSource(src: SourceInfo): SourceInfo {
+  if (!isBlankOrBrowserPage(src.sourceUrl)) return src;
+  return {
+    sourceTitle: '',
+    sourceUrl: '',
+    sourceDomain: '',
+    surrounding: '',
+    capturedAt: src.capturedAt,
+  };
 }
 
 export type WordAction = 'created' | 'occurrence-added' | 'duplicate';

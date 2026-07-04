@@ -5,6 +5,21 @@ All notable changes to 拾语汉字box are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-07-04
+
+### Fixed
+
+- **Captures from non-content pages no longer record a bogus source.** Saving a
+  word or quote from a blank page (`about:blank`), a New Tab Page
+  (`chrome://newtab`, `edge://newtab`, `about:newtab`, `chrome-search://local-ntp`),
+  or a browser/extension internal page (`chrome://…`, the extension's own
+  `dashboard.html`) previously stored meaningless provenance such as a "New Tab"
+  title and a `chrome://newtab/` URL. The word or quote is still saved, but the
+  source title, URL, domain, and surrounding sentence are left blank — so the
+  occurrence is treated as empty and hidden from source examples. Applies to the
+  keyboard shortcut, the context-menu fallback (which fires on exactly these
+  restricted pages), and the popup paste-fallback capture.
+
 ## [0.4.0] - 2026-07-03
 
 ### Added
@@ -125,6 +140,11 @@ review and cloze-deletion quote review; opt-in BYO-key AI insight and cloze
 suggestions; optional Kaikki dictionary fallback; English / zh-CN UI; daily
 Markdown, zip, and JSON backup exports.
 
+[0.4.1]: https://github.com/viphat/shiyu-hanzi-box/releases/tag/v0.4.1
+[0.4.0]: https://github.com/viphat/shiyu-hanzi-box/releases/tag/v0.4.0
+[0.3.0]: https://github.com/viphat/shiyu-hanzi-box/releases/tag/v0.3.0
+[0.2.5]: https://github.com/viphat/shiyu-hanzi-box/releases/tag/v0.2.5
+[0.2.2]: https://github.com/viphat/shiyu-hanzi-box/releases/tag/v0.2.2
 [0.2.1]: https://github.com/viphat/shiyu-hanzi-box/releases/tag/v0.2.1
 [0.2.0]: https://github.com/viphat/shiyu-hanzi-box/releases/tag/v0.2.0
 [0.1.0]: https://github.com/viphat/shiyu-hanzi-box/releases/tag/v0.1.0

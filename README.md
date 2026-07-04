@@ -51,7 +51,10 @@ Implemented:
 - Core capture logic:
   - words dedupe by normalized text and append source occurrences;
   - quotes are saved as independent entries;
-  - empty selections are ignored.
+  - empty selections are ignored;
+  - captures from a blank page, a New Tab Page, or a browser/extension
+    dashboard page are still saved, but with a blank source (no title, URL,
+    domain, or surrounding sentence) since those pages carry no real provenance.
 - Page-context reader for selected text, surrounding text, title, URL, and domain.
 - Background service worker wiring for context menus and keyboard commands.
 - Toolbar popup buttons for saving the current selection as a word or quote.
@@ -81,6 +84,9 @@ Implemented:
   card limits. Quotes are reviewed via cloze deletion: each blanked span is an
   independent FSRS card. Quotes save parked (no blanks); add blanks manually or
   via AI suggestions before they enter the review queue.
+- Dashboard **Stats** tab: a review streak with a one-grace-day freeze as the
+  hero, a 12-week activity heatmap, a 7-day due forecast, and lifetime total
+  reviews — all derived from existing local review history and fully localized.
 - One-click Simplified to Taiwan Traditional conversion on word and quote cards,
   powered by OpenCC and cached on each entry.
 - Offline Word Insight Panel with CC-CEDICT definitions, tone chips, source
@@ -224,6 +230,22 @@ card to tomorrow without changing its memory state.
 
 All review data is stored locally on each entry and travels with JSON backups.
 No network access is required.
+
+## Stats (Stats tab)
+
+The dashboard **Stats** tab summarizes your review history — nothing new is
+tracked; it is all derived from the review events already stored on each entry.
+
+- **Streak** — consecutive days with at least one review, shown as the hero. A
+  single missed day is forgiven (a one-day grace "freeze") so an occasional gap
+  does not reset the count.
+- **Activity heatmap** — the last 12 weeks (84 days) of review counts, zero-filled
+  and ending today.
+- **Due forecast** — how many cards come due over the next 7 days, with anything
+  overdue folded into today.
+- **Lifetime total** — the total number of reviews you have completed.
+
+The Stats tab is fully localized (English / zh-CN) and requires no network access.
 
 ## Quote Tags
 
@@ -406,6 +428,7 @@ lib/
   page-context.ts        # injected selection reader
   pinyin.ts              # pinyin-pro wrapper
   review.ts              # compatibility wrapper around the SRS queue
+  review-stats.ts        # streak, heatmap, due forecast, and lifetime totals for the Stats tab
   srs.ts                 # FSRS adapter, migration, queue, actions, stats
   traditional.ts         # opencc-js Simplified -> Taiwan Traditional wrapper
   storage.ts             # WXT storage item and serialized mutations
@@ -475,9 +498,8 @@ npm run zip
 
 ## To Do
 
-- Add capture undo and clearer save feedback after context menu, shortcut, and
-  popup captures.
-- Add review streak visibility.
+No tracked pending items. Recent releases shipped capture undo with in-page save
+feedback (0.2.1) and review streak visibility via the Stats tab (0.4.0).
 
 ## Useful Notes
 
@@ -496,7 +518,8 @@ The current test suite covers:
 - first word capture, normalized word dedupe, duplicate occurrence suppression,
   quote capture, and empty-input handling;
 - background capture success, no-selection, restricted-page, no-active-tab, and
-  quote paths using fake Chrome APIs;
+  quote paths using fake Chrome APIs, plus blank-source handling for blank / New
+  Tab / browser-dashboard pages;
 - local pinyin generation;
 - daily Markdown frontmatter, sections, words, quotes, quote tags, pinyin,
   source links, and AI insight sections;
@@ -508,6 +531,8 @@ The current test suite covers:
   parsing, client error handling, component rendering, and backup round-trip.
 - FSRS migration, rating schedules, learning-step persistence, daily new-card
   caps, due-time wakeups, settings normalization, and one-card review UI.
+- review-stats computation (streak with grace day, 12-week heatmap, 7-day due
+  forecast, lifetime totals) and the Stats tab rendering.
 - tag normalization, add/remove/count helpers, category-to-tags migration,
   OR-semantics tag filtering, and Tags Cloud rendering with rename/delete.
 - folder-sync deterministic merge, inbox projection, OR-Set tag merge,

@@ -32,7 +32,9 @@ The implementation plans and specs are in `docs/superpowers/`:
 Tasks 0 through 15, Traditional Chinese conversion, TTS, the real FSRS system,
 the focused single-card review experience, cloze-deletion quote review, the
 versioned full backup (settings + AI key), encrypted folder sync, the
-first-class quote tags system, and the watercolor UI redesign have landed.
+first-class quote tags system, the watercolor UI redesign, the first-run
+onboarding carousel, and the dashboard Stats tab (review streak, activity
+heatmap, due forecast, lifetime totals) have landed.
 
 ## Commands
 
@@ -60,6 +62,9 @@ npx vitest run tests/settings.test.ts
 npx vitest run tests/srs.test.ts
 npx vitest run tests/review.test.ts
 npx vitest run tests/review-queue.test.tsx
+npx vitest run tests/review-stats.test.ts
+npx vitest run tests/review-stats-tab.test.tsx
+npx vitest run tests/page-context.test.ts
 npx vitest run tests/backup.test.ts
 npx vitest run tests/markdown.test.ts
 npx vitest run tests/export.test.ts
@@ -150,6 +155,13 @@ The central data path is:
     `entrypoints/dashboard/SyncStatusBadge.tsx` shows the state;
     `entrypoints/settings/FolderSync.tsx` is the settings UI. Kaikki data and the
     remembered key never sync.
+16. `lib/review-stats.ts` derives the dashboard Stats tab entirely from existing
+    review history: `computeReviewStats` is the public entry point, composing the
+    streak (consecutive review days with a one-day grace freeze, guarded against
+    future days), the 12-week (84-day) zero-filled activity heatmap ending today,
+    the 7-day due forecast (overdue folds into today), and lifetime total reviews.
+    It reads persisted review events only — it never schedules or mutates.
+    `entrypoints/dashboard/components/ReviewStatsTab.tsx` renders it.
 
 Core modules:
 
@@ -158,7 +170,10 @@ Core modules:
 - `lib/id.ts`: dependency-free id helper.
 - `lib/storage.ts`: `local:inbox` storage item and serialized mutations.
 - `lib/capture.ts`: `saveWord` and `saveQuote`. `saveQuote` saves quotes with
-  no cloze blanks (parked); blanks are added later by the user.
+  no cloze blanks (parked); blanks are added later by the user. `sanitizeSource`
+  blanks the source/surrounding (preserving `capturedAt` so undo still matches)
+  when a capture comes from a blank / New Tab / browser-dashboard page; every
+  capture path in `capture-handler.ts` runs `SourceInfo` through it.
 - `lib/cloze.ts`: cloze type guards, overlap detection, brace-markup parsing
   (`parseClozeMarkup` / `seedMarkup`), hint types (none / pinyin / length), and
   Anki-style `{{cN::...}}` Markdown rendering. This is the only file that may
@@ -166,7 +181,10 @@ Core modules:
   still import (their quotes load parked because they carry no cloze arrays);
   malformed cloze arrays are sanitized to `[]` on import (the quote is
   preserved).
-- `lib/page-context.ts`: self-contained injected function.
+- `lib/page-context.ts`: self-contained injected selection reader, plus
+  `isBlankOrBrowserPage(url)` — a pure URL-scheme test for blank pages, New Tab
+  Pages, and browser/extension internal (dashboard) pages. `lib/capture.ts`
+  `sanitizeSource` uses it to blank the source of captures from those pages.
 - `lib/pinyin.ts`: `pinyin-pro` wrapper for lazy dashboard pinyin generation.
 - `lib/traditional.ts`: `opencc-js` wrapper for lazy dashboard Simplified →
   Taiwan Traditional conversion using `cn -> twp`.
@@ -178,6 +196,10 @@ Core modules:
   field is ignored and treated as a one-time scheduling reset.
 - `lib/review.ts`: compatibility wrapper that delegates queue building to
   `lib/srs.ts`.
+- `lib/review-stats.ts`: pure derivation of the Stats tab from review history —
+  `computeReviewStats` builds the streak (grace-day freeze, future-day guard),
+  the 84-day heatmap, the 7-day due forecast, and lifetime totals. Read-only; it
+  never schedules or mutates entries.
 - `lib/settings.ts`: `local:settings` storage plus normalized read, watch,
   mutation, and replacement helpers so old installs gain nested defaults.
 - `lib/tags.ts`: the only owner of tag behavior — normalization (lowercase,
@@ -257,6 +279,9 @@ Core modules:
   dedupe or storage writes in UI entrypoints.
 - Keep injected functions self-contained. `readPageContext` must not depend on
   imported closure state because it is serialized into the active tab.
+- Blank the source of captures from non-content pages. Route every `SourceInfo`
+  through `sanitizeSource` (backed by `isBlankOrBrowserPage`) so blank / New Tab /
+  browser-dashboard pages record no title, URL, domain, or surrounding sentence.
 - Prefer pure modules for behavior that can be unit-tested without Chrome APIs.
 - Keep Traditional conversion as a display annotation. Do not use
   `traditionalText` for capture, normalize, dedupe, review scheduling, Markdown

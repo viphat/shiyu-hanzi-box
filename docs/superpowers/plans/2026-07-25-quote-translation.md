@@ -1439,10 +1439,15 @@ export function TranslateButtons({
         onToggle={onToggleAi}
         locale={locale}
       />
-      <span className="basis-full space-y-0.5">
+      {/*
+        A div, not a span: SlotMessage renders <p>, which is invalid inside
+        phrasing content. `basis-full` drops it onto its own line of the
+        footer's flex-wrap row so both slots' errors can show at once.
+      */}
+      <div className="basis-full space-y-0.5">
         <SlotMessage slot={google} locale={locale} />
         <SlotMessage slot={ai} locale={locale} />
-      </span>
+      </div>
     </>
   );
 }
@@ -1453,7 +1458,7 @@ export function TranslateButtons({
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run tests/translate-buttons.test.tsx`
-Expected: PASS, 11 tests.
+Expected: PASS, 10 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -1951,7 +1956,7 @@ Note: the AI path does **not** request a host permission here. `useClozeSuggesti
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run tests/use-quote-translation.test.tsx`
-Expected: PASS, 10 tests.
+Expected: PASS, 11 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -2249,7 +2254,7 @@ Add the chips in the footer row, immediately after the existing `<TraditionalBut
 - [ ] **Step 4: Run both test files to verify they pass**
 
 Run: `npx vitest run tests/quote-card-translation.test.tsx tests/use-quote-translation.test.tsx`
-Expected: PASS — 6 card tests and 10 hook tests.
+Expected: PASS — 6 card tests and 11 hook tests.
 
 - [ ] **Step 5: Confirm no regression in the existing quote tests**
 

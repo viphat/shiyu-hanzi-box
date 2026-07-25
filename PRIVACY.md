@@ -51,8 +51,10 @@ translate buttons; neither runs unless you click it.
 
 - **EN·G** sends that quote's sentence text to Google's translation endpoint at
   `translate.googleapis.com`. This is Google's unofficial keyless translation
-  endpoint: no API key, no account, and no sign-in is involved, and the request
-  carries no identifier for you or the extension beyond the sentence itself.
+  endpoint: no API key, no account, and no sign-in is involved, and the
+  extension sends no account, device, or user identifier with the request. As
+  with any cross-origin request a browser extension makes, the browser itself
+  identifies the extension to Google by its extension ID.
   Because the endpoint is undocumented and unsupported by Google, it may rate-limit
   or stop working; the extension treats any failure as a retryable error. Host
   access to `translate.googleapis.com` is optional and requested only the first

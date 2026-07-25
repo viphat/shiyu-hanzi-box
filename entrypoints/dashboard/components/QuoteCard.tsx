@@ -2,8 +2,10 @@ import { useRef, useState } from 'react';
 import { formatMessage, t } from '@/lib/i18n';
 import { addTag, removeTag } from '@/lib/tags';
 import type { Cloze, QuoteEntry, UiLocale } from '@/lib/types';
+import { useQuoteTranslation } from '../hooks/useQuoteTranslation';
 import { ClozeEditor } from './ClozeEditor';
 import { TraditionalButton } from './TraditionalButton';
+import { TranslateButtons } from './TranslateButtons';
 
 export function QuoteCard({
   quote,
@@ -24,6 +26,18 @@ export function QuoteCard({
 }) {
   const [note, setNote] = useState(quote.note);
   const [showTraditional, setShowTraditional] = useState(false);
+  const [showGoogle, setShowGoogle] = useState(false);
+  const [showAi, setShowAi] = useState(false);
+  /**
+   * Freshly generated text, held locally so the line appears immediately.
+   * The persisted value arrives on the next inbox render and takes over.
+   */
+  const [freshGoogle, setFreshGoogle] = useState<string | null>(null);
+  const [freshAi, setFreshAi] = useState<string | null>(null);
+  const translation = useQuoteTranslation(quote);
+
+  const googleText = quote.translations?.google?.text ?? freshGoogle;
+  const aiText = quote.translations?.ai?.text ?? freshAi;
   const [tagInput, setTagInput] = useState('');
   const listId = `tags-${quote.id}`;
   const suggestions = knownTags
@@ -62,6 +76,22 @@ export function QuoteCard({
       </div>
       {showTraditional && quote.traditionalText && (
         <p className="mt-2 pl-5 text-sm italic text-accent-deep">{quote.traditionalText}</p>
+      )}
+      {showGoogle && googleText && (
+        <p className="mt-2 pl-5 text-sm text-ink-secondary">
+          <span className="mr-1.5 text-[11px] uppercase tracking-wide text-muted">
+            {t(locale, 'translate.labelGoogle')}
+          </span>
+          {googleText}
+        </p>
+      )}
+      {showAi && aiText && (
+        <p className="mt-2 pl-5 text-sm text-ink-secondary">
+          <span className="mr-1.5 text-[11px] uppercase tracking-wide text-muted">
+            {t(locale, 'translate.labelAi')}
+          </span>
+          {aiText}
+        </p>
       )}
       {showParkedMarker && (
         <div className="mt-2 flex items-center gap-2">
@@ -123,6 +153,29 @@ export function QuoteCard({
           onGenerated={(traditionalText) => onUpdate({ traditionalText })}
           shown={showTraditional}
           onToggle={() => setShowTraditional((value) => !value)}
+          locale={locale}
+        />
+        <TranslateButtons
+          google={translation.google}
+          ai={translation.ai}
+          hasGoogle={Boolean(googleText)}
+          hasAi={Boolean(aiText)}
+          shownGoogle={showGoogle}
+          shownAi={showAi}
+          onTranslateGoogle={async () => {
+            // The hook returns the generated text so the line can appear now,
+            // before the persisted inbox re-render reaches this card.
+            const text = await translation.translateGoogle();
+            if (text) setFreshGoogle(text);
+            setShowGoogle(true);
+          }}
+          onTranslateAi={async () => {
+            const text = await translation.translateAi();
+            if (text) setFreshAi(text);
+            setShowAi(true);
+          }}
+          onToggleGoogle={() => setShowGoogle((value) => !value)}
+          onToggleAi={() => setShowAi((value) => !value)}
           locale={locale}
         />
       </div>

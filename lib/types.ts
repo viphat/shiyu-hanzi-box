@@ -87,6 +87,8 @@ export interface QuoteEntry extends EntryBase {
   sourceDomain: string;
   surrounding: string;
   clozes?: Cloze[];    // absent or [] => parked (not review-eligible)
+  /** English translations generated on demand. Display/export annotation only. */
+  translations?: QuoteTranslations;
 }
 
 export type Entry = WordEntry | QuoteEntry;
@@ -162,6 +164,28 @@ export interface AiInsight {
   translations: string[];
   collocations: string[];
   notes: string;
+}
+
+/** One English translation of a whole quote, generated on explicit request. */
+export interface QuoteTranslation {
+  text: string;
+  generatedAt: number;
+}
+
+/** AI-generated translation, carrying provider provenance like AiInsight. */
+export interface AiQuoteTranslation extends QuoteTranslation {
+  provider: AiProvider;
+  model: string;
+  baseUrl: string;
+}
+
+/**
+ * Per-source English translation slots for a quote. Each slot is written
+ * independently; filling one never clears the other.
+ */
+export interface QuoteTranslations {
+  google?: QuoteTranslation;
+  ai?: AiQuoteTranslation;
 }
 
 // ---------------------------------------------------------------------------

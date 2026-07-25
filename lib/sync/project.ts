@@ -4,6 +4,7 @@ import type {
   Inbox,
   Occurrence,
   QuoteEntry,
+  QuoteTranslations,
   ReviewLogEntry,
   ReviewState,
   WordEntry,
@@ -21,6 +22,7 @@ import { isSuppressed } from './registers';
 import { DEFAULT_SETTINGS } from '../settings';
 import { DEFAULT_AI_SETTINGS } from '../ai/settings';
 import { normalizeTags } from '../tags';
+import { sanitizeQuoteTranslations } from '../translate/validate';
 
 // ---------------------------------------------------------------------------
 // Public key helpers
@@ -201,6 +203,40 @@ function projectQuote(quote: QuoteEntry, ctx: BootstrapContext, prev?: QuoteNode
       surrounding: reg(quote.surrounding, s),
       pinyin: reg(quote.pinyin ?? null, s),
       traditionalText: reg(quote.traditionalText ?? null, s),
+      // One register per slot, not one object register: a Google translate on
+      // device A and an AI translate on device B must both survive the merge.
+      // Absent slots are omitted rather than stamped null so an untranslated
+      // replica cannot overwrite a peer's translation.
+      // Consequence: removal is UNREPRESENTABLE. Absence merges as "no
+      // opinion", not as "cleared", so a future "clear this translation"
+      // affordance would silently self-revert — the coordinator merges the
+      // fresh projection (no register) with persisted state (register still
+      // present) and writes the old value back, even with zero peers.
+      // Clearing a slot would require a tombstone or a cleared-sentinel.
+      // Stamped by the slot's own generatedAt, NOT the shared `s`
+      // (quote.updatedAt): unlike every sibling field here, a translation is
+      // written once and never mutated by an unrelated edit to the quote, so
+      // re-stamping it with `s` would let an unrelated later edit (e.g. the
+      // note) revert a peer's newer translation on merge. generatedAt is the
+      // correct recency key for this sub-object, exactly as `occurrences` are
+      // stamped by `occ.capturedAt` and review events by `entry.reviewedAt`
+      // rather than by the parent's `updatedAt`.
+      ...(quote.translations?.google
+        ? {
+            translationGoogle: reg(
+              quote.translations.google,
+              stamp(quote.translations.google.generatedAt, ctx.replicaId),
+            ),
+          }
+        : {}),
+      ...(quote.translations?.ai
+        ? {
+            translationAi: reg(
+              quote.translations.ai,
+              stamp(quote.translations.ai.generatedAt, ctx.replicaId),
+            ),
+          }
+        : {}),
       updatedAt: reg(quote.updatedAt, s),
     },
     tags,
@@ -373,6 +409,16 @@ export function materialize(state: SyncState): {
       .filter(([tag, addStamp]) => !isSuppressed(addStamp, node.tagTombstones?.[tag]))
       .map(([tag]) => tag)
       .sort();
+    // Registers hold raw peer-supplied values with no compile-time guarantee
+    // they match QuoteTranslation/AiQuoteTranslation — a malformed or hostile
+    // replica file can put anything there. Route each through the shared
+    // sanitizer (wrapping the lone slot under its key) instead of casting.
+    const googleSlot = sanitizeQuoteTranslations({ google: node.fields.translationGoogle?.value })?.google;
+    const aiSlot = sanitizeQuoteTranslations({ ai: node.fields.translationAi?.value })?.ai;
+    const translations: QuoteTranslations = {
+      ...(googleSlot ? { google: googleSlot } : {}),
+      ...(aiSlot ? { ai: aiSlot } : {}),
+    };
     quotes.push({
       id: node.id,
       kind: 'quote',
@@ -388,6 +434,7 @@ export function materialize(state: SyncState): {
       surrounding: (node.fields.surrounding?.value as string) ?? '',
       pinyin: (node.fields.pinyin?.value as string | null) ?? undefined,
       traditionalText: (node.fields.traditionalText?.value as string | null) ?? undefined,
+      ...(Object.keys(translations).length > 0 ? { translations } : {}),
       ...(review ? { review } : {}),
     });
   }

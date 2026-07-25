@@ -210,3 +210,113 @@ describe('renderDay with AI insight', () => {
     expect(md).not.toContain('AI Insight');
   });
 });
+
+describe('renderDay quote translations', () => {
+  const translated: QuoteEntry = {
+    ...quote,
+    id: 'q-tr',
+    translations: {
+      google: { text: 'Learning is a joy', generatedAt: 10 },
+      ai: {
+        text: 'To learn and practise often',
+        generatedAt: 20,
+        provider: 'deepseek',
+        model: 'deepseek-v4-flash',
+        baseUrl: 'https://api.deepseek.com',
+      },
+    },
+  };
+
+  it('emits Google before AI as nested bullets', () => {
+    const out = renderDay(day, [], [translated], null);
+    expect(out).toContain('  - EN (Google): Learning is a joy');
+    expect(out).toContain('  - EN (AI): To learn and practise often');
+    expect(out.indexOf('EN (Google)')).toBeLessThan(out.indexOf('EN (AI)'));
+  });
+
+  it('emits only the Google bullet when only Google exists', () => {
+    const googleOnly: QuoteEntry = {
+      ...quote,
+      translations: { google: { text: 'Learning is a joy', generatedAt: 10 } },
+    };
+    const out = renderDay(day, [], [googleOnly], null);
+    expect(out).toContain('  - EN (Google): Learning is a joy');
+    expect(out).not.toContain('EN (AI)');
+  });
+
+  it('emits only the AI bullet when only AI exists', () => {
+    const aiOnly: QuoteEntry = {
+      ...quote,
+      translations: {
+        ai: {
+          text: 'To learn and practise often',
+          generatedAt: 20,
+          provider: 'deepseek',
+          model: 'deepseek-v4-flash',
+          baseUrl: 'https://api.deepseek.com',
+        },
+      },
+    };
+    const out = renderDay(day, [], [aiOnly], null);
+    expect(out).toContain('  - EN (AI): To learn and practise often');
+    expect(out).not.toContain('EN (Google)');
+  });
+
+  it('emits no translation bullet for an untranslated quote', () => {
+    const out = renderDay(day, [], [quote], null);
+    expect(out).not.toContain('EN (Google)');
+    expect(out).not.toContain('EN (AI)');
+  });
+
+  it('escapes translation text', () => {
+    const risky: QuoteEntry = {
+      ...quote,
+      translations: { google: { text: 'a | b [x](y)', generatedAt: 10 } },
+    };
+    const out = renderDay(day, [], [risky], null);
+    expect(out).not.toContain('EN (Google): a | b [x](y)');
+  });
+
+  it('places translations after the note and before the source link', () => {
+    const withNote: QuoteEntry = { ...translated, note: 'my note' };
+    const out = renderDay(day, [], [withNote], null);
+    expect(out.indexOf('my note')).toBeLessThan(out.indexOf('EN (Google)'));
+    expect(out.indexOf('EN (AI)')).toBeLessThan(out.indexOf('Lunyu]('));
+  });
+
+  it('collapses a newline in the translation onto one line', () => {
+    const multiline: QuoteEntry = {
+      ...quote,
+      translations: { google: { text: 'First line\nSecond line', generatedAt: 10 } },
+    };
+    const out = renderDay(day, [], [multiline], null);
+    expect(out).toContain('  - EN (Google): First line Second line');
+  });
+
+  it('cannot inject a list item or heading via a newline', () => {
+    const injecting: QuoteEntry = {
+      ...quote,
+      translations: { ai: { text: 'Real text\n- fake item\n# fake heading', generatedAt: 20, provider: 'deepseek', model: 'm', baseUrl: 'https://example.com' } },
+    };
+    const out = renderDay(day, [], [injecting], null);
+    // No line may start with an unindented '- ' or '#' from the translation.
+    expect(out.split('\n').some((line) => line.startsWith('- fake item'))).toBe(false);
+    expect(out.split('\n').some((line) => line.startsWith('# fake heading'))).toBe(false);
+  });
+
+  it('skips a non-string translation slot instead of throwing, and still renders the rest of the day', () => {
+    // Models a hand-edited backup / hostile replica that slipped a non-string
+    // `text` past the boundary sanitizers; `as unknown as QuoteEntry` is
+    // needed because the real QuoteEntry type forbids this shape.
+    const malformed = {
+      ...quote,
+      id: 'q-malformed',
+      translations: { google: { text: 42, generatedAt: 10 } },
+    } as unknown as QuoteEntry;
+
+    expect(() => renderDay(day, [], [malformed])).not.toThrow();
+    const out = renderDay(day, [], [malformed]);
+    expect(out).toContain(quote.text);
+    expect(out).not.toContain('EN (Google)');
+  });
+});

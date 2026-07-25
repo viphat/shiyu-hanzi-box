@@ -8,6 +8,7 @@ import {
 } from '../../lib/sync/project';
 import { DEFAULT_SETTINGS } from '../../lib/settings';
 import { DEFAULT_AI_SETTINGS } from '../../lib/ai/settings';
+import { mergeSyncState } from '../../lib/sync/merge';
 import type { Inbox, WordEntry, QuoteEntry } from '../../lib/types';
 import type { SyncState } from '../../lib/sync/types';
 
@@ -143,5 +144,195 @@ describe('quote tags OR-Set projection', () => {
     delete state.quotes.q1.tagTombstones;
     expect(() => materialize(state)).not.toThrow();
     expect(materialize(state).inbox.quotes[0].tags).toEqual([]);
+  });
+});
+
+const AI_SLOT = {
+  text: 'To learn and practise often',
+  generatedAt: 300,
+  provider: 'deepseek' as const,
+  model: 'deepseek-v4-flash',
+  baseUrl: 'https://api.deepseek.com',
+};
+
+describe('quote translation sync', () => {
+  it('round-trips both translation slots', () => {
+    const quote = quoteFixture({
+      translations: {
+        google: { text: 'Learning is a joy', generatedAt: 200 },
+        ai: AI_SLOT,
+      },
+    });
+    const state = projectInbox({ words: [], quotes: [quote] }, DEFAULT_SETTINGS, DEFAULT_AI_SETTINGS, ctx);
+
+    const out = materialize(state).inbox.quotes[0];
+
+    expect(out.translations?.google).toEqual({ text: 'Learning is a joy', generatedAt: 200 });
+    expect(out.translations?.ai).toEqual(AI_SLOT);
+  });
+
+  it('omits translations entirely for an untranslated quote', () => {
+    const state = projectInbox({ words: [], quotes: [quoteFixture()] }, DEFAULT_SETTINGS, DEFAULT_AI_SETTINGS, ctx);
+
+    expect(materialize(state).inbox.quotes[0].translations).toBeUndefined();
+  });
+
+  it('round-trips a quote with only the Google slot', () => {
+    const quote = quoteFixture({
+      translations: { google: { text: 'Learning is a joy', generatedAt: 200 } },
+    });
+    const state = projectInbox({ words: [], quotes: [quote] }, DEFAULT_SETTINGS, DEFAULT_AI_SETTINGS, ctx);
+
+    const out = materialize(state).inbox.quotes[0];
+
+    expect(out.translations?.google?.text).toBe('Learning is a joy');
+    expect(out.translations?.ai).toBeUndefined();
+  });
+
+  it('keeps both slots when two replicas each translated with a different source', () => {
+    // Replica A translated with Google; replica B translated the same quote
+    // with AI. Separate registers mean neither write loses.
+    const stateA = projectInbox(
+      {
+        words: [],
+        quotes: [
+          quoteFixture({
+            updatedAt: 100,
+            translations: { google: { text: 'Learning is a joy', generatedAt: 100 } },
+          }),
+        ],
+      },
+      DEFAULT_SETTINGS,
+      DEFAULT_AI_SETTINGS,
+      { replicaId: 'A', wallTime: 100 },
+    );
+    const stateB = projectInbox(
+      { words: [], quotes: [quoteFixture({ updatedAt: 300, translations: { ai: AI_SLOT } })] },
+      DEFAULT_SETTINGS,
+      DEFAULT_AI_SETTINGS,
+      { replicaId: 'B', wallTime: 300 },
+    );
+
+    const out = materialize(mergeSyncState(stateA, stateB)).inbox.quotes[0];
+
+    expect(out.translations?.google?.text).toBe('Learning is a joy');
+    expect(out.translations?.ai?.text).toBe('To learn and practise often');
+  });
+
+  it('resolves the same translation slot by recency, in either merge order', () => {
+    const older = quoteFixture({
+      updatedAt: 100,
+      translations: { google: { text: 'older rendering', generatedAt: 100 } },
+    });
+    const newer = quoteFixture({
+      updatedAt: 300,
+      translations: { google: { text: 'newer rendering', generatedAt: 300 } },
+    });
+    const a = projectInbox({ words: [], quotes: [older] }, DEFAULT_SETTINGS, DEFAULT_AI_SETTINGS, { replicaId: 'A', wallTime: 100 });
+    const b = projectInbox({ words: [], quotes: [newer] }, DEFAULT_SETTINGS, DEFAULT_AI_SETTINGS, { replicaId: 'B', wallTime: 300 });
+
+    expect(materialize(mergeSyncState(a, b)).inbox.quotes[0].translations?.google?.text).toBe('newer rendering');
+    expect(materialize(mergeSyncState(b, a)).inbox.quotes[0].translations?.google?.text).toBe('newer rendering');
+  });
+
+  it('does not let a replica lacking a slot erase a peer that has one', () => {
+    const translated = quoteFixture({
+      updatedAt: 100,
+      translations: { google: { text: 'kept rendering', generatedAt: 100 } },
+    });
+    // Same quote, edited LATER, but with no translation at all. Its newer
+    // stamp must not be able to clear the peer's real translation, because an
+    // absent slot writes no register rather than a null.
+    const untranslatedButNewer = quoteFixture({ updatedAt: 900 });
+    const a = projectInbox({ words: [], quotes: [translated] }, DEFAULT_SETTINGS, DEFAULT_AI_SETTINGS, { replicaId: 'A', wallTime: 100 });
+    const b = projectInbox({ words: [], quotes: [untranslatedButNewer] }, DEFAULT_SETTINGS, DEFAULT_AI_SETTINGS, { replicaId: 'B', wallTime: 900 });
+
+    expect(materialize(mergeSyncState(a, b)).inbox.quotes[0].translations?.google?.text).toBe('kept rendering');
+    expect(materialize(mergeSyncState(b, a)).inbox.quotes[0].translations?.google?.text).toBe('kept rendering');
+  });
+
+  it('stamps a translation register by its own generatedAt, so an unrelated later edit cannot revert a peer\'s newer translation', () => {
+    // Replica A translated first (generatedAt 100) but then made an unrelated
+    // edit (e.g. its note) much later, bumping quote.updatedAt to 900.
+    // Replica B translated later (generatedAt 200, so B's translation should
+    // win) but never touched the quote again, so its updatedAt stays at 150.
+    // If the register were stamped with the shared `s = stamp(updatedAt, …)`
+    // like its sibling fields, A's stale translation (updatedAt 900) would
+    // beat B's newer one (updatedAt 150) on merge — which is wrong, since the
+    // translation itself is older. Stamping by generatedAt fixes this.
+    const a = projectInbox(
+      {
+        words: [],
+        quotes: [
+          quoteFixture({
+            updatedAt: 900,
+            translations: { google: { text: 'A older translation', generatedAt: 100 } },
+          }),
+        ],
+      },
+      DEFAULT_SETTINGS,
+      DEFAULT_AI_SETTINGS,
+      { replicaId: 'A', wallTime: 900 },
+    );
+    const b = projectInbox(
+      {
+        words: [],
+        quotes: [
+          quoteFixture({
+            updatedAt: 150,
+            translations: { google: { text: 'B newer translation', generatedAt: 200 } },
+          }),
+        ],
+      },
+      DEFAULT_SETTINGS,
+      DEFAULT_AI_SETTINGS,
+      { replicaId: 'B', wallTime: 150 },
+    );
+
+    expect(materialize(mergeSyncState(a, b)).inbox.quotes[0].translations?.google?.text).toBe(
+      'B newer translation',
+    );
+    expect(materialize(mergeSyncState(b, a)).inbox.quotes[0].translations?.google?.text).toBe(
+      'B newer translation',
+    );
+  });
+
+  it('materializes without a malformed translationGoogle register value (hostile replica)', () => {
+    const state = projectInbox(
+      { words: [], quotes: [quoteFixture({ translations: { google: { text: 'ok', generatedAt: 100 } } })] },
+      DEFAULT_SETTINGS,
+      DEFAULT_AI_SETTINGS,
+      ctx,
+    );
+    // Simulate a hostile/corrupt peer replica by overwriting the register
+    // value directly with a shape that fails the QuoteTranslation schema.
+    state.quotes.q1.fields.translationGoogle!.value = { text: 42, generatedAt: 100 } as never;
+
+    expect(() => materialize(state)).not.toThrow();
+    expect(materialize(state).inbox.quotes[0].translations).toBeUndefined();
+  });
+
+  it('keeps a valid ai slot when the sibling google register value is malformed', () => {
+    const state = projectInbox(
+      {
+        words: [],
+        quotes: [
+          quoteFixture({
+            translations: {
+              google: { text: 'ok', generatedAt: 100 },
+              ai: AI_SLOT,
+            },
+          }),
+        ],
+      },
+      DEFAULT_SETTINGS,
+      DEFAULT_AI_SETTINGS,
+      ctx,
+    );
+    state.quotes.q1.fields.translationGoogle!.value = { text: 42, generatedAt: 100 } as never;
+
+    const out = materialize(state).inbox.quotes[0];
+    expect(out.translations?.google).toBeUndefined();
+    expect(out.translations?.ai).toEqual(AI_SLOT);
   });
 });

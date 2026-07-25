@@ -3,6 +3,9 @@ import { parseAiResponse } from './parse';
 import type { AiMessage } from './prompt';
 import { buildClozeMessages } from './cloze-prompt';
 import { parseClozeSuggestions, type ClozeSuggestion } from './cloze-parse';
+import { buildTranslateMessages } from './translate-prompt';
+import { parseTranslation } from './translate-parse';
+import type { TranslateResult } from '../translate/types';
 
 export interface FetchAiParams {
   baseUrl: string;
@@ -68,7 +71,7 @@ async function postChatCompletion(
   },
 ): Promise<
   | { ok: true; content: string; modelId: string }
-  | { ok: false; reason: string }
+  | { ok: false; reason: string; status?: number }
 > {
   const modelId = requestModel(params.provider, params.model);
   const response = await fetch(completionUrl(params.baseUrl), {
@@ -88,7 +91,7 @@ async function postChatCompletion(
   const httpError = classifyHttpStatus(response.status);
   if (httpError) {
     const detail = await providerErrorMessage(response);
-    return { ok: false, reason: detail ? `${httpError} ${detail}` : httpError };
+    return { ok: false, reason: detail ? `${httpError} ${detail}` : httpError, status: response.status };
   }
 
   const data = await response.json();
@@ -141,6 +144,44 @@ export async function fetchClozeSuggestions(params: {
     return parseClozeSuggestions(result.content);
   } catch {
     return { ok: false, reason: 'Provider unreachable; retry.' };
+  }
+}
+
+export async function fetchAiTranslation(params: {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  provider: AiProvider;
+  quoteText: string;
+}): Promise<TranslateResult> {
+  if (params.quoteText.trim() === '') return { ok: false, code: 'empty' };
+
+  try {
+    const result = await postChatCompletion({
+      baseUrl: params.baseUrl,
+      apiKey: params.apiKey,
+      model: params.model,
+      provider: params.provider,
+      messages: buildTranslateMessages(params.quoteText),
+      maxTokens: 400,
+    });
+
+    if (!result.ok) {
+      // Map by HTTP status rather than by matching prose reason text: the
+      // 429 reason contains "retry" which would otherwise be misclassified
+      // as `unreachable` when it is actually just throttling.
+      const code =
+        result.status === 429
+          ? 'rate-limited'
+          : result.status !== undefined && result.status >= 500
+            ? 'unreachable'
+            : 'unexpected';
+      return { ok: false, code, detail: result.reason };
+    }
+
+    return parseTranslation(result.content);
+  } catch {
+    return { ok: false, code: 'unreachable' };
   }
 }
 

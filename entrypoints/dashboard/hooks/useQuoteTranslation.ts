@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchAiTranslation } from '@/lib/ai/client';
+import { requestAiSettingsPermission } from '@/lib/ai/permissions';
 import { getAiSettings, isAiConfigured } from '@/lib/ai/settings';
 import { fetchGoogleTranslation } from '@/lib/translate/google';
 import { requestGoogleTranslatePermission } from '@/lib/translate/permissions';
@@ -121,6 +122,12 @@ export function useQuoteTranslation(quote: QuoteEntry) {
 
     setAi({ state: 'loading' });
     try {
+      const granted = await requestAiSettingsPermission(settings);
+      if (!granted) {
+        setAi({ state: 'error', failure: 'permission-denied' });
+        return null;
+      }
+
       const result = await fetchAiTranslation({
         baseUrl: settings.baseUrl,
         apiKey: settings.apiKey,

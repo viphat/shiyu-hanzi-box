@@ -17,6 +17,9 @@ vi.mock('../lib/translate/permissions', () => ({
 vi.mock('../lib/ai/client', () => ({
   fetchAiTranslation: vi.fn(),
 }));
+vi.mock('../lib/ai/permissions', () => ({
+  requestAiSettingsPermission: vi.fn(),
+}));
 vi.mock('../lib/ai/settings', () => ({
   getAiSettings: vi.fn(),
   isAiConfigured: vi.fn(),
@@ -31,6 +34,7 @@ vi.mock('../entrypoints/background/sync-mutation-handler', () => ({
 const { fetchGoogleTranslation } = await import('../lib/translate/google');
 const { requestGoogleTranslatePermission } = await import('../lib/translate/permissions');
 const { fetchAiTranslation } = await import('../lib/ai/client');
+const { requestAiSettingsPermission } = await import('../lib/ai/permissions');
 const { getAiSettings, isAiConfigured } = await import('../lib/ai/settings');
 const { inboxStorage } = await import('../lib/storage');
 const { requestSyncMutation } = await import('../entrypoints/background/sync-mutation-handler');
@@ -83,6 +87,7 @@ beforeEach(() => {
   vi.mocked(getAiSettings).mockResolvedValue(AI_SETTINGS);
   vi.mocked(isAiConfigured).mockReturnValue(true);
   vi.mocked(requestGoogleTranslatePermission).mockResolvedValue(true);
+  vi.mocked(requestAiSettingsPermission).mockResolvedValue(true);
   vi.mocked(requestSyncMutation).mockResolvedValue(undefined);
 });
 
@@ -299,6 +304,20 @@ describe('useQuoteTranslation — AI path', () => {
     expect(api.ai.state).toBe('error');
     expect(api.ai.failure).toBe('unreachable');
     expect(api.ai.detail).toBe('upstream down');
+  });
+
+  it('never calls fetch and reports permission-denied when the AI provider permission is declined', async () => {
+    vi.mocked(requestAiSettingsPermission).mockResolvedValue(false);
+
+    await renderClient(<Harness quote={makeQuote()} />);
+    await act(async () => {
+      await api.translateAi();
+    });
+
+    expect(fetchAiTranslation).not.toHaveBeenCalled();
+    expect(requestSyncMutation).not.toHaveBeenCalled();
+    expect(api.ai.state).toBe('error');
+    expect(api.ai.failure).toBe('permission-denied');
   });
 
   it('leaves the Google slot idle when the AI path fails', async () => {

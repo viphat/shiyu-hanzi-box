@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Google Translate host access is an **optional** permission, requested only the
   first time you click **EN·G**. The Google endpoint is undocumented and
   unsupported by Google; rate limits and outages surface as a retryable message.
+- A translation is generated once per source (Google or AI) and is not
+  currently regenerable — the chip becomes a show/hide toggle once filled.
 
 ## [0.4.1] - 2026-07-04
 

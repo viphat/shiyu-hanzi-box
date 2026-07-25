@@ -8,22 +8,22 @@ phrases, and quotes while reading.
 ## Data The Extension Handles
 
 The extension stores the text you explicitly save, your notes, pinyin,
-dictionary-derived insights, quote tags, cloze blanks, review ratings, due
-dates, scheduling state, review history, source page title, source page URL,
-source domain, surrounding page context, extension settings, optional AI
-settings (including the optional API key), and optional imported dictionary
-data.
+dictionary-derived insights, quote tags, cloze blanks, quote translations,
+review ratings, due dates, scheduling state, review history, source page
+title, source page URL, source domain, surrounding page context, extension
+settings, optional AI settings (including the optional API key), and
+optional imported dictionary data.
 
 The extension does not create an account, does not operate a developer-owned
 server, and does not sell user data.
 
 ## Local Storage
 
-Saved words, quotes, notes, settings, API keys, generated AI insights, and
-runtime dictionary caches are stored locally in your browser through Chrome
-extension storage and IndexedDB. You can remove the data by deleting entries in
-the extension UI, clearing imported dictionary data in Settings, or uninstalling
-the extension.
+Saved words, quotes, notes, settings, API keys, generated AI insights, quote
+translations, and runtime dictionary caches are stored locally in your
+browser through Chrome extension storage and IndexedDB. You can remove the
+data by deleting entries in the extension UI, clearing imported dictionary
+data in Settings, or uninstalling the extension.
 
 Spaced-repetition ratings and schedules are calculated locally and stored on
 the saved entry. They are not sent to a developer-operated service.

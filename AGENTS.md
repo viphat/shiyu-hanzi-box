@@ -186,7 +186,11 @@ The central data path is:
     presentational. Results persist on `QuoteEntry.translations` as two
     independent slots — `google` and `ai` — which sync as two separate LWW
     registers so translating with different sources on two devices never loses
-    one.
+    one. A translation is write-once: once a slot is filled its chip becomes a
+    show/hide toggle with no regenerate action, and (per the comment in
+    `lib/sync/project.ts`) an absent slot merges as "no opinion" rather than a
+    clear, so there is also no way to delete one — deliberate, mirroring how
+    Traditional (繁) conversion already behaves.
 
 Core modules:
 

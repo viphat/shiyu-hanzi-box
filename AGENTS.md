@@ -33,8 +33,9 @@ Tasks 0 through 15, Traditional Chinese conversion, TTS, the real FSRS system,
 the focused single-card review experience, cloze-deletion quote review, the
 versioned full backup (settings + AI key), encrypted folder sync, the
 first-class quote tags system, the watercolor UI redesign, the first-run
-onboarding carousel, and the dashboard Stats tab (review streak, activity
-heatmap, due forecast, lifetime totals) have landed.
+onboarding carousel, the dashboard Stats tab (review streak, activity
+heatmap, due forecast, lifetime totals), and quote translation (Google + AI)
+have landed.
 
 ## Commands
 
@@ -77,6 +78,14 @@ npx vitest run tests/tag-cloud.test.tsx
 npx vitest run tests/backup-ai.test.ts
 npx vitest run tests/storage-migration.test.ts
 npx vitest run tests/sync
+npx vitest run tests/translate-google-parse.test.ts
+npx vitest run tests/translate-google.test.ts
+npx vitest run tests/ai-translate-prompt.test.ts
+npx vitest run tests/ai-translate-parse.test.ts
+npx vitest run tests/ai-translate-client.test.ts
+npx vitest run tests/translate-buttons.test.tsx
+npx vitest run tests/use-quote-translation.test.tsx
+npx vitest run tests/quote-card-translation.test.tsx
 ```
 
 Regenerate the CC-CEDICT compact asset under `public/dictionaries/`. Requires
@@ -162,6 +171,22 @@ The central data path is:
     the 7-day due forecast (overdue folds into today), and lifetime total reviews.
     It reads persisted review events only — it never schedules or mutates.
     `entrypoints/dashboard/components/ReviewStatsTab.tsx` renders it.
+17. `lib/translate/*` and `lib/ai/translate-*` add two per-quote English
+    translation paths. `google-parse.ts` is the pure parser for Google's
+    undocumented `translate_a/single?client=gtx` response — element `[0]` holds
+    one entry per sentence segment, so a multi-sentence quote arrives split and
+    must be rejoined in order. `google.ts` is the permission-unaware transport;
+    `permissions.ts` owns the optional `translate.googleapis.com` host grant,
+    requested by the hook on click. `lib/ai/translate-prompt.ts` and
+    `lib/ai/translate-parse.ts` back `fetchAiTranslation` in `lib/ai/client.ts`.
+    Both paths return the shared `TranslateResult` from `lib/translate/types.ts`,
+    whose failures are `TranslateFailure` codes rather than prose so the UI can
+    localize them. `hooks/useQuoteTranslation.ts` owns both requests and the
+    single storage write; `components/TranslateButtons.tsx` is purely
+    presentational. Results persist on `QuoteEntry.translations` as two
+    independent slots — `google` and `ai` — which sync as two separate LWW
+    registers so translating with different sources on two devices never loses
+    one.
 
 Core modules:
 
@@ -241,6 +266,18 @@ Core modules:
   typed error handling.
 - `lib/ai/permissions.ts`: lazy `chrome.permissions.request` for the
   configured provider origin.
+- `lib/translate/types.ts`: `TranslateFailure` codes and the shared
+  `TranslateResult`. Failures are codes, never prose.
+- `lib/translate/google-parse.ts`: pure parser for the gtx response; joins every
+  sentence segment.
+- `lib/translate/google.ts`: single `fetch` to the keyless gtx endpoint with
+  status classification. Permission-unaware by design.
+- `lib/translate/permissions.ts`: lazy `chrome.permissions.request` for
+  `https://translate.googleapis.com/*`.
+- `lib/ai/translate-prompt.ts`: pure builder for the JSON-only translation
+  messages array.
+- `lib/ai/translate-parse.ts`: pure validation of the model reply into one
+  English string.
 - `lib/markdown.ts`: pure daily Markdown rendering.
 - `lib/export.ts`: daily export map and zip byte generation.
 - `entrypoints/popup/Popup.tsx`: toolbar capture buttons.
@@ -303,6 +340,14 @@ Core modules:
   file already uses that style.
 - Use `apply_patch` for manual edits.
 - Do not revert user changes. Check `git status --short` before editing.
+- Keep quote translation a display/export annotation. Do not use
+  `QuoteEntry.translations` for capture, dedupe, normalize, review scheduling,
+  or cloze offsets. Translate `quote.text` (Simplified), never
+  `traditionalText`.
+- Write the two translation slots independently; filling one must never clear
+  the other. A failed request writes nothing.
+- Return `TranslateFailure` codes from the translate layer and localize them in
+  the component. Do not surface raw provider prose as the primary message.
 
 ## WXT And Fake-Browser Notes
 

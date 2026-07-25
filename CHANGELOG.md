@@ -5,6 +5,22 @@ All notable changes to 拾语汉字box are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-07-25
+
+### Added
+
+- **Translate a whole quote to English, two ways.** Every quote card now has two
+  chips beside 繁: **EN·G** translates through Google's free keyless endpoint,
+  and **EN·AI** translates through your configured AI provider. Both results are
+  stored on the quote and can be shown at once so you can compare the machine
+  and AI phrasing; each chip toggles its own line. Translations reach the daily
+  Markdown export as nested bullets, sync between profiles as independent
+  fields (so translating with Google on one device and AI on another keeps
+  both), and are included in backups. Fully localized (en / zh-CN).
+- Google Translate host access is an **optional** permission, requested only the
+  first time you click **EN·G**. The Google endpoint is undocumented and
+  unsupported by Google; rate limits and outages surface as a retryable message.
+
 ## [0.4.1] - 2026-07-04
 
 ### Fixed

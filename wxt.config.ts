@@ -25,6 +25,7 @@ export default defineConfig({
       'https://dashscope.aliyuncs.com/*',
       'https://api.moonshot.cn/*',
       'https://open.bigmodel.cn/*',
+      'https://translate.googleapis.com/*',
     ],
     commands: {
       'save-word': {

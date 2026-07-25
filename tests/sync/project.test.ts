@@ -8,6 +8,7 @@ import {
 } from '../../lib/sync/project';
 import { DEFAULT_SETTINGS } from '../../lib/settings';
 import { DEFAULT_AI_SETTINGS } from '../../lib/ai/settings';
+import { mergeSyncState } from '../../lib/sync/merge';
 import type { Inbox, WordEntry, QuoteEntry } from '../../lib/types';
 import type { SyncState } from '../../lib/sync/types';
 
@@ -143,5 +144,78 @@ describe('quote tags OR-Set projection', () => {
     delete state.quotes.q1.tagTombstones;
     expect(() => materialize(state)).not.toThrow();
     expect(materialize(state).inbox.quotes[0].tags).toEqual([]);
+  });
+});
+
+const AI_SLOT = {
+  text: 'To learn and practise often',
+  generatedAt: 300,
+  provider: 'deepseek' as const,
+  model: 'deepseek-v4-flash',
+  baseUrl: 'https://api.deepseek.com',
+};
+
+describe('quote translation sync', () => {
+  it('round-trips both translation slots', () => {
+    const quote = quoteFixture({
+      translations: {
+        google: { text: 'Learning is a joy', generatedAt: 200 },
+        ai: AI_SLOT,
+      },
+    });
+    const state = projectInbox({ words: [], quotes: [quote] }, DEFAULT_SETTINGS, DEFAULT_AI_SETTINGS, ctx);
+
+    const out = materialize(state).inbox.quotes[0];
+
+    expect(out.translations?.google).toEqual({ text: 'Learning is a joy', generatedAt: 200 });
+    expect(out.translations?.ai).toEqual(AI_SLOT);
+  });
+
+  it('omits translations entirely for an untranslated quote', () => {
+    const state = projectInbox({ words: [], quotes: [quoteFixture()] }, DEFAULT_SETTINGS, DEFAULT_AI_SETTINGS, ctx);
+
+    expect(materialize(state).inbox.quotes[0].translations).toBeUndefined();
+  });
+
+  it('round-trips a quote with only the Google slot', () => {
+    const quote = quoteFixture({
+      translations: { google: { text: 'Learning is a joy', generatedAt: 200 } },
+    });
+    const state = projectInbox({ words: [], quotes: [quote] }, DEFAULT_SETTINGS, DEFAULT_AI_SETTINGS, ctx);
+
+    const out = materialize(state).inbox.quotes[0];
+
+    expect(out.translations?.google?.text).toBe('Learning is a joy');
+    expect(out.translations?.ai).toBeUndefined();
+  });
+
+  it('keeps both slots when two replicas each translated with a different source', () => {
+    // Replica A translated with Google; replica B translated the same quote
+    // with AI. Separate registers mean neither write loses.
+    const stateA = projectInbox(
+      {
+        words: [],
+        quotes: [
+          quoteFixture({
+            updatedAt: 100,
+            translations: { google: { text: 'Learning is a joy', generatedAt: 100 } },
+          }),
+        ],
+      },
+      DEFAULT_SETTINGS,
+      DEFAULT_AI_SETTINGS,
+      { replicaId: 'A', wallTime: 100 },
+    );
+    const stateB = projectInbox(
+      { words: [], quotes: [quoteFixture({ updatedAt: 300, translations: { ai: AI_SLOT } })] },
+      DEFAULT_SETTINGS,
+      DEFAULT_AI_SETTINGS,
+      { replicaId: 'B', wallTime: 300 },
+    );
+
+    const out = materialize(mergeSyncState(stateA, stateB)).inbox.quotes[0];
+
+    expect(out.translations?.google?.text).toBe('Learning is a joy');
+    expect(out.translations?.ai?.text).toBe('To learn and practise often');
   });
 });

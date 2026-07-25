@@ -4,6 +4,7 @@ import type {
   Inbox,
   Occurrence,
   QuoteEntry,
+  QuoteTranslations,
   ReviewLogEntry,
   ReviewState,
   WordEntry,
@@ -201,6 +202,16 @@ function projectQuote(quote: QuoteEntry, ctx: BootstrapContext, prev?: QuoteNode
       surrounding: reg(quote.surrounding, s),
       pinyin: reg(quote.pinyin ?? null, s),
       traditionalText: reg(quote.traditionalText ?? null, s),
+      // One register per slot, not one object register: a Google translate on
+      // device A and an AI translate on device B must both survive the merge.
+      // Absent slots are omitted rather than stamped null so an untranslated
+      // replica cannot overwrite a peer's translation.
+      ...(quote.translations?.google
+        ? { translationGoogle: reg(quote.translations.google, s) }
+        : {}),
+      ...(quote.translations?.ai
+        ? { translationAi: reg(quote.translations.ai, s) }
+        : {}),
       updatedAt: reg(quote.updatedAt, s),
     },
     tags,
@@ -373,6 +384,18 @@ export function materialize(state: SyncState): {
       .filter(([tag, addStamp]) => !isSuppressed(addStamp, node.tagTombstones?.[tag]))
       .map(([tag]) => tag)
       .sort();
+    const googleSlot = node.fields.translationGoogle?.value as
+      | QuoteTranslations['google']
+      | null
+      | undefined;
+    const aiSlot = node.fields.translationAi?.value as
+      | QuoteTranslations['ai']
+      | null
+      | undefined;
+    const translations: QuoteTranslations = {
+      ...(googleSlot ? { google: googleSlot } : {}),
+      ...(aiSlot ? { ai: aiSlot } : {}),
+    };
     quotes.push({
       id: node.id,
       kind: 'quote',
@@ -388,6 +411,7 @@ export function materialize(state: SyncState): {
       surrounding: (node.fields.surrounding?.value as string) ?? '',
       pinyin: (node.fields.pinyin?.value as string | null) ?? undefined,
       traditionalText: (node.fields.traditionalText?.value as string | null) ?? undefined,
+      ...(Object.keys(translations).length > 0 ? { translations } : {}),
       ...(review ? { review } : {}),
     });
   }

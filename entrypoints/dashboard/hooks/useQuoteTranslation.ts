@@ -17,6 +17,10 @@ import type {
 
 const IDLE: TranslateSlot = { state: 'idle' };
 
+// Module scope, above the hook — shared across every card so two cards racing
+// cannot clobber each other either.
+let writeChain: Promise<unknown> = Promise.resolve();
+
 export function useQuoteTranslation(quote: QuoteEntry) {
   const [settings, setSettings] = useState<AiSettings | null>(null);
   const [google, setGoogle] = useState<TranslateSlot>(IDLE);
@@ -53,19 +57,26 @@ export function useQuoteTranslation(quote: QuoteEntry) {
    * sibling slot always survives.
    */
   async function persistSlot(patch: Partial<QuoteTranslations>) {
-    const current = await inboxStorage.getValue();
-    await requestSyncMutation('inbox', {
-      ...current,
-      quotes: current.quotes.map((candidate) =>
-        candidate.id === quote.id
-          ? {
-              ...candidate,
-              translations: { ...candidate.translations, ...patch },
-              updatedAt: Date.now(),
-            }
-          : candidate,
-      ),
+    // Reads must not overlap writes: requestSyncMutation resolves only after
+    // the background worker's setInbox, so an unserialized second read can
+    // capture a pre-write snapshot and erase the sibling slot.
+    const run = writeChain.then(async () => {
+      const current = await inboxStorage.getValue();
+      await requestSyncMutation('inbox', {
+        ...current,
+        quotes: current.quotes.map((candidate) =>
+          candidate.id === quote.id
+            ? {
+                ...candidate,
+                translations: { ...candidate.translations, ...patch },
+                updatedAt: Date.now(),
+              }
+            : candidate,
+        ),
+      });
     });
+    writeChain = run.catch(() => {});
+    return run;
   }
 
   function applyFailure(

@@ -200,6 +200,25 @@ describe('useQuoteTranslation — Google path', () => {
     expect(out.ai?.text).toBe('Nature shows no favour');
   });
 
+  it('serializes overlapping writes so neither slot is lost', async () => {
+    const quote = makeQuote();
+    let stored: Inbox = inboxWith(quote);
+    vi.mocked(inboxStorage.getValue).mockImplementation(async () => stored);
+    vi.mocked(requestSyncMutation).mockImplementation(async (_kind, payload) => {
+      stored = payload as Inbox;
+    });
+    vi.mocked(fetchGoogleTranslation).mockResolvedValue({ ok: true, text: 'G text' });
+    vi.mocked(fetchAiTranslation).mockResolvedValue({ ok: true, text: 'AI text' });
+
+    await renderClient(<Harness quote={quote} />);
+    await act(async () => {
+      await Promise.all([api.translateGoogle(), api.translateAi()]);
+    });
+
+    expect(stored.quotes[0].translations?.google?.text).toBe('G text');
+    expect(stored.quotes[0].translations?.ai?.text).toBe('AI text');
+  });
+
   it('leaves other quotes in the inbox untouched', async () => {
     const target = makeQuote({ id: 'q1' });
     const other = makeQuote({ id: 'q2', text: '不亦说乎' });

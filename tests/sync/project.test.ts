@@ -250,4 +250,50 @@ describe('quote translation sync', () => {
     expect(materialize(mergeSyncState(a, b)).inbox.quotes[0].translations?.google?.text).toBe('kept rendering');
     expect(materialize(mergeSyncState(b, a)).inbox.quotes[0].translations?.google?.text).toBe('kept rendering');
   });
+
+  it('stamps a translation register by its own generatedAt, so an unrelated later edit cannot revert a peer\'s newer translation', () => {
+    // Replica A translated first (generatedAt 100) but then made an unrelated
+    // edit (e.g. its note) much later, bumping quote.updatedAt to 900.
+    // Replica B translated later (generatedAt 200, so B's translation should
+    // win) but never touched the quote again, so its updatedAt stays at 150.
+    // If the register were stamped with the shared `s = stamp(updatedAt, …)`
+    // like its sibling fields, A's stale translation (updatedAt 900) would
+    // beat B's newer one (updatedAt 150) on merge — which is wrong, since the
+    // translation itself is older. Stamping by generatedAt fixes this.
+    const a = projectInbox(
+      {
+        words: [],
+        quotes: [
+          quoteFixture({
+            updatedAt: 900,
+            translations: { google: { text: 'A older translation', generatedAt: 100 } },
+          }),
+        ],
+      },
+      DEFAULT_SETTINGS,
+      DEFAULT_AI_SETTINGS,
+      { replicaId: 'A', wallTime: 900 },
+    );
+    const b = projectInbox(
+      {
+        words: [],
+        quotes: [
+          quoteFixture({
+            updatedAt: 150,
+            translations: { google: { text: 'B newer translation', generatedAt: 200 } },
+          }),
+        ],
+      },
+      DEFAULT_SETTINGS,
+      DEFAULT_AI_SETTINGS,
+      { replicaId: 'B', wallTime: 150 },
+    );
+
+    expect(materialize(mergeSyncState(a, b)).inbox.quotes[0].translations?.google?.text).toBe(
+      'B newer translation',
+    );
+    expect(materialize(mergeSyncState(b, a)).inbox.quotes[0].translations?.google?.text).toBe(
+      'B newer translation',
+    );
+  });
 });

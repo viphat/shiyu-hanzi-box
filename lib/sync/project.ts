@@ -212,11 +212,29 @@ function projectQuote(quote: QuoteEntry, ctx: BootstrapContext, prev?: QuoteNode
       // fresh projection (no register) with persisted state (register still
       // present) and writes the old value back, even with zero peers.
       // Clearing a slot would require a tombstone or a cleared-sentinel.
+      // Stamped by the slot's own generatedAt, NOT the shared `s`
+      // (quote.updatedAt): unlike every sibling field here, a translation is
+      // written once and never mutated by an unrelated edit to the quote, so
+      // re-stamping it with `s` would let an unrelated later edit (e.g. the
+      // note) revert a peer's newer translation on merge. generatedAt is the
+      // correct recency key for this sub-object, exactly as `occurrences` are
+      // stamped by `occ.capturedAt` and review events by `entry.reviewedAt`
+      // rather than by the parent's `updatedAt`.
       ...(quote.translations?.google
-        ? { translationGoogle: reg(quote.translations.google, s) }
+        ? {
+            translationGoogle: reg(
+              quote.translations.google,
+              stamp(quote.translations.google.generatedAt, ctx.replicaId),
+            ),
+          }
         : {}),
       ...(quote.translations?.ai
-        ? { translationAi: reg(quote.translations.ai, s) }
+        ? {
+            translationAi: reg(
+              quote.translations.ai,
+              stamp(quote.translations.ai.generatedAt, ctx.replicaId),
+            ),
+          }
         : {}),
       updatedAt: reg(quote.updatedAt, s),
     },

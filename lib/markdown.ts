@@ -87,6 +87,11 @@ export function renderDay(
       lines.push(`- [ ] > ${renderQuoteBody(quote)}`);
       if (tags) lines.push(tags);
       if (quote.note) lines.push(`  - ${esc(quote.note)}`);
+      // Translations are a read-only annotation: export never triggers a call.
+      const google = quote.translations?.google?.text;
+      if (google) lines.push(`  - EN (Google): ${esc(google)}`);
+      const ai = quote.translations?.ai?.text;
+      if (ai) lines.push(`  - EN (AI): ${esc(ai)}`);
       lines.push(`  - [${esc(quote.sourceTitle || quote.sourceDomain)}](${quote.sourceUrl})`);
       lines.push('');
     }

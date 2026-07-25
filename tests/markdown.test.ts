@@ -210,3 +210,77 @@ describe('renderDay with AI insight', () => {
     expect(md).not.toContain('AI Insight');
   });
 });
+
+describe('renderDay quote translations', () => {
+  const translated: QuoteEntry = {
+    ...quote,
+    id: 'q-tr',
+    translations: {
+      google: { text: 'Learning is a joy', generatedAt: 10 },
+      ai: {
+        text: 'To learn and practise often',
+        generatedAt: 20,
+        provider: 'deepseek',
+        model: 'deepseek-v4-flash',
+        baseUrl: 'https://api.deepseek.com',
+      },
+    },
+  };
+
+  it('emits Google before AI as nested bullets', () => {
+    const out = renderDay(day, [], [translated], null);
+    expect(out).toContain('  - EN (Google): Learning is a joy');
+    expect(out).toContain('  - EN (AI): To learn and practise often');
+    expect(out.indexOf('EN (Google)')).toBeLessThan(out.indexOf('EN (AI)'));
+  });
+
+  it('emits only the Google bullet when only Google exists', () => {
+    const googleOnly: QuoteEntry = {
+      ...quote,
+      translations: { google: { text: 'Learning is a joy', generatedAt: 10 } },
+    };
+    const out = renderDay(day, [], [googleOnly], null);
+    expect(out).toContain('  - EN (Google): Learning is a joy');
+    expect(out).not.toContain('EN (AI)');
+  });
+
+  it('emits only the AI bullet when only AI exists', () => {
+    const aiOnly: QuoteEntry = {
+      ...quote,
+      translations: {
+        ai: {
+          text: 'To learn and practise often',
+          generatedAt: 20,
+          provider: 'deepseek',
+          model: 'deepseek-v4-flash',
+          baseUrl: 'https://api.deepseek.com',
+        },
+      },
+    };
+    const out = renderDay(day, [], [aiOnly], null);
+    expect(out).toContain('  - EN (AI): To learn and practise often');
+    expect(out).not.toContain('EN (Google)');
+  });
+
+  it('emits no translation bullet for an untranslated quote', () => {
+    const out = renderDay(day, [], [quote], null);
+    expect(out).not.toContain('EN (Google)');
+    expect(out).not.toContain('EN (AI)');
+  });
+
+  it('escapes translation text', () => {
+    const risky: QuoteEntry = {
+      ...quote,
+      translations: { google: { text: 'a | b [x](y)', generatedAt: 10 } },
+    };
+    const out = renderDay(day, [], [risky], null);
+    expect(out).not.toContain('EN (Google): a | b [x](y)');
+  });
+
+  it('places translations after the note and before the source link', () => {
+    const withNote: QuoteEntry = { ...translated, note: 'my note' };
+    const out = renderDay(day, [], [withNote], null);
+    expect(out.indexOf('my note')).toBeLessThan(out.indexOf('EN (Google)'));
+    expect(out.indexOf('EN (AI)')).toBeLessThan(out.indexOf('Lunyu]('));
+  });
+});

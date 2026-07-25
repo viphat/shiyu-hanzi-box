@@ -154,4 +154,26 @@ describe('TranslateButtons', () => {
       messages.en['translate.showAi'],
     );
   });
+
+  it('wraps error messages in a div, not a span', async () => {
+    // A <p> inside a <span> is invalid phrasing content; browsers restructure
+    // it and the flex footer layout breaks. textContent assertions can't see
+    // this, so pin the element type directly.
+    await renderClient(
+      <TranslateButtons
+        {...props({ ai: { state: 'error', failure: 'not-configured' } })}
+      />,
+    );
+    const wrapper = container.querySelector('.basis-full');
+    expect(wrapper).not.toBeNull();
+    expect(wrapper!.tagName).toBe('DIV');
+  });
+
+  it('renders zh-CN strings when the locale is zh-CN', async () => {
+    await renderClient(
+      <TranslateButtons {...props({ google: { state: 'loading' }, locale: 'zh-CN' })} />
+    );
+    expect(container.textContent).toContain(messages['zh-CN']['translate.loading']);
+    expect(container.textContent).not.toContain(messages.en['translate.loading']);
+  });
 });

@@ -1,5 +1,6 @@
 import { clozesOverlap } from './cloze';
 import { migrateQuoteCategoryToTags } from './tags';
+import { sanitizeQuoteTranslations } from './translate/validate';
 import type {
   AiSettings,
   AppSettings,
@@ -169,6 +170,17 @@ function sanitizeQuoteClozes(quote: QuoteEntry): QuoteEntry {
   return quote;
 }
 
+function sanitizeQuoteTranslationsField(quote: QuoteEntry): QuoteEntry {
+  const sanitized = sanitizeQuoteTranslations((quote as QuoteEntry & { translations?: unknown }).translations);
+  if (sanitized === undefined) {
+    // Omit the key entirely rather than setting `translations: undefined`, so
+    // an untranslated quote keeps exactly its current shape on JSON round-trip.
+    const { translations: _translations, ...rest } = quote as QuoteEntry & { translations?: unknown };
+    return rest as QuoteEntry;
+  }
+  return { ...quote, translations: sanitized };
+}
+
 function hasEntryBase(value: Record<string, unknown>): boolean {
   // Optional fields added after backup format v1, such as WordEntry.aiInsight,
   // are intentionally not checked here; cloneJson preserves them on round-trip.
@@ -319,7 +331,7 @@ function cloneInbox(inbox: Inbox): Inbox {
       return cloneJson(rest) as WordEntry;
     }),
     quotes: cloneJson(inbox.quotes).map((quote) =>
-      sanitizeQuoteClozes(migrateQuoteCategoryToTags(quote) as QuoteEntry),
+      sanitizeQuoteTranslationsField(sanitizeQuoteClozes(migrateQuoteCategoryToTags(quote) as QuoteEntry)),
     ),
   };
 }

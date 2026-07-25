@@ -22,6 +22,7 @@ import { isSuppressed } from './registers';
 import { DEFAULT_SETTINGS } from '../settings';
 import { DEFAULT_AI_SETTINGS } from '../ai/settings';
 import { normalizeTags } from '../tags';
+import { sanitizeQuoteTranslations } from '../translate/validate';
 
 // ---------------------------------------------------------------------------
 // Public key helpers
@@ -408,14 +409,12 @@ export function materialize(state: SyncState): {
       .filter(([tag, addStamp]) => !isSuppressed(addStamp, node.tagTombstones?.[tag]))
       .map(([tag]) => tag)
       .sort();
-    const googleSlot = node.fields.translationGoogle?.value as
-      | QuoteTranslations['google']
-      | null
-      | undefined;
-    const aiSlot = node.fields.translationAi?.value as
-      | QuoteTranslations['ai']
-      | null
-      | undefined;
+    // Registers hold raw peer-supplied values with no compile-time guarantee
+    // they match QuoteTranslation/AiQuoteTranslation — a malformed or hostile
+    // replica file can put anything there. Route each through the shared
+    // sanitizer (wrapping the lone slot under its key) instead of casting.
+    const googleSlot = sanitizeQuoteTranslations({ google: node.fields.translationGoogle?.value })?.google;
+    const aiSlot = sanitizeQuoteTranslations({ ai: node.fields.translationAi?.value })?.ai;
     const translations: QuoteTranslations = {
       ...(googleSlot ? { google: googleSlot } : {}),
       ...(aiSlot ? { ai: aiSlot } : {}),

@@ -296,4 +296,43 @@ describe('quote translation sync', () => {
       'B newer translation',
     );
   });
+
+  it('materializes without a malformed translationGoogle register value (hostile replica)', () => {
+    const state = projectInbox(
+      { words: [], quotes: [quoteFixture({ translations: { google: { text: 'ok', generatedAt: 100 } } })] },
+      DEFAULT_SETTINGS,
+      DEFAULT_AI_SETTINGS,
+      ctx,
+    );
+    // Simulate a hostile/corrupt peer replica by overwriting the register
+    // value directly with a shape that fails the QuoteTranslation schema.
+    state.quotes.q1.fields.translationGoogle!.value = { text: 42, generatedAt: 100 } as never;
+
+    expect(() => materialize(state)).not.toThrow();
+    expect(materialize(state).inbox.quotes[0].translations).toBeUndefined();
+  });
+
+  it('keeps a valid ai slot when the sibling google register value is malformed', () => {
+    const state = projectInbox(
+      {
+        words: [],
+        quotes: [
+          quoteFixture({
+            translations: {
+              google: { text: 'ok', generatedAt: 100 },
+              ai: AI_SLOT,
+            },
+          }),
+        ],
+      },
+      DEFAULT_SETTINGS,
+      DEFAULT_AI_SETTINGS,
+      ctx,
+    );
+    state.quotes.q1.fields.translationGoogle!.value = { text: 42, generatedAt: 100 } as never;
+
+    const out = materialize(state).inbox.quotes[0];
+    expect(out.translations?.google).toBeUndefined();
+    expect(out.translations?.ai).toEqual(AI_SLOT);
+  });
 });

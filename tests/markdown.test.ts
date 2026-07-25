@@ -303,4 +303,20 @@ describe('renderDay quote translations', () => {
     expect(out.split('\n').some((line) => line.startsWith('- fake item'))).toBe(false);
     expect(out.split('\n').some((line) => line.startsWith('# fake heading'))).toBe(false);
   });
+
+  it('skips a non-string translation slot instead of throwing, and still renders the rest of the day', () => {
+    // Models a hand-edited backup / hostile replica that slipped a non-string
+    // `text` past the boundary sanitizers; `as unknown as QuoteEntry` is
+    // needed because the real QuoteEntry type forbids this shape.
+    const malformed = {
+      ...quote,
+      id: 'q-malformed',
+      translations: { google: { text: 42, generatedAt: 10 } },
+    } as unknown as QuoteEntry;
+
+    expect(() => renderDay(day, [], [malformed])).not.toThrow();
+    const out = renderDay(day, [], [malformed]);
+    expect(out).toContain(quote.text);
+    expect(out).not.toContain('EN (Google)');
+  });
 });

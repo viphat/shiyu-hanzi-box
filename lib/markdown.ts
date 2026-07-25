@@ -96,9 +96,9 @@ export function renderDay(
       // would break out of this nested bullet and could inject a spurious
       // list item or heading into the exported note.
       const google = quote.translations?.google?.text;
-      if (google) lines.push(`  - EN (Google): ${esc(oneLine(google))}`);
+      if (typeof google === 'string' && google) lines.push(`  - EN (Google): ${esc(oneLine(google))}`);
       const ai = quote.translations?.ai?.text;
-      if (ai) lines.push(`  - EN (AI): ${esc(oneLine(ai))}`);
+      if (typeof ai === 'string' && ai) lines.push(`  - EN (AI): ${esc(oneLine(ai))}`);
       lines.push(`  - [${esc(quote.sourceTitle || quote.sourceDomain)}](${quote.sourceUrl})`);
       lines.push('');
     }

@@ -445,4 +445,54 @@ describe('backup preserves quote translations', () => {
 
     expect(restored.quotes[0].translations).toBeUndefined();
   });
+
+  it('drops a malformed translation slot from a hand-edited backup while keeping a valid sibling', () => {
+    // Simulates a hand-edited backup file: constructed as raw JSON rather than
+    // via createBackup/serializeBackup, since those never produce this shape.
+    const handEdited = {
+      app: 'shiyu-hanzi-box',
+      formatVersion: 2,
+      exportedAt: '2026-06-20T12:00:00.000Z',
+      inbox: {
+        words: [],
+        quotes: [
+          {
+            id: 'q11',
+            kind: 'quote',
+            text: '天地不仁',
+            tags: [],
+            note: '',
+            status: 'inbox',
+            createdAt: 1,
+            updatedAt: 2,
+            sourceTitle: 'Laozi',
+            sourceUrl: 'https://example.com',
+            sourceDomain: 'example.com',
+            surrounding: '天地不仁，以万物为刍狗',
+            translations: {
+              google: { text: 42, generatedAt: 10 }, // malformed: text must be a string
+              ai: {
+                text: 'Nature shows no favour',
+                generatedAt: 20,
+                provider: 'deepseek',
+                model: 'deepseek-v4-flash',
+                baseUrl: 'https://api.deepseek.com',
+              },
+            },
+          },
+        ],
+      },
+    };
+
+    const restored = parseBackup(JSON.stringify(handEdited));
+
+    expect(restored.quotes[0].translations?.google).toBeUndefined();
+    expect(restored.quotes[0].translations?.ai).toEqual({
+      text: 'Nature shows no favour',
+      generatedAt: 20,
+      provider: 'deepseek',
+      model: 'deepseek-v4-flash',
+      baseUrl: 'https://api.deepseek.com',
+    });
+  });
 });

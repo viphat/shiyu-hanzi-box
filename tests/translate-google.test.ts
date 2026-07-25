@@ -151,4 +151,11 @@ describe('Google Translate host permission', () => {
     vi.spyOn(fakeBrowser.permissions, 'contains').mockRejectedValue(new Error('boom'));
     await expect(hasGoogleTranslatePermission()).resolves.toBe(false);
   });
+
+  it('pins the origin literal that the manifest must match', () => {
+    // Asserted as a literal, not via the imported constant: the extension
+    // manifest declares this same string, and a silent drift between the two
+    // would break the permission request at runtime with no test failure.
+    expect(GOOGLE_TRANSLATE_ORIGIN).toBe('https://translate.googleapis.com/*');
+  });
 });

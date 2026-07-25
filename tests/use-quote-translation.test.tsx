@@ -4,7 +4,7 @@ import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useQuoteTranslation } from '../entrypoints/dashboard/hooks/useQuoteTranslation';
-import type { Inbox, QuoteEntry } from '../lib/types';
+import type { QuoteEntry } from '../lib/types';
 
 vi.mock('../lib/translate/google', () => ({
   fetchGoogleTranslation: vi.fn(),
@@ -24,9 +24,6 @@ vi.mock('../lib/ai/settings', () => ({
   getAiSettings: vi.fn(),
   isAiConfigured: vi.fn(),
 }));
-vi.mock('../lib/storage', () => ({
-  inboxStorage: { getValue: vi.fn() },
-}));
 vi.mock('../entrypoints/background/sync-mutation-handler', () => ({
   requestSyncMutation: vi.fn(),
 }));
@@ -36,7 +33,6 @@ const { requestGoogleTranslatePermission } = await import('../lib/translate/perm
 const { fetchAiTranslation } = await import('../lib/ai/client');
 const { requestAiSettingsPermission } = await import('../lib/ai/permissions');
 const { getAiSettings, isAiConfigured } = await import('../lib/ai/settings');
-const { inboxStorage } = await import('../lib/storage');
 const { requestSyncMutation } = await import('../entrypoints/background/sync-mutation-handler');
 
 const AI_SETTINGS = {
@@ -105,18 +101,20 @@ async function renderClient(node: ReactNode) {
   });
 }
 
-function inboxWith(quote: QuoteEntry): Inbox {
-  return { words: [], quotes: [quote] };
+interface QuoteTranslationPatch {
+  quoteId: string;
+  slot: 'google' | 'ai';
+  value: { text: string; generatedAt: number; provider?: string; model?: string; baseUrl?: string };
 }
 
-function writtenInbox(): Inbox {
-  return vi.mocked(requestSyncMutation).mock.calls[0][1] as Inbox;
+function lastMutationCall(): [string, QuoteTranslationPatch] {
+  const calls = vi.mocked(requestSyncMutation).mock.calls;
+  return calls[calls.length - 1] as [string, QuoteTranslationPatch];
 }
 
 describe('useQuoteTranslation — Google path', () => {
-  it('requests the host permission, then persists the Google slot', async () => {
+  it('requests the host permission, then persists the Google slot as a targeted patch', async () => {
     const quote = makeQuote();
-    vi.mocked(inboxStorage.getValue).mockResolvedValue(inboxWith(quote));
     vi.mocked(fetchGoogleTranslation).mockResolvedValue({
       ok: true,
       text: 'Learning is a joy',
@@ -131,7 +129,11 @@ describe('useQuoteTranslation — Google path', () => {
     expect(requestGoogleTranslatePermission).toHaveBeenCalledTimes(1);
     expect(fetchGoogleTranslation).toHaveBeenCalledWith({ text: '学而时习之' });
     expect(requestSyncMutation).toHaveBeenCalledTimes(1);
-    expect(writtenInbox().quotes[0].translations?.google?.text).toBe('Learning is a joy');
+    const [kind, payload] = lastMutationCall();
+    expect(kind).toBe('quoteTranslation');
+    expect(payload.quoteId).toBe('q1');
+    expect(payload.slot).toBe('google');
+    expect(payload.value.text).toBe('Learning is a joy');
     expect(api.google.state).toBe('idle');
     expect(returned).toBe('Learning is a joy');
   });
@@ -180,38 +182,8 @@ describe('useQuoteTranslation — Google path', () => {
     expect(api.google.failure).toBe('rate-limited');
   });
 
-  it('preserves an existing AI slot when writing the Google slot', async () => {
-    const quote = makeQuote({
-      translations: {
-        ai: {
-          text: 'Nature shows no favour',
-          generatedAt: 50,
-          provider: 'deepseek',
-          model: 'deepseek-v4-flash',
-          baseUrl: 'https://api.deepseek.com',
-        },
-      },
-    });
-    vi.mocked(inboxStorage.getValue).mockResolvedValue(inboxWith(quote));
-    vi.mocked(fetchGoogleTranslation).mockResolvedValue({ ok: true, text: 'G text' });
-
-    await renderClient(<Harness quote={quote} />);
-    await act(async () => {
-      await api.translateGoogle();
-    });
-
-    const out = writtenInbox().quotes[0].translations!;
-    expect(out.google?.text).toBe('G text');
-    expect(out.ai?.text).toBe('Nature shows no favour');
-  });
-
-  it('serializes overlapping writes so neither slot is lost', async () => {
+  it('produces two separate targeted patches when both slots fire concurrently, neither carrying the other data', async () => {
     const quote = makeQuote();
-    let stored: Inbox = inboxWith(quote);
-    vi.mocked(inboxStorage.getValue).mockImplementation(async () => stored);
-    vi.mocked(requestSyncMutation).mockImplementation(async (_kind, payload) => {
-      stored = payload as Inbox;
-    });
     vi.mocked(fetchGoogleTranslation).mockResolvedValue({ ok: true, text: 'G text' });
     vi.mocked(fetchAiTranslation).mockResolvedValue({ ok: true, text: 'AI text' });
 
@@ -220,33 +192,28 @@ describe('useQuoteTranslation — Google path', () => {
       await Promise.all([api.translateGoogle(), api.translateAi()]);
     });
 
-    expect(stored.quotes[0].translations?.google?.text).toBe('G text');
-    expect(stored.quotes[0].translations?.ai?.text).toBe('AI text');
-  });
+    expect(requestSyncMutation).toHaveBeenCalledTimes(2);
+    const patches = vi.mocked(requestSyncMutation).mock.calls.map(
+      ([, payload]) => payload as QuoteTranslationPatch,
+    );
 
-  it('leaves other quotes in the inbox untouched', async () => {
-    const target = makeQuote({ id: 'q1' });
-    const other = makeQuote({ id: 'q2', text: '不亦说乎' });
-    vi.mocked(inboxStorage.getValue).mockResolvedValue({
-      words: [],
-      quotes: [target, other],
-    });
-    vi.mocked(fetchGoogleTranslation).mockResolvedValue({ ok: true, text: 'G text' });
+    const googlePatch = patches.find((p) => p.slot === 'google')!;
+    const aiPatch = patches.find((p) => p.slot === 'ai')!;
 
-    await renderClient(<Harness quote={target} />);
-    await act(async () => {
-      await api.translateGoogle();
-    });
-
-    const quotes = writtenInbox().quotes;
-    expect(quotes.find((q) => q.id === 'q2')!.translations).toBeUndefined();
+    expect(googlePatch).toBeDefined();
+    expect(aiPatch).toBeDefined();
+    expect(googlePatch.value.text).toBe('G text');
+    expect(aiPatch.value.text).toBe('AI text');
+    // Each patch carries only its own slot's value — no sibling data at all,
+    // since the merge now happens atomically in the background chain, not here.
+    expect(googlePatch.value).not.toHaveProperty('provider');
+    expect(aiPatch.quoteId).toBe(googlePatch.quoteId);
   });
 });
 
 describe('useQuoteTranslation — AI path', () => {
-  it('persists the AI slot with provider provenance', async () => {
+  it('persists the AI slot with provider provenance as a targeted patch', async () => {
     const quote = makeQuote();
-    vi.mocked(inboxStorage.getValue).mockResolvedValue(inboxWith(quote));
     vi.mocked(fetchAiTranslation).mockResolvedValue({
       ok: true,
       text: 'Nature shows no favour',
@@ -259,11 +226,14 @@ describe('useQuoteTranslation — AI path', () => {
     });
 
     expect(returned).toBe('Nature shows no favour');
-    const slot = writtenInbox().quotes[0].translations!.ai!;
-    expect(slot.text).toBe('Nature shows no favour');
-    expect(slot.provider).toBe('deepseek');
-    expect(slot.model).toBe('deepseek-v4-flash');
-    expect(slot.baseUrl).toBe('https://api.deepseek.com');
+    const [kind, payload] = lastMutationCall();
+    expect(kind).toBe('quoteTranslation');
+    expect(payload.quoteId).toBe('q1');
+    expect(payload.slot).toBe('ai');
+    expect(payload.value.text).toBe('Nature shows no favour');
+    expect(payload.value.provider).toBe('deepseek');
+    expect(payload.value.model).toBe('deepseek-v4-flash');
+    expect(payload.value.baseUrl).toBe('https://api.deepseek.com');
     expect(requestGoogleTranslatePermission).not.toHaveBeenCalled();
   });
 

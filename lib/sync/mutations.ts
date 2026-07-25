@@ -3,7 +3,7 @@ import { getInbox, setInbox } from '../storage';
 import { getSettings } from '../settings';
 import { aiSettingsStorage } from '../ai/settings';
 import { ensureReplicaId, mutateSyncConfig } from './local';
-import type { Inbox } from '../types';
+import type { AiQuoteTranslation, Inbox, QuoteTranslation } from '../types';
 import { projectInbox, wordKey } from './project';
 import { deleteEntity } from './merge';
 import { mergeStampMap } from './registers';
@@ -121,6 +121,36 @@ export async function mutateInboxSynced(fn: (inbox: Inbox) => Inbox): Promise<In
     await setInbox(result);
   });
   return result!;
+}
+
+export interface QuoteTranslationPatch {
+  quoteId: string;
+  slot: 'google' | 'ai';
+  value: QuoteTranslation | AiQuoteTranslation;
+}
+
+/**
+ * Atomically merge one translation slot into one quote.
+ *
+ * Runs inside mutateInboxSynced so the read and the write happen together in
+ * the shared chain — a concurrent note/tag/status edit or a background capture
+ * can no longer be clobbered by a stale whole-inbox snapshot, and cannot clobber
+ * this slot either. The sibling slot is preserved because the spread reads the
+ * quote as it exists at apply time, not as the UI saw it.
+ */
+export async function applyQuoteTranslation(patch: QuoteTranslationPatch): Promise<void> {
+  await mutateInboxSynced((inbox) => ({
+    ...inbox,
+    quotes: inbox.quotes.map((quote) =>
+      quote.id === patch.quoteId
+        ? {
+            ...quote,
+            translations: { ...quote.translations, [patch.slot]: patch.value },
+            updatedAt: Date.now(),
+          }
+        : quote,
+    ),
+  }));
 }
 
 export async function applyDeletion(keys: string[]): Promise<void> {

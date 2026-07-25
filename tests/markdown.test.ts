@@ -283,4 +283,24 @@ describe('renderDay quote translations', () => {
     expect(out.indexOf('my note')).toBeLessThan(out.indexOf('EN (Google)'));
     expect(out.indexOf('EN (AI)')).toBeLessThan(out.indexOf('Lunyu]('));
   });
+
+  it('collapses a newline in the translation onto one line', () => {
+    const multiline: QuoteEntry = {
+      ...quote,
+      translations: { google: { text: 'First line\nSecond line', generatedAt: 10 } },
+    };
+    const out = renderDay(day, [], [multiline], null);
+    expect(out).toContain('  - EN (Google): First line Second line');
+  });
+
+  it('cannot inject a list item or heading via a newline', () => {
+    const injecting: QuoteEntry = {
+      ...quote,
+      translations: { ai: { text: 'Real text\n- fake item\n# fake heading', generatedAt: 20, provider: 'deepseek', model: 'm', baseUrl: 'https://example.com' } },
+    };
+    const out = renderDay(day, [], [injecting], null);
+    // No line may start with an unindented '- ' or '#' from the translation.
+    expect(out.split('\n').some((line) => line.startsWith('- fake item'))).toBe(false);
+    expect(out.split('\n').some((line) => line.startsWith('# fake heading'))).toBe(false);
+  });
 });

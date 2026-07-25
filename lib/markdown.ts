@@ -5,6 +5,10 @@ function esc(value: string): string {
   return value.replace(/\|/g, '\\|');
 }
 
+function oneLine(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
 function renderQuoteBody(quote: QuoteEntry): string {
   if (!quote.clozes?.length) {
     return esc(quote.text);
@@ -88,10 +92,13 @@ export function renderDay(
       if (tags) lines.push(tags);
       if (quote.note) lines.push(`  - ${esc(quote.note)}`);
       // Translations are a read-only annotation: export never triggers a call.
+      // Collapse whitespace before escaping: a newline in the translation
+      // would break out of this nested bullet and could inject a spurious
+      // list item or heading into the exported note.
       const google = quote.translations?.google?.text;
-      if (google) lines.push(`  - EN (Google): ${esc(google)}`);
+      if (google) lines.push(`  - EN (Google): ${esc(oneLine(google))}`);
       const ai = quote.translations?.ai?.text;
-      if (ai) lines.push(`  - EN (AI): ${esc(ai)}`);
+      if (ai) lines.push(`  - EN (AI): ${esc(oneLine(ai))}`);
       lines.push(`  - [${esc(quote.sourceTitle || quote.sourceDomain)}](${quote.sourceUrl})`);
       lines.push('');
     }

@@ -103,8 +103,21 @@ describe('TranslateButtons', () => {
         {...props({ ai: { state: 'disabled', failure: 'not-configured' } })}
       />,
     );
-    expect(queryButton(messages.en['translate.aiShort'])!.disabled).toBe(true);
-    expect(container.textContent).toContain(messages.en['translate.errNotConfigured']);
+    const chip = queryButton(messages.en['translate.aiShort'])!;
+    expect(chip.disabled).toBe(true);
+    expect(chip.title).toBe(messages.en['translate.errNotConfigured']);
+  });
+
+  it('renders no inline message when a slot has a translation, even in an error state', async () => {
+    await renderClient(
+      <TranslateButtons
+        {...props({
+          hasGoogle: true,
+          google: { state: 'error', failure: 'rate-limited' },
+        })}
+      />,
+    );
+    expect(container.textContent).not.toContain(messages.en['translate.errRateLimited']);
   });
 
   it('offers Retry with a localized message on a rate-limited failure', async () => {

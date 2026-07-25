@@ -84,12 +84,16 @@ function Chip({
 
   const disabled = slot.state === 'disabled';
   const isError = slot.state === 'error';
+  // When disabled, explain why in the title (hover) rather than as an inline
+  // line — every quote card would otherwise ship a persistent error-colored
+  // line for the common "AI not configured" state.
+  const title = disabled && slot.failure ? t(locale, failureMessageKey(slot.failure)) : generateTitle;
 
   return (
     <button
       type="button"
       disabled={disabled}
-      title={generateTitle}
+      title={title}
       onClick={(event) => {
         event.stopPropagation();
         if (!disabled) onGenerate();
@@ -106,8 +110,22 @@ function Chip({
   );
 }
 
-function SlotMessage({ slot, locale }: { slot: TranslateSlot; locale: UiLocale }) {
-  if (slot.state !== 'error' && slot.state !== 'disabled') return null;
+function SlotMessage({
+  slot,
+  hasTranslation,
+  locale,
+}: {
+  slot: TranslateSlot;
+  hasTranslation: boolean;
+  locale: UiLocale;
+}) {
+  // A filled slot's chip is toggle-only, so a retry/configure line beneath it
+  // would be a dead end with no reachable action — never render one here.
+  if (hasTranslation) return null;
+  // The 'disabled' case surfaces its reason via the chip's title instead (see
+  // Chip above); an inline line here is reserved for 'error', which follows
+  // an actual click and must stay visible.
+  if (slot.state !== 'error') return null;
   if (!slot.failure) return null;
   const text = t(locale, failureMessageKey(slot.failure));
   return (
@@ -174,8 +192,8 @@ export function TranslateButtons({
         footer's flex-wrap row so both slots' errors can show at once.
       */}
       <div className="basis-full space-y-0.5">
-        <SlotMessage slot={google} locale={locale} />
-        <SlotMessage slot={ai} locale={locale} />
+        <SlotMessage slot={google} hasTranslation={hasGoogle} locale={locale} />
+        <SlotMessage slot={ai} hasTranslation={hasAi} locale={locale} />
       </div>
     </>
   );

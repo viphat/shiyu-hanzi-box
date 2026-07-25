@@ -206,6 +206,12 @@ function projectQuote(quote: QuoteEntry, ctx: BootstrapContext, prev?: QuoteNode
       // device A and an AI translate on device B must both survive the merge.
       // Absent slots are omitted rather than stamped null so an untranslated
       // replica cannot overwrite a peer's translation.
+      // Consequence: removal is UNREPRESENTABLE. Absence merges as "no
+      // opinion", not as "cleared", so a future "clear this translation"
+      // affordance would silently self-revert — the coordinator merges the
+      // fresh projection (no register) with persisted state (register still
+      // present) and writes the old value back, even with zero peers.
+      // Clearing a slot would require a tombstone or a cleared-sentinel.
       ...(quote.translations?.google
         ? { translationGoogle: reg(quote.translations.google, s) }
         : {}),

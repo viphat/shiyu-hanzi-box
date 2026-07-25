@@ -218,4 +218,36 @@ describe('quote translation sync', () => {
     expect(out.translations?.google?.text).toBe('Learning is a joy');
     expect(out.translations?.ai?.text).toBe('To learn and practise often');
   });
+
+  it('resolves the same translation slot by recency, in either merge order', () => {
+    const older = quoteFixture({
+      updatedAt: 100,
+      translations: { google: { text: 'older rendering', generatedAt: 100 } },
+    });
+    const newer = quoteFixture({
+      updatedAt: 300,
+      translations: { google: { text: 'newer rendering', generatedAt: 300 } },
+    });
+    const a = projectInbox({ words: [], quotes: [older] }, DEFAULT_SETTINGS, DEFAULT_AI_SETTINGS, { replicaId: 'A', wallTime: 100 });
+    const b = projectInbox({ words: [], quotes: [newer] }, DEFAULT_SETTINGS, DEFAULT_AI_SETTINGS, { replicaId: 'B', wallTime: 300 });
+
+    expect(materialize(mergeSyncState(a, b)).inbox.quotes[0].translations?.google?.text).toBe('newer rendering');
+    expect(materialize(mergeSyncState(b, a)).inbox.quotes[0].translations?.google?.text).toBe('newer rendering');
+  });
+
+  it('does not let a replica lacking a slot erase a peer that has one', () => {
+    const translated = quoteFixture({
+      updatedAt: 100,
+      translations: { google: { text: 'kept rendering', generatedAt: 100 } },
+    });
+    // Same quote, edited LATER, but with no translation at all. Its newer
+    // stamp must not be able to clear the peer's real translation, because an
+    // absent slot writes no register rather than a null.
+    const untranslatedButNewer = quoteFixture({ updatedAt: 900 });
+    const a = projectInbox({ words: [], quotes: [translated] }, DEFAULT_SETTINGS, DEFAULT_AI_SETTINGS, { replicaId: 'A', wallTime: 100 });
+    const b = projectInbox({ words: [], quotes: [untranslatedButNewer] }, DEFAULT_SETTINGS, DEFAULT_AI_SETTINGS, { replicaId: 'B', wallTime: 900 });
+
+    expect(materialize(mergeSyncState(a, b)).inbox.quotes[0].translations?.google?.text).toBe('kept rendering');
+    expect(materialize(mergeSyncState(b, a)).inbox.quotes[0].translations?.google?.text).toBe('kept rendering');
+  });
 });

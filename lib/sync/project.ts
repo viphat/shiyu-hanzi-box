@@ -115,12 +115,14 @@ function reg<T>(value: T, s: HybridTimestamp): Register<T> {
   return { value, stamp: s };
 }
 
-function insightStamp(value: unknown, fallback: number, replicaId: string): HybridTimestamp {
-  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-    const generatedAt = (value as Record<string, unknown>).generatedAt;
-    if (typeof generatedAt === 'number' && Number.isFinite(generatedAt)) {
-      return stamp(generatedAt, replicaId);
-    }
+function insightStamp<T extends { generatedAt: number }>(
+  value: unknown,
+  fallback: number,
+  replicaId: string,
+  isValid: (candidate: unknown) => candidate is T,
+): HybridTimestamp {
+  if (isValid(value)) {
+    return stamp(value.generatedAt, replicaId);
   }
   return stamp(fallback, replicaId);
 }
@@ -178,7 +180,7 @@ function projectWord(word: WordEntry, ctx: BootstrapContext): WordNode {
         ? {
             aiInsight: reg(
               word.aiInsight,
-              insightStamp(word.aiInsight, word.updatedAt, ctx.replicaId),
+              insightStamp(word.aiInsight, word.updatedAt, ctx.replicaId, isAiInsight),
             ),
           }
         : {}),
@@ -186,7 +188,12 @@ function projectWord(word: WordEntry, ctx: BootstrapContext): WordNode {
         ? {
             aiVietnameseInsight: reg(
               word.aiVietnameseInsight,
-              insightStamp(word.aiVietnameseInsight, word.updatedAt, ctx.replicaId),
+              insightStamp(
+                word.aiVietnameseInsight,
+                word.updatedAt,
+                ctx.replicaId,
+                isVietnameseAiInsight,
+              ),
             ),
           }
         : {}),

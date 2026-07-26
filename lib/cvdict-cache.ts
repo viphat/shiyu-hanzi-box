@@ -6,20 +6,20 @@ import {
 } from './dictionary-index-cache';
 import type { DictionaryIndex } from './types';
 
-const STORE = 'kaikki-cache' as const;
+const STORE = 'cvdict-cache' as const;
 
 function backend(): DictionaryIndexCacheBackend | undefined {
-  return (globalThis as { __kaikkiCacheStore?: DictionaryIndexCacheBackend }).__kaikkiCacheStore;
+  return (globalThis as { __cvdictCacheStore?: DictionaryIndexCacheBackend }).__cvdictCacheStore;
 }
 
-export function getKaikkiCache(hash: string): Promise<DictionaryIndex | null> {
+export function getCvdictCache(hash: string): Promise<DictionaryIndex | null> {
   return getDictionaryIndexCache(STORE, hash, backend());
 }
 
-export function setKaikkiCache(hash: string, index: DictionaryIndex): Promise<void> {
+export function setCvdictCache(hash: string, index: DictionaryIndex): Promise<void> {
   return setDictionaryIndexCache(STORE, hash, index, backend());
 }
 
-export function clearKaikkiCache(hash: string): Promise<void> {
+export function clearCvdictCache(hash: string): Promise<void> {
   return clearDictionaryIndexCache(STORE, hash, backend());
 }

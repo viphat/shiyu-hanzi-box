@@ -18,6 +18,15 @@ export interface ParseCedictStats {
   skipped: number;
 }
 
+export interface CedictStreamResult extends ParseCedictStats {
+  metadata: { version: string | null; release: string | null };
+}
+
+export interface CedictStreamParser {
+  addChunk(chunk: string): void;
+  finish(): CedictStreamResult;
+}
+
 const LINE_RE = /^(\S+)\s+(\S+)\s+\[([^\]]+)\]\s+\/(.*)\/\s*$/;
 
 /**
@@ -51,11 +60,30 @@ export function parseCedictText(
   text: string,
   options: { withStats?: boolean } = {},
 ): ParsedCedictEntry[] | ParseCedictStats {
+  const parser = createCedictStreamParser();
+  parser.addChunk(text);
+  const { entries, skipped } = parser.finish();
+  return options.withStats ? { entries, skipped } : entries;
+}
+
+/** Parse CEDICT data incrementally without retaining completed source lines. */
+export function createCedictStreamParser(): CedictStreamParser {
   const entries: ParsedCedictEntry[] = [];
   let skipped = 0;
-  for (const line of text.split('\n')) {
+  let pending = '';
+  const metadata = { version: null as string | null, release: null as string | null };
+
+  function consumeLine(line: string) {
     const trimmed = line.trim();
-    if (trimmed === '' || trimmed.startsWith('#')) continue;
+    if (trimmed === '') return;
+    if (trimmed.startsWith('#!')) {
+      const version = /\bversion=([^\s]+)/.exec(trimmed);
+      const release = /\bdate=([^\s]+)/.exec(trimmed);
+      if (version) metadata.version = version[1];
+      if (release) metadata.release = release[1];
+      return;
+    }
+    if (trimmed.startsWith('#')) return;
     const parsed = parseCedictLine(line);
     if (parsed) {
       entries.push(parsed);
@@ -63,7 +91,20 @@ export function parseCedictText(
       skipped += 1;
     }
   }
-  return options.withStats ? { entries, skipped } : entries;
+
+  return {
+    addChunk(chunk) {
+      pending += chunk;
+      const lines = pending.split('\n');
+      pending = lines.pop() ?? '';
+      for (const line of lines) consumeLine(line);
+    },
+    finish() {
+      if (pending) consumeLine(pending);
+      pending = '';
+      return { entries, skipped, metadata: { ...metadata } };
+    },
+  };
 }
 
 /**

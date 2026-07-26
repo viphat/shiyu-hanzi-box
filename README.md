@@ -89,12 +89,13 @@ Implemented:
   reviews — all derived from existing local review history and fully localized.
 - One-click Simplified to Taiwan Traditional conversion on word and quote cards,
   powered by OpenCC and cached on each entry.
-- Offline Word Insight Panel with CC-CEDICT definitions, tone chips, source
-  examples, external dictionary links, and review reveal mode.
+- Offline Word Insight Panel with CC-CEDICT definitions, optional locally
+  installed CVDICT Vietnamese definitions, tone chips, source examples,
+  external dictionary links, and review reveal mode.
 - One-click Mandarin pronunciation for saved words through Chrome/OS Chinese
   text-to-speech voices, with browser Web Speech fallback.
-- Opt-in AI Insight layer with BYO API key, provider picker, generated bilingual
-  notes persisted on words, and Markdown/backup/review integration.
+- Opt-in AI Insight layer with BYO API key, provider picker, independent AI · EN
+  and AI · VI outputs persisted on words, and Markdown/backup/review integration.
 - Settings page with English / zh-CN UI locale selection, full AI provider
   configuration, and optional dictionary controls.
 - Optional runtime Kaikki JSONL import/download into local IndexedDB storage for
@@ -111,6 +112,8 @@ Expanding a saved word in the dashboard shows:
 - **Tone chips** — one per Chinese character, with tone marks and numbers.
 - **Pronunciation** — click the speaker button to hear the saved word.
 - **Definitions** — from the bundled CC-CEDICT offline dictionary.
+- **Vietnamese definitions** — from optional CVDICT data installed locally in
+  this browser profile; this remains separate from the English dictionary index.
 - **Component fallback** — for phrases with no exact match, definitions for
   the component characters.
 - **Source examples** — the captured surrounding sentences with the word
@@ -156,10 +159,12 @@ network requests, affect capture dedupe, or change Markdown/zip exports.
 
 ### AI Insight (opt-in)
 
-The word card's expanded panel offers an "Ask AI" button that generates
-structured bilingual definitions, sample sentences, collocations, and usage
-notes. This is an **opt-in feature**: it requires a user-supplied API key and
-does not run until you click the button.
+The word card's expanded panel offers independent **AI · EN** and **AI · VI**
+buttons. Each generates structured definitions, sample sentences, collocations,
+and usage notes in its selected output language. This is an **opt-in feature**:
+it requires a user-supplied API key and does not run until you click a button.
+The two results, loading states, retries, and stored fields are independent, so
+one result remains visible while the other is generated.
 
 How it works:
 
@@ -175,8 +180,9 @@ Privacy:
 - The API key is stored in `chrome.storage.local` on your device only.
 - AI requests send only the saved word, optional pinyin, dictionary glosses, and
   one recent occurrence to the provider you chose.
-- Generated insights are persisted on the word and flow into backups, exports,
-  and review cards, so you only pay for each insight once.
+- English and Vietnamese insights are persisted in separate word fields and
+  flow independently into backups, exports, sync, and review cards, so you only
+  pay for each requested insight once.
 - When AI is disabled, the extension makes no AI provider requests.
 
 ### Dictionary Attribution
@@ -186,11 +192,19 @@ licensed CC-BY-SA. See `docs/dictionaries/CC-CEDICT.md` for details and update
 instructions. The dictionary ships as a compact offline asset; the extension
 never contacts MDBG at runtime.
 
+Optional Vietnamese definitions come from
+[CVDICT](https://github.com/ph0ngp/CVDICT), a CC-CEDICT-derived
+Chinese-Vietnamese dictionary. See `docs/dictionaries/CVDICT.md` for the
+CC BY-SA 4.0 attribution, accuracy caveat, and explicit local install/update
+flow.
+
 ### Local Dictionary Privacy
 
-The local Word Insight sections are fully offline. The only outbound dictionary
-requests are the two external dictionary links, and only when you click them.
-AI requests are separate, opt-in, and use only the provider configured by you.
+The local Word Insight sections are fully offline after installation. CVDICT is
+downloaded only after its explicit Settings action, then kept as a parsed
+IndexedDB cache in that browser profile. The only outbound dictionary requests
+are the two external dictionary links, and only when you click them. AI requests
+are separate, opt-in, and use only the provider configured by you.
 
 ## Spaced repetition (Review tab)
 
@@ -295,9 +309,9 @@ synchronizes an encrypted replica through a folder you choose.
   replaces this profile's app and AI settings (including the API key) with the
   vault's.
 - **Scope** — words, quotes, occurrences, notes, generated annotations, SRS
-  state, app settings, and AI settings synchronize. The imported Kaikki
-  dictionary and its IndexedDB index stay local to each profile, as does the
-  remembered key.
+  state, app settings, and AI settings synchronize. The imported Kaikki and
+  CVDICT dictionary indexes stay local to each profile, as does the remembered
+  key.
 - **Status badge** — the dashboard shows Off / Synced / Syncing / Pending /
   Needs attention.
 
@@ -305,7 +319,7 @@ Configure it under **Settings → Folder Sync**: create a new vault or join an
 existing one, sync now, reauthorize the folder, forget the remembered key, or
 disconnect. Manual JSON backup/restore remains an independent recovery path.
 
-## Settings, AI, And Optional Kaikki Dictionary
+## Settings, AI, And Optional Dictionaries
 
 Open **Settings** from the dashboard toolbar to choose the UI locale:
 
@@ -314,9 +328,17 @@ Open **Settings** from the dashboard toolbar to choose the UI locale:
   English. Saved words, quotes, notes, backups, and Markdown exports are never
   translated.
 
-CC-CEDICT remains the default bundled offline dictionary. For words that
-CC-CEDICT misses, the settings page can optionally extend lookup with a Kaikki
-JSONL dictionary source:
+CC-CEDICT remains the default bundled offline dictionary. The settings page can
+also install CVDICT for a separate Vietnamese definition index:
+
+- **Install and enable CVDICT** explicitly grants the raw GitHub optional host
+  permission, streams the fixed upstream source in a worker, and stores the
+  parsed index in local IndexedDB.
+- **Update CVDICT** repeats that explicit install flow; **Remove CVDICT data**
+  clears only this profile's cached index. CVDICT is never synced or exported.
+
+For words that CC-CEDICT misses, the settings page can optionally extend the
+English lookup index with a Kaikki JSONL dictionary source:
 
 - **Import JSONL file** streams a local Kaikki JSONL file through a worker,
   shows progress, and stores processed entries in IndexedDB.
@@ -383,7 +405,8 @@ entrypoints/
   settings/
     index.html
     main.tsx
-    SettingsApp.tsx      # locale + SRS + AI + optional Kaikki settings
+    SettingsApp.tsx      # locale + SRS + AI + optional CVDICT/Kaikki settings
+    cvdict-install.worker.ts # explicit CVDICT download, parse, and local cache
     FolderSync.tsx       # Folder Sync settings section (create/join/sync/forget)
   dashboard/
     index.html
@@ -422,6 +445,8 @@ lib/
     local.ts             #   local:syncConfig storage item
   markdown.ts            # daily note rendering
   i18n.ts                # EN/zh-CN UI messages
+  cvdict.ts              # fixed CVDICT source and validation helpers
+  cvdict-cache.ts        # IndexedDB cache for local CVDICT index
   kaikki.ts              # Kaikki JSONL parser and URL validation
   kaikki-cache.ts        # IndexedDB cache for runtime Kaikki indexes
   normalize.ts           # word normalization
@@ -522,13 +547,16 @@ The current test suite covers:
   Tab / browser-dashboard pages;
 - local pinyin generation;
 - daily Markdown frontmatter, sections, words, quotes, quote tags, pinyin,
-  source links, and AI insight sections;
+  source links, and separate English/Vietnamese AI insight sections;
 - daily export grouping, archived-entry skipping, and zip byte generation.
 - versioned backup JSON generation, legacy raw inbox restore, and invalid import
   rejection.
 - full backup (v3) generation and restore of app settings and AI settings.
-- AI settings presets, permission origin requests, prompt building, response
-  parsing, client error handling, component rendering, and backup round-trip.
+- AI settings presets, permission origin requests, English/Vietnamese prompt
+  building, response parsing, client error handling, component rendering, and
+  backup round-trip.
+- CVDICT stream parsing, optional-host worker installation, separate local
+  IndexedDB cache, and Vietnamese dictionary lookup.
 - FSRS migration, rating schedules, learning-step persistence, daily new-card
   caps, due-time wakeups, settings normalization, and one-card review UI.
 - review-stats computation (streak with grace day, 12-week heatmap, 7-day due

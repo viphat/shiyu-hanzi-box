@@ -4,11 +4,21 @@ import type { AiRequestState } from '../hooks/useAiInsight';
 export function AskAiButton({
   state,
   error,
+  label,
+  checkingLabel,
+  loadingLabel,
+  retryLabel,
+  disabledDescription,
   onAsk,
   onRetry,
 }: {
   state: AiRequestState;
   error: string;
+  label: string;
+  checkingLabel: string;
+  loadingLabel: string;
+  retryLabel: string;
+  disabledDescription: string;
   onAsk: () => void;
   onRetry: () => void;
 }) {
@@ -24,10 +34,10 @@ export function AskAiButton({
           ) : (
             <Sparkles className="h-3 w-3" />
           )}
-          {state === 'checking' ? '检查 AI 设置...' : 'Ask AI'}
+          {state === 'checking' ? checkingLabel : label}
         </button>
         <p className="text-[11px] text-muted">
-          {error || 'Configure AI to use this.'}
+          {error || disabledDescription}
         </p>
       </div>
     );
@@ -51,7 +61,7 @@ export function AskAiButton({
         ) : (
           <Sparkles className="h-3 w-3" />
         )}
-        {state === 'loading' ? '正在生成...' : state === 'error' ? '重试' : 'Ask AI'}
+        {state === 'loading' ? loadingLabel : state === 'error' ? retryLabel : label}
       </button>
       {state === 'error' && <p className="text-[11px] text-accent-deep">{error}</p>}
     </div>

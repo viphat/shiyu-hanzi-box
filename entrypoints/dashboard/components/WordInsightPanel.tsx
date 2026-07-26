@@ -26,9 +26,10 @@ export function WordInsightPanel({
   dictionarySettings?: AppSettings;
 }) {
   const { insight, loading } = useWordInsight(word, dictionaryCacheKey, dictionarySettings);
-  const { state: aiState, error: aiError, requestInsight } = useAiInsight(
+  const { english, vietnamese } = useAiInsight(
     word,
     insight?.exactEntries ?? [],
+    insight?.vietnamese.exactEntries ?? [],
   );
 
   if (loading) {
@@ -85,17 +86,49 @@ export function WordInsightPanel({
         {t(locale, 'dictionary.ccCedict')}
       </a>
       <div className="border-t border-border pt-3">
-        <AskAiButton
-          state={aiState}
-          error={aiError}
-          onAsk={requestInsight}
-          onRetry={requestInsight}
-        />
+        <div className="flex flex-wrap gap-2">
+          <AskAiButton
+            state={english.state}
+            error={english.state === 'disabled' ? t(locale, 'ai.configure') : english.error}
+            label={t(locale, 'ai.askEnglish')}
+            checkingLabel={t(locale, 'ai.checking')}
+            loadingLabel={t(locale, 'ai.generating')}
+            retryLabel={t(locale, 'ai.retry')}
+            disabledDescription={t(locale, 'ai.configure')}
+            onAsk={english.request}
+            onRetry={english.request}
+          />
+          <AskAiButton
+            state={vietnamese.state}
+            error={vietnamese.state === 'disabled' ? t(locale, 'ai.configure') : vietnamese.error}
+            label={t(locale, 'ai.askVietnamese')}
+            checkingLabel={t(locale, 'ai.checking')}
+            loadingLabel={t(locale, 'ai.generating')}
+            retryLabel={t(locale, 'ai.retry')}
+            disabledDescription={t(locale, 'ai.configure')}
+            onAsk={vietnamese.request}
+            onRetry={vietnamese.request}
+          />
+        </div>
         {word.aiInsight && (
           <div className="mt-2">
             <AiInsightSection
+              title={t(locale, 'ai.englishTitle')}
               insight={word.aiInsight}
-              onRegenerate={requestInsight}
+              onRegenerate={english.request}
+              regenerateTitle={t(locale, 'ai.regenerate')}
+              generatedByLabel={t(locale, 'ai.generatedBy')}
+            />
+          </div>
+        )}
+        {word.aiVietnameseInsight && (
+          <div className="mt-2">
+            <AiInsightSection
+              title={t(locale, 'ai.vietnameseTitle')}
+              insight={word.aiVietnameseInsight}
+              onRegenerate={vietnamese.request}
+              regenerateTitle={t(locale, 'ai.regenerate')}
+              generatedByLabel={t(locale, 'ai.generatedBy')}
             />
           </div>
         )}

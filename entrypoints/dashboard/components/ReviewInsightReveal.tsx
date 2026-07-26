@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { t } from '@/lib/i18n';
 import type { AppSettings, UiLocale, WordEntry } from '@/lib/types';
 import { useWordInsight } from '../hooks/useWordInsight';
+import { AiInsightSection } from './AiInsightSection';
 import { DefinitionList } from './DefinitionList';
 import { SpeakButton } from './SpeakButton';
 import { SourceExamples } from './SourceExamples';
@@ -78,15 +79,18 @@ function RevealedReviewInsight({
       )}
       <SourceExamples examples={topExamples} externalLinks={[]} locale={locale} />
       {word.aiInsight && (
-        <div className="space-y-1.5 rounded-sm border border-accent-fade bg-paper-light p-3">
-          <p className="text-[11px] font-medium uppercase tracking-[2px] text-accent-deep">AI 释义</p>
-          <p className="text-sm text-ink">{word.aiInsight.summary}</p>
-          {word.aiInsight.definitions.map((definition) => (
-            <p key={definition} className="text-xs text-ink-secondary">
-              {definition}
-            </p>
-          ))}
-        </div>
+        <AiInsightSection
+          title={t(locale, 'ai.englishTitle')}
+          insight={word.aiInsight}
+          generatedByLabel={t(locale, 'ai.generatedBy')}
+        />
+      )}
+      {word.aiVietnameseInsight && (
+        <AiInsightSection
+          title={t(locale, 'ai.vietnameseTitle')}
+          insight={word.aiVietnameseInsight}
+          generatedByLabel={t(locale, 'ai.generatedBy')}
+        />
       )}
     </div>
   );

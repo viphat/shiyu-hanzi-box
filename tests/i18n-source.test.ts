@@ -31,4 +31,15 @@ describe('i18n source usage', () => {
     // gives no runtime guarantee — assert both directions here.
     expect(zh).toEqual(en);
   });
+
+  it('defines separate localized labels for English and Vietnamese AI insights', () => {
+    expect(messages.en).toHaveProperty('ai.askEnglish');
+    expect(messages.en).toHaveProperty('ai.askVietnamese');
+    expect(messages.en).toHaveProperty('ai.englishTitle');
+    expect(messages.en).toHaveProperty('ai.vietnameseTitle');
+    expect(messages['zh-CN']).toHaveProperty('ai.askEnglish');
+    expect(messages['zh-CN']).toHaveProperty('ai.askVietnamese');
+    expect(messages['zh-CN']).toHaveProperty('ai.englishTitle');
+    expect(messages['zh-CN']).toHaveProperty('ai.vietnameseTitle');
+  });
 });

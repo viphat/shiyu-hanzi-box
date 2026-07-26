@@ -1,5 +1,5 @@
 import { lookupExact } from './dictionary';
-import type { Cloze, DictionaryIndex, QuoteEntry, WordEntry } from './types';
+import type { AiInsight, Cloze, DictionaryIndex, QuoteEntry, WordEntry } from './types';
 
 function esc(value: string): string {
   return value.replace(/\|/g, '\\|');
@@ -34,6 +34,50 @@ function reviewLine(review: WordEntry['review']): string | null {
   return `Review: due ${dueStr}, state ${state}, interval ${review.intervalDays} days`;
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+function isRenderableAiInsight(value: unknown): value is AiInsight {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const insight = value as Record<string, unknown>;
+  return (
+    typeof insight.summary === 'string' &&
+    typeof insight.register === 'string' &&
+    typeof insight.notes === 'string' &&
+    isStringArray(insight.definitions) &&
+    isStringArray(insight.sampleSentences) &&
+    isStringArray(insight.translations) &&
+    isStringArray(insight.collocations) &&
+    insight.sampleSentences.length === insight.translations.length
+  );
+}
+
+function renderAiInsight(
+  lines: string[],
+  word: WordEntry,
+  insight: AiInsight,
+  heading: string,
+): void {
+  lines.push('');
+  lines.push(heading);
+  lines.push(`- ${esc(word.text)}`);
+  if (insight.summary) lines.push(`  - _${esc(insight.summary)}_ (${esc(insight.register)})`);
+  for (const definition of insight.definitions) {
+    lines.push(`  - ${esc(definition)}`);
+  }
+  for (let i = 0; i < insight.sampleSentences.length; i += 1) {
+    lines.push(`  - ${esc(insight.sampleSentences[i])}`);
+    if (insight.translations[i]) {
+      lines.push(`    ${esc(insight.translations[i])}`);
+    }
+  }
+  if (insight.collocations.length > 0) {
+    lines.push(`  - 搭配: ${insight.collocations.map((collocation) => esc(collocation)).join(', ')}`);
+  }
+  if (insight.notes) lines.push(`  - ${esc(insight.notes)}`);
+}
+
 export function renderDay(
   date: string,
   words: WordEntry[],
@@ -58,25 +102,11 @@ export function renderDay(
           lines.push(`  - Dictionary: _${esc(entry.pinyin)}_ ${entry.definitions.map((d) => esc(d)).join('; ')}`);
         }
       }
-      if (word.aiInsight) {
-        const ai = word.aiInsight;
-        lines.push('');
-        lines.push('## AI Insight');
-        lines.push(`- ${esc(word.text)}`);
-        if (ai.summary) lines.push(`  - _${esc(ai.summary)}_ (${esc(ai.register)})`);
-        for (const definition of ai.definitions) {
-          lines.push(`  - ${esc(definition)}`);
-        }
-        for (let i = 0; i < ai.sampleSentences.length; i += 1) {
-          lines.push(`  - ${esc(ai.sampleSentences[i])}`);
-          if (ai.translations[i]) {
-            lines.push(`    ${esc(ai.translations[i])}`);
-          }
-        }
-        if (ai.collocations.length > 0) {
-          lines.push(`  - 搭配: ${ai.collocations.map((collocation) => esc(collocation)).join(', ')}`);
-        }
-        if (ai.notes) lines.push(`  - ${esc(ai.notes)}`);
+      if (isRenderableAiInsight(word.aiInsight)) {
+        renderAiInsight(lines, word, word.aiInsight, '## AI English Insight');
+      }
+      if (isRenderableAiInsight(word.aiVietnameseInsight)) {
+        renderAiInsight(lines, word, word.aiVietnameseInsight, '## AI Vietnamese Insight');
       }
       const rLine = reviewLine(word.review);
       if (rLine) lines.push(`  - ${rLine}`);

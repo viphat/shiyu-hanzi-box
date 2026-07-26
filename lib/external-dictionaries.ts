@@ -5,7 +5,10 @@ import type { ExternalDictionaryLink } from './types';
  * previewed, iframed, or cached — these are plain anchor hrefs the user
  * chooses to open.
  */
-export function buildExternalLinks(word: string): ExternalDictionaryLink[] {
+export function buildExternalLinks(
+  word: string,
+  cvdictEnabled = false,
+): ExternalDictionaryLink[] {
   const q = encodeURIComponent(word);
   return [
     {
@@ -18,5 +21,13 @@ export function buildExternalLinks(word: string): ExternalDictionaryLink[] {
       language: 'Chinese-Chinese',
       url: `https://hanyu.baidu.com/s?wd=${q}`,
     },
+    ...(cvdictEnabled
+      ? [{
+          label: 'Hanzii' as const,
+          labelKey: 'dictionary.hanziiLookup' as const,
+          language: 'Chinese-Vietnamese' as const,
+          url: `https://hanzii.net/search/word/${q}?hl=vi`,
+        }]
+      : []),
   ];
 }

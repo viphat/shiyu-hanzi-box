@@ -25,7 +25,7 @@ export function SourceExamples({
               rel="noreferrer"
               className="rounded-sm border border-border bg-paper-input px-2 py-1 text-xs text-muted transition hover:border-accent-border hover:text-accent-deep"
             >
-              {link.label} ↗
+              {link.labelKey ? t(locale, link.labelKey) : link.label} ↗
             </a>
           ))}
         </div>

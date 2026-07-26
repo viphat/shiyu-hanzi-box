@@ -131,7 +131,7 @@ export function computeWordInsight(
   cvdictEnabled = false,
 ): WordInsight {
   const displayText = word.text;
-  const externalLinks = buildExternalLinks(displayText);
+  const externalLinks = buildExternalLinks(displayText, cvdictEnabled);
   const vietnamese = computeVietnameseInsight(
     word,
     indexes.vietnamese,

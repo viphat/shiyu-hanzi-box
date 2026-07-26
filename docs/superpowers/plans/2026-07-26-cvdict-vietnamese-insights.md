@@ -527,9 +527,46 @@ git add entrypoints/dashboard/components/WordInsightPanel.tsx entrypoints/dashbo
 git commit -m "docs: document CVDICT and Vietnamese AI insights"
 ~~~
 
+### Task 7: CVDICT-gated Hanzii word shortcut
+
+**Files:**
+
+- Modify: `lib/external-dictionaries.ts`, `lib/types.ts`, `lib/word-insight.ts`, `lib/i18n.ts`, `entrypoints/dashboard/components/SourceExamples.tsx`.
+- Test: `tests/external-dictionaries.test.ts`, `tests/word-insight.test.ts`, `tests/source-examples.test.tsx`, `tests/i18n.test.ts`.
+- Document: `README.md`, `AGENTS.md`, `docs/superpowers/specs/2026-07-26-cvdict-vietnamese-insights-design.md`, `docs/dictionaries/CVDICT.md`.
+
+**Interfaces:**
+
+`buildExternalLinks(word, cvdictEnabled)` retains Youdao and 百度汉语 and appends a localized Hanzii link only when `cvdictEnabled` is true. The Hanzii URL is exactly `https://hanzii.net/search/word/${encodeURIComponent(word.text)}?hl=vi`.
+
+- [ ] **Step 1: Add failing URL, visibility, and i18n tests**
+
+Assert that a CVDICT-enabled word insight contains the exact encoded Hanzii URL, a disabled insight omits it, `dictionary.hanziiLookup` has en/zh-CN values, and the outbound anchor renders the localized label.
+
+- [ ] **Step 2: Prove failure**
+
+Run: `npx vitest run tests/external-dictionaries.test.ts tests/word-insight.test.ts tests/source-examples.test.tsx tests/i18n.test.ts`
+
+Expected: Hanzii is absent and the new message key is missing.
+
+- [ ] **Step 3: Implement the click-only shortcut**
+
+Extend the external-link view type with Hanzii/Chinese-Vietnamese and an optional localized-label key. Pass the existing `cvdictEnabled` flag from `computeWordInsight` into `buildExternalLinks`. Render the label through `t`; keep the existing plain `target="_blank"` anchor with no fetch or permission code.
+
+- [ ] **Step 4: Verify and commit**
+
+Run: `npx vitest run tests/external-dictionaries.test.ts tests/word-insight.test.ts tests/source-examples.test.tsx tests/i18n.test.ts tests/i18n-source.test.ts && npm run compile`
+
+Expected: all focused tests and TypeScript pass.
+
+~~~sh
+git add lib/external-dictionaries.ts lib/types.ts lib/word-insight.ts lib/i18n.ts entrypoints/dashboard/components/SourceExamples.tsx tests/external-dictionaries.test.ts tests/word-insight.test.ts tests/source-examples.test.tsx tests/i18n.test.ts README.md AGENTS.md docs/superpowers/specs/2026-07-26-cvdict-vietnamese-insights-design.md docs/superpowers/plans/2026-07-26-cvdict-vietnamese-insights.md docs/dictionaries/CVDICT.md
+git commit -m "feat: add CVDICT-gated Hanzii lookup"
+~~~
+
 ## Plan Self-Review
 
-- **Spec coverage:** Task 1 covers version/settings/i18n; Task 2 parser and schema safety; Task 3 install permission/worker/UI; Task 4 separate lookup/display; Task 5 language-specific AI, concurrency, permission, and sync; Task 6 output parity, docs, and verification.
+- **Spec coverage:** Task 1 covers version/settings/i18n; Task 2 parser and schema safety; Task 3 install permission/worker/UI; Task 4 separate lookup/display; Task 5 language-specific AI, concurrency, permission, and sync; Task 6 output parity, docs, and verification; Task 7 adds the enabled-only click-through Hanzii shortcut.
 - **Placeholder scan:** Each task has exact files, interfaces, test examples, commands, and implementation behavior; no later-fill-in items remain.
 - **Type consistency:** CvdictSettings, DictionaryIndexes, VietnameseDictionaryInsight, VietnameseAiInsight, and WordAiInsightPatch are defined before later consumers use them.
 

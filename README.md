@@ -118,8 +118,9 @@ Expanding a saved word in the dashboard shows:
   the component characters.
 - **Source examples** — the captured surrounding sentences with the word
   highlighted, deduped to the newest three.
-- **External links** — click-only links to Youdao (Chinese-English) and
-  百度汉语 (Chinese-Chinese). Nothing is fetched until you click.
+- **External links** — click-only links to Youdao (Chinese-English), 百度汉语
+  (Chinese-Chinese), and, while CVDICT is enabled, Hanzii (Chinese-Vietnamese).
+  Nothing is fetched until you click.
 
 In the Review tab, one large card is shown at a time. Word cards keep pinyin,
 definitions, notes, examples, pronunciation, and AI insight behind
@@ -202,9 +203,10 @@ flow.
 
 The local Word Insight sections are fully offline after installation. CVDICT is
 downloaded only after its explicit Settings action, then kept as a parsed
-IndexedDB cache in that browser profile. The only outbound dictionary requests
-are the two external dictionary links, and only when you click them. AI requests
-are separate, opt-in, and use only the provider configured by you.
+IndexedDB cache in that browser profile. Outbound dictionary requests occur only
+when you click an external link; enabling CVDICT adds a Hanzii shortcut without
+fetching Hanzii or requesting its host permission. AI requests are separate,
+opt-in, and use only the provider configured by you.
 
 ## Spaced repetition (Review tab)
 

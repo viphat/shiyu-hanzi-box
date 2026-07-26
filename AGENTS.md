@@ -106,7 +106,8 @@ links are computed at view time and never persisted on `WordEntry`.
 - `lib/traditional.ts`: `opencc-js` wrapper for lazy Simplified → Taiwan
   Traditional conversion (`cn -> twp`), cached on `EntryBase.traditionalText`
   after an explicit click.
-- `lib/external-dictionaries.ts`: click-only encoded MDBG and 百度汉语 URLs.
+- `lib/external-dictionaries.ts`: click-only encoded Youdao and 百度汉语 URLs,
+  plus Hanzii only while CVDICT is enabled. These links never fetch until clicked.
 - `lib/kaikki.ts`: Kaikki JSONL parser, streaming parser, URL validation, and
   entry hashing. It intentionally filters records with no Han characters or no
   usable `glosses` / `raw_glosses` — progress UI must call these *filtered*

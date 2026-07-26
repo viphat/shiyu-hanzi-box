@@ -27,4 +27,16 @@ describe('buildExternalLinks', () => {
     const links = buildExternalLinks('龙');
     expect(links.map((l) => l.label)).toEqual(['Youdao', '百度汉语']);
   });
+
+  it('builds the exact encoded Hanzii Vietnamese URL when CVDICT is enabled', () => {
+    const text = '汉字 / 学习';
+    const links = buildExternalLinks(text, true);
+    const hanzii = links.find((link) => link.label === 'Hanzii')!;
+
+    expect(hanzii.url).toBe(
+      `https://hanzii.net/search/word/${encodeURIComponent(text)}?hl=vi`,
+    );
+    expect(hanzii.language).toBe('Chinese-Vietnamese');
+    expect(hanzii.labelKey).toBe('dictionary.hanziiLookup');
+  });
 });

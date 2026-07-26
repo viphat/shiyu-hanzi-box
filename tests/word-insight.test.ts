@@ -322,4 +322,16 @@ describe('computeWordInsight', () => {
       componentEntries: [],
     });
   });
+
+  it('shows Hanzii only when CVDICT is enabled and uses Simplified word.text', () => {
+    const simplified = word({ text: '汉字 / 学习', normalized: 'different-key' });
+
+    const disabled = computeWordInsight(simplified, englishOnly(index), false);
+    const enabled = computeWordInsight(simplified, englishOnly(index), true);
+
+    expect(disabled.externalLinks.some((link) => link.label === 'Hanzii')).toBe(false);
+    expect(enabled.externalLinks.find((link) => link.label === 'Hanzii')?.url).toBe(
+      `https://hanzii.net/search/word/${encodeURIComponent(simplified.text)}?hl=vi`,
+    );
+  });
 });

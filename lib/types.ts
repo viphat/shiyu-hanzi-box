@@ -303,8 +303,9 @@ export interface HighlightedExample {
 
 /** A click-only outbound dictionary link (no content fetched). */
 export interface ExternalDictionaryLink {
-  label: 'Youdao' | '百度汉语';
-  language: 'Chinese-English' | 'Chinese-Chinese';
+  label: 'Youdao' | '百度汉语' | 'Hanzii';
+  labelKey?: 'dictionary.hanziiLookup';
+  language: 'Chinese-English' | 'Chinese-Chinese' | 'Chinese-Vietnamese';
   url: string;
 }
 

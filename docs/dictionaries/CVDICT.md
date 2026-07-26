@@ -41,6 +41,15 @@ data or a derived index.
 CVDICT is not bundled with the extension. The downloaded source text is not
 kept as an exportable file; only the parsed runtime index is cached locally.
 
+## Hanzii Lookup Shortcut
+
+When CVDICT is enabled, expanded Word Insight includes a localized shortcut to
+look up the captured Simplified word on Hanzii.net. The destination is built as
+`https://hanzii.net/search/word/${encodeURIComponent(word.text)}?hl=vi`.
+It is a normal click-only outbound link: the extension does not fetch Hanzii,
+preview its content, or request a Hanzii host permission. Disabling CVDICT hides
+the shortcut.
+
 ## Sync and Backup Boundary
 
 CVDICT settings metadata can appear in a full settings backup, but its IndexedDB

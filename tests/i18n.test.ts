@@ -25,6 +25,8 @@ describe('i18n messages', () => {
     expect(t('zh-CN', 'dictionary.cvdictBadge')).toBe('越');
     expect(t('zh-CN', 'insight.vietnameseDefinitions')).toBe('越南语释义');
     expect(t('zh-CN', 'settings.cvdictNotInstalled')).toBe('尚未安装');
+    expect(t('en', 'dictionary.hanziiLookup')).toBe('Hanzii · Vietnamese');
+    expect(t('zh-CN', 'dictionary.hanziiLookup')).toBe('Hanzii · 越南语');
   });
 
   it('falls back to the key when a message is missing', () => {

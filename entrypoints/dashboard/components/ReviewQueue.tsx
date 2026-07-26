@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import { formatMessage, t } from '@/lib/i18n';
 import { toPinyin } from '@/lib/pinyin';
 import type { SrsQueueItem } from '@/lib/srs';
-import type { Cloze, Entry, QuoteEntry, ReviewRating, UiLocale } from '@/lib/types';
+import type { AppSettings, Cloze, Entry, QuoteEntry, ReviewRating, UiLocale } from '@/lib/types';
 import { ReviewInsightReveal } from './ReviewInsightReveal';
 import { SpeakButton } from './SpeakButton';
 
@@ -76,11 +76,15 @@ export function ReviewQueue({
   onAnswer,
   onPostpone,
   locale,
+  dictionaryCacheKey = 'default',
+  dictionarySettings,
 }: {
   items: SrsQueueItem[];
   onAnswer: AnswerHandler;
   onPostpone: PostponeHandler;
   locale: UiLocale;
+  dictionaryCacheKey?: string;
+  dictionarySettings?: AppSettings;
 }) {
   if (items.length === 0) {
     return (
@@ -104,6 +108,8 @@ export function ReviewQueue({
       onAnswer={onAnswer}
       onPostpone={onPostpone}
       locale={locale}
+      dictionaryCacheKey={dictionaryCacheKey}
+      dictionarySettings={dictionarySettings}
     />
   );
 }
@@ -113,11 +119,15 @@ function ActiveReviewCard({
   onAnswer,
   onPostpone,
   locale,
+  dictionaryCacheKey,
+  dictionarySettings,
 }: {
   items: SrsQueueItem[];
   onAnswer: AnswerHandler;
   onPostpone: PostponeHandler;
   locale: UiLocale;
+  dictionaryCacheKey: string;
+  dictionarySettings?: AppSettings;
 }) {
   const [busy, setBusy] = useState(false);
   const [exiting, setExiting] = useState(false);
@@ -168,6 +178,8 @@ function ActiveReviewCard({
           )
         }
         locale={locale}
+        dictionaryCacheKey={dictionaryCacheKey}
+        dictionarySettings={dictionarySettings}
         busy={busy}
         focusOnMount={focusOnMount}
         transitionClassName={
@@ -184,6 +196,8 @@ export function ReviewCard({
   onAnswer,
   onPostpone,
   locale,
+  dictionaryCacheKey = 'default',
+  dictionarySettings,
   initiallyRevealed = false,
   busy = false,
   focusOnMount = false,
@@ -194,6 +208,8 @@ export function ReviewCard({
   onAnswer: (rating: ReviewRating) => void | Promise<void>;
   onPostpone: () => void | Promise<void>;
   locale: UiLocale;
+  dictionaryCacheKey?: string;
+  dictionarySettings?: AppSettings;
   initiallyRevealed?: boolean;
   busy?: boolean;
   focusOnMount?: boolean;
@@ -324,6 +340,8 @@ export function ReviewCard({
             word={entry}
             locale={locale}
             initiallyRevealed
+            dictionaryCacheKey={dictionaryCacheKey}
+            dictionarySettings={dictionarySettings}
           />
         </div>
       )}

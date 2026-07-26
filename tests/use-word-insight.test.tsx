@@ -13,6 +13,7 @@ const loaderMocks = vi.hoisted(() => ({
 vi.mock('@/lib/dictionary-loader', () => loaderMocks);
 
 import { useWordInsight } from '../entrypoints/dashboard/hooks/useWordInsight';
+import { ReviewInsightReveal } from '../entrypoints/dashboard/components/ReviewInsightReveal';
 
 const word: WordEntry = {
   id: 'word-1',
@@ -73,11 +74,36 @@ async function render(cacheKey: string, settings: AppSettings) {
   await act(async () => {});
 }
 
+async function renderReview(cacheKey: string, settings: AppSettings) {
+  await act(async () => {
+    root.render(
+      <ReviewInsightReveal
+        word={word}
+        locale="en"
+        initiallyRevealed
+        dictionaryCacheKey={cacheKey}
+        dictionarySettings={settings}
+      />,
+    );
+  });
+  await act(async () => {});
+}
+
 describe('useWordInsight dictionary session cache', () => {
   it('keeps each cache key associated with its settings snapshot', async () => {
     await render('kaikki-a:cvdict-a', settingsA);
     await render('kaikki-b:cvdict-b', settingsB);
     await render('kaikki-a:cvdict-a', settingsA);
+
+    expect(loaderMocks.loadDictionary).toHaveBeenNthCalledWith(1, settingsA);
+    expect(loaderMocks.loadDictionary).toHaveBeenNthCalledWith(2, settingsB);
+    expect(loaderMocks.loadDictionary).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps review insight cache keys associated with their settings snapshots', async () => {
+    await renderReview('review-a', settingsA);
+    await renderReview('review-b', settingsB);
+    await renderReview('review-a', settingsA);
 
     expect(loaderMocks.loadDictionary).toHaveBeenNthCalledWith(1, settingsA);
     expect(loaderMocks.loadDictionary).toHaveBeenNthCalledWith(2, settingsB);

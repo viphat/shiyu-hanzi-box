@@ -25,7 +25,6 @@ import type {
   Status,
   UiLocale,
   WordEntry,
-  AppSettings,
 } from '@/lib/types';
 import { getAiSettings, aiSettingsStorage, DEFAULT_AI_SETTINGS } from '@/lib/ai/settings';
 import { QuoteList } from './components/QuoteList';
@@ -445,6 +444,8 @@ export function App() {
               onAnswer={answerEntry}
               onPostpone={postponeEntry}
               locale={locale}
+              dictionaryCacheKey={dictionaryCacheKey}
+              dictionarySettings={settings}
             />
           ) : tab === 'words' ? (
             <WordList

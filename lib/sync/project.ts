@@ -23,6 +23,7 @@ import { DEFAULT_SETTINGS } from '../settings';
 import { DEFAULT_AI_SETTINGS } from '../ai/settings';
 import { normalizeTags } from '../tags';
 import { sanitizeQuoteTranslations } from '../translate/validate';
+import { isAiInsight, isVietnameseAiInsight } from '../ai/parse';
 
 // ---------------------------------------------------------------------------
 // Public key helpers
@@ -114,6 +115,16 @@ function reg<T>(value: T, s: HybridTimestamp): Register<T> {
   return { value, stamp: s };
 }
 
+function insightStamp(value: unknown, fallback: number, replicaId: string): HybridTimestamp {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    const generatedAt = (value as Record<string, unknown>).generatedAt;
+    if (typeof generatedAt === 'number' && Number.isFinite(generatedAt)) {
+      return stamp(generatedAt, replicaId);
+    }
+  }
+  return stamp(fallback, replicaId);
+}
+
 function projectScheduler(
   entityKey: string,
   review: ReviewState | undefined,
@@ -163,7 +174,22 @@ function projectWord(word: WordEntry, ctx: BootstrapContext): WordNode {
       status: reg(word.status, s),
       pinyin: reg(word.pinyin ?? null, s),
       traditionalText: reg(word.traditionalText ?? null, s),
-      aiInsight: reg(word.aiInsight ?? null, s),
+      ...(word.aiInsight !== undefined
+        ? {
+            aiInsight: reg(
+              word.aiInsight,
+              insightStamp(word.aiInsight, word.updatedAt, ctx.replicaId),
+            ),
+          }
+        : {}),
+      ...(word.aiVietnameseInsight !== undefined
+        ? {
+            aiVietnameseInsight: reg(
+              word.aiVietnameseInsight,
+              insightStamp(word.aiVietnameseInsight, word.updatedAt, ctx.replicaId),
+            ),
+          }
+        : {}),
       updatedAt: reg(word.updatedAt, s),
     },
     occurrences,
@@ -393,7 +419,12 @@ export function materialize(state: SyncState): {
       updatedAt: node.fields.updatedAt?.value as number,
       pinyin: (node.fields.pinyin?.value as string | null) ?? undefined,
       traditionalText: (node.fields.traditionalText?.value as string | null) ?? undefined,
-      aiInsight: (node.fields.aiInsight?.value as WordEntry['aiInsight']) ?? undefined,
+      ...(isAiInsight(node.fields.aiInsight?.value)
+        ? { aiInsight: node.fields.aiInsight.value }
+        : {}),
+      ...(isVietnameseAiInsight(node.fields.aiVietnameseInsight?.value)
+        ? { aiVietnameseInsight: node.fields.aiVietnameseInsight.value }
+        : {}),
       occurrences,
       ...(review ? { review } : {}),
     });

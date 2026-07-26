@@ -3,7 +3,12 @@ import { getInbox, setInbox } from '../storage';
 import { getSettings } from '../settings';
 import { aiSettingsStorage } from '../ai/settings';
 import { ensureReplicaId, mutateSyncConfig } from './local';
-import type { AiQuoteTranslation, Inbox, QuoteTranslation } from '../types';
+import type {
+  AiQuoteTranslation,
+  Inbox,
+  QuoteTranslation,
+  WordAiInsightPatch,
+} from '../types';
 import { projectInbox, wordKey } from './project';
 import { deleteEntity } from './merge';
 import { mergeStampMap } from './registers';
@@ -61,7 +66,7 @@ export async function applyLocalMutation(
       status: cfg.vaultId ? 'pending' : cfg.status,
     }));
   });
-  chain = run;
+  chain = run.catch(() => undefined);
   return run;
 }
 
@@ -151,6 +156,25 @@ export async function applyQuoteTranslation(patch: QuoteTranslationPatch): Promi
         : quote,
     ),
   }));
+}
+
+/** Atomically write exactly one language-specific AI insight field. */
+export async function applyWordAiInsight(patch: WordAiInsightPatch): Promise<void> {
+  await mutateInboxSynced((inbox) => {
+    if (!inbox.words.some((word) => word.id === patch.wordId)) {
+      throw new Error(`Unknown word: ${patch.wordId}`);
+    }
+
+    return {
+      ...inbox,
+      words: inbox.words.map((word) => {
+        if (word.id !== patch.wordId) return word;
+        return patch.language === 'en'
+          ? { ...word, aiInsight: patch.insight, updatedAt: Date.now() }
+          : { ...word, aiVietnameseInsight: patch.insight, updatedAt: Date.now() };
+      }),
+    };
+  });
 }
 
 export async function applyDeletion(keys: string[]): Promise<void> {

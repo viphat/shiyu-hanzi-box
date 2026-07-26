@@ -9,7 +9,13 @@ import {
 import { DEFAULT_SETTINGS } from '../../lib/settings';
 import { DEFAULT_AI_SETTINGS } from '../../lib/ai/settings';
 import { mergeSyncState } from '../../lib/sync/merge';
-import type { Inbox, WordEntry, QuoteEntry } from '../../lib/types';
+import type {
+  AiInsight,
+  Inbox,
+  QuoteEntry,
+  VietnameseAiInsight,
+  WordEntry,
+} from '../../lib/types';
 import type { SyncState } from '../../lib/sync/types';
 
 const ctx = { replicaId: 'A', wallTime: 1000 };
@@ -58,6 +64,76 @@ describe('project then materialize round-trip', () => {
     const ai = { ...DEFAULT_AI_SETTINGS, apiKey: 'secret', enabled: true };
     const state = projectInbox(inbox, DEFAULT_SETTINGS, ai, ctx);
     expect(materialize(state).ai.apiKey).toBe('secret');
+  });
+
+  it('round-trips independent English and Vietnamese word insights', () => {
+    const english: AiInsight = {
+      provider: 'deepseek', model: 'en-model', baseUrl: 'https://example.com', generatedAt: 100,
+      summary: 'hello', register: 'neutral', definitions: ['hello'], sampleSentences: ['你好。'],
+      translations: ['Hello.'], collocations: ['你好吗'], notes: 'English note.',
+    };
+    const vietnamese: VietnameseAiInsight = {
+      ...english, model: 'vi-model', generatedAt: 200, summary: 'xin chào',
+      translations: ['Xin chào.'], notes: 'Ghi chú.', outputLanguage: 'vi',
+    };
+
+    const state = projectInbox(
+      { words: [wordFixture({ aiInsight: english, aiVietnameseInsight: vietnamese })], quotes: [] },
+      DEFAULT_SETTINGS,
+      DEFAULT_AI_SETTINGS,
+      ctx,
+    );
+
+    expect(materialize(state).inbox.words[0]).toMatchObject({
+      aiInsight: english,
+      aiVietnameseInsight: vietnamese,
+    });
+  });
+
+  it('drops one malformed insight register without dropping its valid sibling', () => {
+    const english: AiInsight = {
+      provider: 'deepseek', model: 'en-model', baseUrl: 'https://example.com', generatedAt: 100,
+      summary: 'hello', register: 'neutral', definitions: ['hello'], sampleSentences: ['你好。'],
+      translations: ['Hello.'], collocations: ['你好吗'], notes: 'English note.',
+    };
+    const vietnamese: VietnameseAiInsight = {
+      ...english, generatedAt: 200, summary: 'xin chào', translations: ['Xin chào.'],
+      outputLanguage: 'vi',
+    };
+    const state = projectInbox(
+      { words: [wordFixture({ aiInsight: english, aiVietnameseInsight: vietnamese })], quotes: [] },
+      DEFAULT_SETTINGS,
+      DEFAULT_AI_SETTINGS,
+      ctx,
+    );
+    state.words[wordKey('你好')].fields.aiInsight!.value = { summary: 42 };
+
+    const out = materialize(state).inbox.words[0];
+    expect(out.aiInsight).toBeUndefined();
+    expect(out.aiVietnameseInsight).toEqual(vietnamese);
+  });
+
+  it('projects a null legacy English insight without crashing or dropping valid Vietnamese', () => {
+    const vietnamese: VietnameseAiInsight = {
+      provider: 'deepseek', model: 'vi-model', baseUrl: 'https://example.com', generatedAt: 200,
+      summary: 'xin chào', register: 'neutral', definitions: ['lời chào'],
+      sampleSentences: ['你好。'], translations: ['Xin chào.'], collocations: ['你好吗'],
+      notes: 'Ghi chú.', outputLanguage: 'vi',
+    };
+    const unsafeWord = wordFixture({
+      aiInsight: null as never,
+      aiVietnameseInsight: vietnamese,
+    });
+
+    const state = projectInbox(
+      { words: [unsafeWord], quotes: [] },
+      DEFAULT_SETTINGS,
+      DEFAULT_AI_SETTINGS,
+      ctx,
+    );
+
+    expect(materialize(state).inbox.words[0].aiInsight).toBeUndefined();
+    expect(materialize(state).inbox.words[0].aiVietnameseInsight).toEqual(vietnamese);
   });
 });
 

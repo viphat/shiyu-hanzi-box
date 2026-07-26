@@ -4,13 +4,14 @@ import {
   applyTagRemoval,
   applyOccurrenceRemoval,
   applyQuoteTranslation,
+  applyWordAiInsight,
   type QuoteTranslationPatch,
 } from '../../lib/sync/mutations';
 import { setInbox } from '../../lib/storage';
 import { replaceSettings } from '../../lib/settings';
 import { aiSettingsStorage } from '../../lib/ai/settings';
 import { getSyncConfig } from '../../lib/sync/local';
-import type { AiSettings, AppSettings, Inbox } from '../../lib/types';
+import type { AiSettings, AppSettings, Inbox, WordAiInsightPatch } from '../../lib/types';
 
 export const SYNC_DEBOUNCE_ALARM = 'shiyu:sync-debounce';
 
@@ -25,7 +26,7 @@ export const SYNC_MUTATION_MESSAGE = 'shiyu:sync-mutation';
 
 export interface SyncMutationRequestMessage {
   type: typeof SYNC_MUTATION_MESSAGE;
-  kind: 'inbox' | 'settings' | 'ai' | 'delete' | 'removeTags' | 'removeOccurrence' | 'quoteTranslation';
+  kind: 'inbox' | 'settings' | 'ai' | 'delete' | 'removeTags' | 'removeOccurrence' | 'quoteTranslation' | 'wordAiInsight';
   payload: unknown;
 }
 
@@ -40,6 +41,8 @@ async function writeKind(kind: SyncMutationRequestMessage['kind'], payload: unkn
     await applyOccurrenceRemoval(removals);
   } else if (kind === 'quoteTranslation') {
     await applyQuoteTranslation(payload as QuoteTranslationPatch);
+  } else if (kind === 'wordAiInsight') {
+    await applyWordAiInsight(payload as WordAiInsightPatch);
   } else {
     await applyLocalMutation(kind, async () => {
       if (kind === 'inbox') await setInbox(payload as Inbox);

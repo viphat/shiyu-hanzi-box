@@ -77,6 +77,8 @@ export interface WordEntry extends EntryBase {
   occurrences: Occurrence[];
   /** Opt-in AI-generated insight, persisted after explicit user request. */
   aiInsight?: AiInsight;
+  /** Opt-in Vietnamese AI insight, independent from the English output. */
+  aiVietnameseInsight?: VietnameseAiInsight;
 }
 
 export interface QuoteEntry extends EntryBase {
@@ -175,6 +177,18 @@ export interface AiInsight {
   collocations: string[];
   notes: string;
 }
+
+export type AiInsightLanguage = 'en' | 'vi';
+
+/** Vietnamese AI output uses the same seven content fields as English. */
+export interface VietnameseAiInsight extends AiInsight {
+  outputLanguage: 'vi';
+}
+
+/** Targeted background patch for one word AI output slot. */
+export type WordAiInsightPatch =
+  | { wordId: string; language: 'en'; insight: AiInsight }
+  | { wordId: string; language: 'vi'; insight: VietnameseAiInsight };
 
 /** One English translation of a whole quote, generated on explicit request. */
 export interface QuoteTranslation {

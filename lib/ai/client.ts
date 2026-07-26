@@ -1,4 +1,9 @@
-import type { AiInsight, AiProvider } from '../types';
+import type {
+  AiInsight,
+  AiInsightLanguage,
+  AiProvider,
+  VietnameseAiInsight,
+} from '../types';
 import { parseAiResponse } from './parse';
 import type { AiMessage } from './prompt';
 import { buildClozeMessages } from './cloze-prompt';
@@ -13,6 +18,7 @@ export interface FetchAiParams {
   model: string;
   messages: AiMessage[];
   provider: AiProvider;
+  language?: AiInsightLanguage;
 }
 
 export interface TestAiConnectionParams {
@@ -23,7 +29,7 @@ export interface TestAiConnectionParams {
 }
 
 export type AiClientResult =
-  | { ok: true; value: AiInsight }
+  | { ok: true; value: AiInsight | VietnameseAiInsight }
   | { ok: false; reason: string };
 
 function classifyHttpStatus(status: number): string | null {
@@ -110,7 +116,13 @@ export async function fetchAiInsight(params: FetchAiParams): Promise<AiClientRes
       return result;
     }
 
-    const parsed = parseAiResponse(result.content, params.provider, result.modelId, params.baseUrl);
+    const parsed = parseAiResponse(
+      result.content,
+      params.provider,
+      result.modelId,
+      params.baseUrl,
+      params.language ?? 'en',
+    );
     if (!parsed.ok) {
       return { ok: false, reason: `Unexpected response; ${parsed.reason}` };
     }

@@ -173,7 +173,7 @@ How it works:
    Moonshot (Kimi), or Zhipu (GLM). Claude is reachable through OpenRouter.
 3. Paste your API key and select a model.
 4. Click **测试连接** to verify the provider settings.
-5. Expand any word card and click **Ask AI**.
+5. Expand any word card and click **AI · EN** or **AI · VI**.
 
 Privacy:
 

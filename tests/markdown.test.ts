@@ -234,6 +234,35 @@ describe('renderDay with AI insight', () => {
     expect(md).toContain(vietnameseInsight.summary);
   });
 
+  it('groups mixed multi-word AI outputs under one heading per language', () => {
+    const secondWord: WordEntry = {
+      ...word,
+      id: 'w2',
+      text: '再见',
+      normalized: '再见',
+      aiInsight: { ...aiInsight, summary: 'farewell greeting' },
+    };
+    const thirdWord: WordEntry = {
+      ...word,
+      id: 'w3',
+      text: '谢谢',
+      normalized: '谢谢',
+      aiVietnameseInsight: { ...vietnameseInsight, summary: 'lời cảm ơn' },
+    };
+
+    const md = renderDay(day, [
+      { ...word, aiInsight, aiVietnameseInsight: vietnameseInsight },
+      secondWord,
+      thirdWord,
+    ], []);
+
+    expect(md.match(/^## AI English Insight$/gm)).toHaveLength(1);
+    expect(md.match(/^## AI Vietnamese Insight$/gm)).toHaveLength(1);
+    expect(md).toContain('farewell greeting');
+    expect(md).toContain('lời cảm ơn');
+    expect(md.indexOf('**谢谢**')).toBeLessThan(md.indexOf('## AI English Insight'));
+  });
+
   it('skips malformed restored AI insight data instead of rendering it', () => {
     const malformed = {
       ...word,

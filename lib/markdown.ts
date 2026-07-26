@@ -53,29 +53,31 @@ function isRenderableAiInsight(value: unknown): value is AiInsight {
   );
 }
 
-function renderAiInsight(
+function renderAiInsights(
   lines: string[],
-  word: WordEntry,
-  insight: AiInsight,
+  entries: Array<{ word: WordEntry; insight: AiInsight }>,
   heading: string,
 ): void {
+  if (entries.length === 0) return;
   lines.push('');
   lines.push(heading);
-  lines.push(`- ${esc(word.text)}`);
-  if (insight.summary) lines.push(`  - _${esc(insight.summary)}_ (${esc(insight.register)})`);
-  for (const definition of insight.definitions) {
-    lines.push(`  - ${esc(definition)}`);
-  }
-  for (let i = 0; i < insight.sampleSentences.length; i += 1) {
-    lines.push(`  - ${esc(insight.sampleSentences[i])}`);
-    if (insight.translations[i]) {
-      lines.push(`    ${esc(insight.translations[i])}`);
+  for (const { word, insight } of entries) {
+    lines.push(`- ${esc(word.text)}`);
+    if (insight.summary) lines.push(`  - _${esc(insight.summary)}_ (${esc(insight.register)})`);
+    for (const definition of insight.definitions) {
+      lines.push(`  - ${esc(definition)}`);
     }
+    for (let i = 0; i < insight.sampleSentences.length; i += 1) {
+      lines.push(`  - ${esc(insight.sampleSentences[i])}`);
+      if (insight.translations[i]) {
+        lines.push(`    ${esc(insight.translations[i])}`);
+      }
+    }
+    if (insight.collocations.length > 0) {
+      lines.push(`  - 搭配: ${insight.collocations.map((collocation) => esc(collocation)).join(', ')}`);
+    }
+    if (insight.notes) lines.push(`  - ${esc(insight.notes)}`);
   }
-  if (insight.collocations.length > 0) {
-    lines.push(`  - 搭配: ${insight.collocations.map((collocation) => esc(collocation)).join(', ')}`);
-  }
-  if (insight.notes) lines.push(`  - ${esc(insight.notes)}`);
 }
 
 export function renderDay(
@@ -89,6 +91,8 @@ export function renderDay(
 
   if (words.length > 0) {
     lines.push('## Words', '');
+    const englishInsights: Array<{ word: WordEntry; insight: AiInsight }> = [];
+    const vietnameseInsights: Array<{ word: WordEntry; insight: AiInsight }> = [];
     for (const word of words) {
       const pinyin = word.pinyin ? ` _${word.pinyin}_` : '';
       lines.push(`- [ ] **${esc(word.text)}**${pinyin}`);
@@ -103,15 +107,17 @@ export function renderDay(
         }
       }
       if (isRenderableAiInsight(word.aiInsight)) {
-        renderAiInsight(lines, word, word.aiInsight, '## AI English Insight');
+        englishInsights.push({ word, insight: word.aiInsight });
       }
       if (isRenderableAiInsight(word.aiVietnameseInsight)) {
-        renderAiInsight(lines, word, word.aiVietnameseInsight, '## AI Vietnamese Insight');
+        vietnameseInsights.push({ word, insight: word.aiVietnameseInsight });
       }
       const rLine = reviewLine(word.review);
       if (rLine) lines.push(`  - ${rLine}`);
       lines.push('');
     }
+    renderAiInsights(lines, englishInsights, '## AI English Insight');
+    renderAiInsights(lines, vietnameseInsights, '## AI Vietnamese Insight');
   }
 
   if (quotes.length > 0) {

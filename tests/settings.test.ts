@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import {
+  DEFAULT_CVDICT_SETTINGS,
   DEFAULT_KAIKKI_SOURCE_URL,
   DEFAULT_SRS_SETTINGS,
   DEFAULT_SETTINGS,
@@ -8,9 +9,12 @@ import {
   getSettings,
   mutateSettings,
   normalizeSettings,
+  recordCvdictInstall,
   recordKaikkiImport,
+  resetCvdict,
   resetKaikki,
   settingsStorage,
+  setCvdictEnabled,
   setSrsSettings,
   setUiLocale,
   watchSettings,
@@ -87,6 +91,49 @@ describe('settings helpers', () => {
     expect(reset.kaikki.entryCount).toBe(0);
     expect(reset.kaikki.enabled).toBe(false);
   });
+
+  it('adds disabled CVDICT defaults when old settings are read', () => {
+    const old = {
+      uiLocale: 'en' as const,
+      kaikki: DEFAULT_SETTINGS.kaikki,
+      srs: DEFAULT_SETTINGS.srs,
+    };
+
+    expect(normalizeSettings(old).cvdict).toEqual(DEFAULT_CVDICT_SETTINGS);
+  });
+
+  it('keeps installed CVDICT metadata when merely disabled', () => {
+    const installed = recordCvdictInstall(DEFAULT_SETTINGS, {
+      hash: 'cv1',
+      entryCount: 2,
+      version: '1.0.1',
+      release: '2024-12-02T17:46:19Z',
+      installedAt: 100,
+    });
+
+    expect(setCvdictEnabled(installed, false).cvdict).toMatchObject({
+      enabled: false,
+      hash: 'cv1',
+      entryCount: 2,
+    });
+  });
+
+  it('resets CVDICT while preserving locale, Kaikki, and SRS settings', () => {
+    const installed = recordCvdictInstall(setUiLocale(DEFAULT_SETTINGS, 'en'), {
+      hash: 'cv1',
+      entryCount: 2,
+      version: '1.0.1',
+      release: '2024-12-02T17:46:19Z',
+      installedAt: 100,
+    });
+
+    const reset = resetCvdict(installed);
+
+    expect(reset.cvdict).toEqual(DEFAULT_CVDICT_SETTINGS);
+    expect(reset.uiLocale).toBe('en');
+    expect(reset.kaikki).toEqual(DEFAULT_SETTINGS.kaikki);
+    expect(reset.srs).toEqual(DEFAULT_SETTINGS.srs);
+  });
 });
 
 describe('SRS settings', () => {
@@ -119,6 +166,7 @@ describe('SRS settings', () => {
     const customized: AppSettings = {
       uiLocale: 'zh-CN',
       kaikki: DEFAULT_SETTINGS.kaikki,
+      cvdict: DEFAULT_SETTINGS.cvdict,
       srs: {
         desiredRetention: 0.85,
         maximumIntervalDays: 1000,

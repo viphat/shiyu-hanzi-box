@@ -1,6 +1,7 @@
 import { storage } from 'wxt/utils/storage';
 import type {
   AppSettings,
+  CvdictSettings,
   KaikkiSettings,
   SrsSettings,
   UiLocale,
@@ -18,6 +19,15 @@ export const DEFAULT_KAIKKI_SETTINGS: KaikkiSettings = {
   importedAt: null,
 };
 
+export const DEFAULT_CVDICT_SETTINGS: CvdictSettings = {
+  enabled: false,
+  hash: null,
+  entryCount: 0,
+  version: null,
+  release: null,
+  installedAt: null,
+};
+
 export const DEFAULT_SRS_SETTINGS: SrsSettings = {
   desiredRetention: 0.9,
   maximumIntervalDays: 3650,
@@ -28,6 +38,7 @@ export const DEFAULT_SRS_SETTINGS: SrsSettings = {
 export const DEFAULT_SETTINGS: AppSettings = {
   uiLocale: 'zh-CN',
   kaikki: DEFAULT_KAIKKI_SETTINGS,
+  cvdict: DEFAULT_CVDICT_SETTINGS,
   srs: DEFAULT_SRS_SETTINGS,
 };
 
@@ -87,8 +98,36 @@ export function resetKaikki(settings: AppSettings): AppSettings {
   };
 }
 
-type StoredAppSettings = Partial<Omit<AppSettings, 'kaikki' | 'srs'>> & {
+export function setCvdictEnabled(
+  settings: AppSettings,
+  enabled: boolean,
+): AppSettings {
+  return { ...settings, cvdict: { ...settings.cvdict, enabled } };
+}
+
+export function recordCvdictInstall(
+  settings: AppSettings,
+  metadata: Omit<CvdictSettings, 'enabled'>,
+): AppSettings {
+  return {
+    ...settings,
+    cvdict: {
+      enabled: true,
+      ...metadata,
+    },
+  };
+}
+
+export function resetCvdict(settings: AppSettings): AppSettings {
+  return {
+    ...settings,
+    cvdict: DEFAULT_CVDICT_SETTINGS,
+  };
+}
+
+type StoredAppSettings = Partial<Omit<AppSettings, 'kaikki' | 'cvdict' | 'srs'>> & {
   kaikki?: Partial<KaikkiSettings>;
+  cvdict?: Partial<CvdictSettings>;
   srs?: Partial<SrsSettings>;
 };
 
@@ -98,6 +137,7 @@ export function normalizeSettings(
   return {
     uiLocale: value?.uiLocale ?? DEFAULT_SETTINGS.uiLocale,
     kaikki: { ...DEFAULT_KAIKKI_SETTINGS, ...value?.kaikki },
+    cvdict: { ...DEFAULT_CVDICT_SETTINGS, ...value?.cvdict },
     srs: { ...DEFAULT_SRS_SETTINGS, ...value?.srs },
   };
 }

@@ -116,6 +116,15 @@ export interface KaikkiSettings {
   importedAt: number | null;
 }
 
+export interface CvdictSettings {
+  enabled: boolean;
+  hash: string | null;
+  entryCount: number;
+  version: string | null;
+  release: string | null;
+  installedAt: number | null;
+}
+
 export interface SrsSettings {
   desiredRetention: number;
   maximumIntervalDays: number;
@@ -126,6 +135,7 @@ export interface SrsSettings {
 export interface AppSettings {
   uiLocale: UiLocale;
   kaikki: KaikkiSettings;
+  cvdict: CvdictSettings;
   srs: SrsSettings;
 }
 

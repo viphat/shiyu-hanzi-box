@@ -68,6 +68,14 @@ describe('SRS persisted types', () => {
         entryCount: 0,
         importedAt: null,
       },
+      cvdict: {
+        enabled: false,
+        hash: null,
+        entryCount: 0,
+        version: null,
+        release: null,
+        installedAt: null,
+      },
       srs: {
         desiredRetention: 0.9,
         maximumIntervalDays: 3650,

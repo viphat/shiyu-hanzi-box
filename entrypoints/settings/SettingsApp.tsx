@@ -22,11 +22,8 @@ import {
   DEFAULT_KAIKKI_SOURCE_URL,
   DEFAULT_SRS_SETTINGS,
   enableKaikki,
-  recordCvdictInstall,
   recordKaikkiImport,
-  resetCvdict,
   resetKaikki,
-  setCvdictEnabled,
   setSrsSettings,
   setUiLocale,
 } from '@/lib/settings';
@@ -221,7 +218,7 @@ export function SettingsApp() {
   }
 
   async function updateCvdictEnabled(enabled: boolean) {
-    await mutate((current) => setCvdictEnabled(current, enabled));
+    await requestSyncMutation('cvdictSettings', { operation: 'setEnabled', enabled });
     setMessage({ tone: 'success', text: t(locale, 'settings.saved') });
   }
 
@@ -274,15 +271,16 @@ export function SettingsApp() {
     }
 
     if (workerMessage.type === 'complete') {
-      await mutate((current) =>
-        recordCvdictInstall(current, {
+      await requestSyncMutation('cvdictSettings', {
+        operation: 'install',
+        metadata: {
           hash: workerMessage.hash,
           entryCount: workerMessage.entryCount,
           version: workerMessage.version,
           release: workerMessage.release,
           installedAt: Date.now(),
-        }),
-      );
+        },
+      });
       finishCvdictInstall();
       setMessage({
         tone: 'success',
@@ -321,7 +319,7 @@ export function SettingsApp() {
   async function removeCvdict() {
     const hash = settings.cvdict.hash;
     if (hash) await clearCvdictCache(hash);
-    await mutate((current) => resetCvdict(current));
+    await requestSyncMutation('cvdictSettings', { operation: 'reset' });
     setMessage({ tone: 'success', text: t(locale, 'settings.saved') });
   }
 

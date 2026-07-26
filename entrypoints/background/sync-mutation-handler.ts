@@ -1,11 +1,13 @@
 import {
   applyDeletion,
+  applyCvdictSettingsMutation,
   applyLocalMutation,
   applyTagRemoval,
   applyOccurrenceRemoval,
   applyQuoteTranslation,
   applyWordAiInsight,
   type QuoteTranslationPatch,
+  type CvdictSettingsMutation,
 } from '../../lib/sync/mutations';
 import { setInbox } from '../../lib/storage';
 import { replaceSettings } from '../../lib/settings';
@@ -26,7 +28,7 @@ export const SYNC_MUTATION_MESSAGE = 'shiyu:sync-mutation';
 
 export interface SyncMutationRequestMessage {
   type: typeof SYNC_MUTATION_MESSAGE;
-  kind: 'inbox' | 'settings' | 'ai' | 'delete' | 'removeTags' | 'removeOccurrence' | 'quoteTranslation' | 'wordAiInsight';
+  kind: 'inbox' | 'settings' | 'cvdictSettings' | 'ai' | 'delete' | 'removeTags' | 'removeOccurrence' | 'quoteTranslation' | 'wordAiInsight';
   payload: unknown;
 }
 
@@ -43,6 +45,8 @@ async function writeKind(kind: SyncMutationRequestMessage['kind'], payload: unkn
     await applyQuoteTranslation(payload as QuoteTranslationPatch);
   } else if (kind === 'wordAiInsight') {
     await applyWordAiInsight(payload as WordAiInsightPatch);
+  } else if (kind === 'cvdictSettings') {
+    await applyCvdictSettingsMutation(payload as CvdictSettingsMutation);
   } else {
     await applyLocalMutation(kind, async () => {
       if (kind === 'inbox') await setInbox(payload as Inbox);

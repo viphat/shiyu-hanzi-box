@@ -1,10 +1,17 @@
 import { storage } from 'wxt/utils/storage';
 import { getInbox, setInbox } from '../storage';
-import { getSettings } from '../settings';
+import {
+  getSettings,
+  recordCvdictInstall,
+  replaceSettings,
+  resetCvdict,
+  setCvdictEnabled,
+} from '../settings';
 import { aiSettingsStorage } from '../ai/settings';
 import { ensureReplicaId, mutateSyncConfig } from './local';
 import type {
   AiQuoteTranslation,
+  CvdictSettings,
   Inbox,
   QuoteTranslation,
   WordAiInsightPatch,
@@ -41,7 +48,7 @@ export async function readDomainSnapshot() {
 let chain: Promise<unknown> = Promise.resolve();
 
 export async function applyLocalMutation(
-  kind: 'inbox' | 'settings' | 'ai',
+  kind: 'inbox' | 'settings' | 'localSettings' | 'ai',
   writer: () => Promise<void>,
 ): Promise<void> {
   const run = chain.then(async () => {
@@ -126,6 +133,32 @@ export async function mutateInboxSynced(fn: (inbox: Inbox) => Inbox): Promise<In
     await setInbox(result);
   });
   return result!;
+}
+
+export type CvdictSettingsMutation =
+  | { operation: 'install'; metadata: Omit<CvdictSettings, 'enabled'> }
+  | { operation: 'setEnabled'; enabled: boolean }
+  | { operation: 'reset' };
+
+/**
+ * Apply a device-local CVDICT settings change in the shared mutation chain.
+ *
+ * The revision bump protects it from a stale coordinator write, while the
+ * localSettings kind deliberately leaves appSettingsUpdatedAt unchanged so
+ * this device-only change cannot make stale portable settings win sync.
+ */
+export async function applyCvdictSettingsMutation(
+  mutation: CvdictSettingsMutation,
+): Promise<void> {
+  await applyLocalMutation('localSettings', async () => {
+    const current = await getSettings();
+    const next = mutation.operation === 'install'
+      ? recordCvdictInstall(current, mutation.metadata)
+      : mutation.operation === 'setEnabled'
+        ? setCvdictEnabled(current, mutation.enabled)
+        : resetCvdict(current);
+    await replaceSettings(next);
+  });
 }
 
 export interface QuoteTranslationPatch {

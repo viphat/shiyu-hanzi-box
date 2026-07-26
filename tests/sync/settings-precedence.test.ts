@@ -14,6 +14,13 @@ import { materialize } from '../../lib/sync/project';
 import { DEFAULT_SETTINGS } from '../../lib/settings';
 import { DEFAULT_AI_SETTINGS } from '../../lib/ai/settings';
 import { aiSettingsStorage } from '../../lib/ai/settings';
+import {
+  registerSyncMutationHandler,
+  requestSyncMutation,
+  SYNC_DEBOUNCE_ALARM,
+} from '../../entrypoints/background/sync-mutation-handler';
+import { getSettings, replaceSettings } from '../../lib/settings';
+import { getSyncConfig, mutateSyncConfig } from '../../lib/sync/local';
 import type { Inbox } from '../../lib/types';
 
 const EMPTY_INBOX: Inbox = { words: [], quotes: [] };
@@ -172,5 +179,97 @@ describe('applyLocalMutation tracks settings/ai edit timestamps', () => {
     const meta = await syncMetadataStorage.getValue();
     expect(meta.appSettingsUpdatedAt).toBe(0);
     expect(meta.aiSettingsUpdatedAt).toBe(0);
+  });
+});
+
+describe('CVDICT-local settings mutations', () => {
+  beforeEach(() => fakeBrowser.reset());
+
+  it('serializes install, toggle, and removal without advancing the portable-settings stamp', async () => {
+    const srs = { ...DEFAULT_SETTINGS.srs, newCardsPerDay: 7 };
+    await replaceSettings({ ...DEFAULT_SETTINGS, uiLocale: 'en', srs });
+    await syncMetadataStorage.setValue({
+      revision: 4,
+      state: null,
+      lastDigest: null,
+      appSettingsUpdatedAt: 100,
+      aiSettingsUpdatedAt: 0,
+    });
+    await mutateSyncConfig((config) => ({ ...config, vaultId: 'vault-1' }));
+    registerSyncMutationHandler();
+
+    await requestSyncMutation('cvdictSettings', {
+      operation: 'install',
+      metadata: {
+        hash: 'cv1',
+        entryCount: 2,
+        version: '1.0.1',
+        release: '2024-12-02T17:46:19Z',
+        installedAt: 200,
+      },
+    });
+    expect((await getSettings()).cvdict).toMatchObject({ enabled: true, hash: 'cv1' });
+
+    await requestSyncMutation('cvdictSettings', { operation: 'setEnabled', enabled: false });
+    expect((await getSettings()).cvdict).toMatchObject({ enabled: false, hash: 'cv1' });
+
+    await requestSyncMutation('cvdictSettings', { operation: 'reset' });
+    const settings = await getSettings();
+    const meta = await syncMetadataStorage.getValue();
+    expect(settings).toEqual({ ...DEFAULT_SETTINGS, uiLocale: 'en', srs });
+    expect(meta.revision).toBe(7);
+    expect(meta.appSettingsUpdatedAt).toBe(100);
+    expect((await getSyncConfig()).pending).toBe(true);
+    expect((await browser.alarms.get(SYNC_DEBOUNCE_ALARM))?.name).toBe(SYNC_DEBOUNCE_ALARM);
+  });
+
+  it('does not let stale portable settings win after CVDICT is installed on a second replica', async () => {
+    const newerSrs = { ...DEFAULT_SETTINGS.srs, desiredRetention: 0.95, newCardsPerDay: 8 };
+    const newerPortable = { ...DEFAULT_SETTINGS, uiLocale: 'en' as const, srs: newerSrs };
+    const replicaA = projectInbox(
+      EMPTY_INBOX,
+      newerPortable,
+      DEFAULT_AI_SETTINGS,
+      { replicaId: 'A', wallTime: 200, settingsStamp: 200, aiStamp: 0 },
+    );
+
+    await replaceSettings(DEFAULT_SETTINGS);
+    await syncMetadataStorage.setValue({
+      revision: 0,
+      state: null,
+      lastDigest: null,
+      appSettingsUpdatedAt: 100,
+      aiSettingsUpdatedAt: 0,
+    });
+    registerSyncMutationHandler();
+    await requestSyncMutation('cvdictSettings', {
+      operation: 'install',
+      metadata: {
+        hash: 'cv1',
+        entryCount: 2,
+        version: '1.0.1',
+        release: '2024-12-02T17:46:19Z',
+        installedAt: 300,
+      },
+    });
+
+    const staleSettings = await getSettings();
+    const staleMeta = await syncMetadataStorage.getValue();
+    const replicaB = projectInbox(
+      EMPTY_INBOX,
+      staleSettings,
+      DEFAULT_AI_SETTINGS,
+      {
+        replicaId: 'B',
+        wallTime: 300,
+        settingsStamp: staleMeta.appSettingsUpdatedAt,
+        aiStamp: 0,
+      },
+    );
+
+    const merged = materialize(mergeSyncState(replicaA, replicaB));
+    expect(staleSettings.cvdict).toMatchObject({ enabled: true, hash: 'cv1' });
+    expect(staleMeta.appSettingsUpdatedAt).toBe(100);
+    expect(merged.portableSettings).toEqual({ uiLocale: 'en', srs: newerSrs });
   });
 });

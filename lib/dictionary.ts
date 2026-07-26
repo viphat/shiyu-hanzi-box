@@ -24,6 +24,7 @@ export interface CedictStreamResult extends ParseCedictStats {
 
 export interface CedictStreamParser {
   addChunk(chunk: string): void;
+  snapshot(): { entryCount: number; skipped: number };
   finish(): CedictStreamResult;
 }
 
@@ -98,6 +99,9 @@ export function createCedictStreamParser(): CedictStreamParser {
       const lines = pending.split('\n');
       pending = lines.pop() ?? '';
       for (const line of lines) consumeLine(line);
+    },
+    snapshot() {
+      return { entryCount: entries.length, skipped };
     },
     finish() {
       if (pending) consumeLine(pending);

@@ -118,6 +118,25 @@ describe('settings helpers', () => {
     });
   });
 
+  it('records complete CVDICT install metadata and enables the local index', () => {
+    const installed = recordCvdictInstall(DEFAULT_SETTINGS, {
+      hash: 'cv1',
+      entryCount: 2,
+      version: '1.0.1',
+      release: '2024-12-02T17:46:19Z',
+      installedAt: 100,
+    });
+
+    expect(installed.cvdict).toEqual({
+      enabled: true,
+      hash: 'cv1',
+      entryCount: 2,
+      version: '1.0.1',
+      release: '2024-12-02T17:46:19Z',
+      installedAt: 100,
+    });
+  });
+
   it('resets CVDICT while preserving locale, Kaikki, and SRS settings', () => {
     const installed = recordCvdictInstall(setUiLocale(DEFAULT_SETTINGS, 'en'), {
       hash: 'cv1',

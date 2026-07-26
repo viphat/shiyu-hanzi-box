@@ -14,6 +14,7 @@ import { testAiConnection as testAiProviderConnection } from '@/lib/ai/client';
 import { requestAiSettingsPermission } from '@/lib/ai/permissions';
 import { DEFAULT_AI_SETTINGS, getAiSettings } from '@/lib/ai/settings';
 import { requestSyncMutation } from '@/entrypoints/background/sync-mutation-handler';
+import { clearCvdictCache } from '@/lib/cvdict-cache';
 import { t } from '@/lib/i18n';
 import { manualKaikkiDownloadUrl } from '@/lib/kaikki';
 import { clearKaikkiCache } from '@/lib/kaikki-cache';
@@ -21,8 +22,11 @@ import {
   DEFAULT_KAIKKI_SOURCE_URL,
   DEFAULT_SRS_SETTINGS,
   enableKaikki,
+  recordCvdictInstall,
   recordKaikkiImport,
+  resetCvdict,
   resetKaikki,
+  setCvdictEnabled,
   setSrsSettings,
   setUiLocale,
 } from '@/lib/settings';
@@ -35,6 +39,10 @@ import type {
   KaikkiImportWorkerRequest,
   KaikkiImportWorkerResponse,
 } from './kaikki-import-types';
+import type {
+  CvdictInstallWorkerRequest,
+  CvdictInstallWorkerResponse,
+} from './cvdict-install-types';
 
 type Message = { tone: 'success' | 'error'; text: string } | null;
 
@@ -43,13 +51,19 @@ export function SettingsApp() {
   const locale = settings.uiLocale;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const workerRef = useRef<Worker | null>(null);
+  const cvdictWorkerRef = useRef<Worker | null>(null);
   const [sourceUrl, setSourceUrl] = useState(settings.kaikki.sourceUrl);
   const [aiSettings, setAiSettingsState] = useState(DEFAULT_AI_SETTINGS);
   const [aiTesting, setAiTesting] = useState(false);
   const [aiTestResult, setAiTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [cvdictBusy, setCvdictBusy] = useState(false);
   const [importProgress, setImportProgress] = useState<KaikkiImportProgress | null>(null);
   const [importPhase, setImportPhase] = useState<'idle' | 'parsing' | 'writing'>('idle');
+  const [cvdictProgress, setCvdictProgress] = useState<Extract<
+    CvdictInstallWorkerResponse,
+    { type: 'progress' | 'indexing' }
+  > | null>(null);
   const [message, setMessage] = useState<Message>(null);
 
   useEffect(() => {
@@ -70,6 +84,7 @@ export function SettingsApp() {
   useEffect(() => {
     return () => {
       workerRef.current?.terminate();
+      cvdictWorkerRef.current?.terminate();
     };
   }, []);
 
@@ -202,6 +217,111 @@ export function SettingsApp() {
     if (hash) await clearKaikkiCache(hash);
     await mutate((current) => resetKaikki(current));
     setSourceUrl(DEFAULT_KAIKKI_SOURCE_URL);
+    setMessage({ tone: 'success', text: t(locale, 'settings.saved') });
+  }
+
+  async function updateCvdictEnabled(enabled: boolean) {
+    await mutate((current) => setCvdictEnabled(current, enabled));
+    setMessage({ tone: 'success', text: t(locale, 'settings.saved') });
+  }
+
+  async function startCvdictInstall() {
+    let granted = false;
+    try {
+      granted = await browser.permissions.request({
+        origins: ['https://raw.githubusercontent.com/*'],
+      });
+    } catch {
+      setMessage({ tone: 'error', text: t(locale, 'settings.cvdictPermissionDenied') });
+      return;
+    }
+    if (!granted) {
+      setMessage({ tone: 'error', text: t(locale, 'settings.cvdictPermissionDenied') });
+      return;
+    }
+
+    cvdictWorkerRef.current?.terminate();
+    const worker = new Worker(new URL('./cvdict-install.worker.ts', import.meta.url), {
+      type: 'module',
+    });
+    cvdictWorkerRef.current = worker;
+    setCvdictBusy(true);
+    setCvdictProgress({
+      type: 'progress',
+      loadedBytes: 0,
+      totalBytes: null,
+      entryCount: 0,
+      skipped: 0,
+    });
+    setMessage(null);
+
+    worker.onmessage = (event: MessageEvent<CvdictInstallWorkerResponse>) => {
+      void handleCvdictWorkerMessage(event.data);
+    };
+    worker.onerror = () => {
+      finishCvdictInstall();
+      setMessage({ tone: 'error', text: t(locale, 'settings.failed') });
+    };
+
+    const request: CvdictInstallWorkerRequest = { type: 'install' };
+    worker.postMessage(request);
+  }
+
+  async function handleCvdictWorkerMessage(workerMessage: CvdictInstallWorkerResponse) {
+    if (workerMessage.type === 'progress' || workerMessage.type === 'indexing') {
+      setCvdictProgress(workerMessage);
+      return;
+    }
+
+    if (workerMessage.type === 'complete') {
+      await mutate((current) =>
+        recordCvdictInstall(current, {
+          hash: workerMessage.hash,
+          entryCount: workerMessage.entryCount,
+          version: workerMessage.version,
+          release: workerMessage.release,
+          installedAt: Date.now(),
+        }),
+      );
+      finishCvdictInstall();
+      setMessage({
+        tone: 'success',
+        text: `${t(locale, 'settings.ready')}: ${workerMessage.entryCount}`,
+      });
+      return;
+    }
+
+    finishCvdictInstall();
+    if (workerMessage.type === 'cancelled') {
+      setMessage({ tone: 'success', text: t(locale, 'settings.importCancelled') });
+      return;
+    }
+    setMessage({
+      tone: 'error',
+      text: workerMessage.code === 'too-large'
+        ? t(locale, 'settings.cvdictTooLarge')
+        : workerMessage.code === 'invalid-data'
+          ? t(locale, 'settings.cvdictNoEntries')
+          : t(locale, 'settings.failed'),
+    });
+  }
+
+  function cancelCvdictInstall() {
+    const request: CvdictInstallWorkerRequest = { type: 'cancel' };
+    cvdictWorkerRef.current?.postMessage(request);
+  }
+
+  function finishCvdictInstall() {
+    cvdictWorkerRef.current?.terminate();
+    cvdictWorkerRef.current = null;
+    setCvdictBusy(false);
+    setCvdictProgress(null);
+  }
+
+  async function removeCvdict() {
+    const hash = settings.cvdict.hash;
+    if (hash) await clearCvdictCache(hash);
+    await mutate((current) => resetCvdict(current));
     setMessage({ tone: 'success', text: t(locale, 'settings.saved') });
   }
 
@@ -410,6 +530,97 @@ export function SettingsApp() {
                 {settings.kaikki.importedAt
                   ? new Intl.DateTimeFormat(locale).format(new Date(settings.kaikki.importedAt))
                   : t(locale, 'settings.notImported')}
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-[0_1px_3px_rgba(90,75,50,0.06)]">
+          <div className="mb-3 flex items-center gap-2">
+            <Database className="h-4 w-4 text-accent-deep" />
+            <h2 className="text-sm font-semibold tracking-[2px]">{t(locale, 'dictionary.cvdict')}</h2>
+          </div>
+          <p className="mb-3 text-xs leading-6 text-muted">{t(locale, 'settings.cvdictBody')}</p>
+          <p className="mb-3 text-xs leading-6 text-muted">{t(locale, 'settings.cvdictSource')}</p>
+          {settings.cvdict.hash ? (
+            <label className="mb-3 flex items-center gap-2 text-sm text-ink-secondary">
+              <input
+                type="checkbox"
+                checked={settings.cvdict.enabled}
+                onChange={(event) => updateCvdictEnabled(event.target.checked)}
+                disabled={cvdictBusy}
+                className="h-4 w-4 accent-accent"
+              />
+              {t(locale, 'settings.enableCvdict')}
+            </label>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={startCvdictInstall}
+              disabled={cvdictBusy}
+              className="inline-flex items-center gap-1 rounded-full bg-accent px-3 py-2.5 text-sm text-white shadow-sm tracking-[1px] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Download className="h-4 w-4" />
+              {settings.cvdict.hash
+                ? t(locale, 'settings.updateCvdict')
+                : t(locale, 'settings.installEnableCvdict')}
+            </button>
+            <button
+              onClick={removeCvdict}
+              disabled={cvdictBusy || !settings.cvdict.hash}
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-transparent px-3 py-2.5 text-sm text-ink-secondary tracking-[1px] transition hover:border-accent-border hover:bg-accent-light hover:text-accent-deep disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Trash2 className="h-4 w-4" />
+              {t(locale, 'settings.removeCvdict')}
+            </button>
+          </div>
+          {cvdictProgress ? (
+            <div className="mt-3 rounded-sm border border-border bg-paper-input p-3 text-xs text-muted">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <span className="font-medium text-ink-secondary">
+                  {cvdictProgress.type === 'indexing'
+                    ? t(locale, 'settings.cvdictIndexing')
+                    : t(locale, 'settings.cvdictDownloading')}
+                </span>
+                {cvdictProgress.type === 'progress' ? (
+                  <span>
+                    {formatBytes(cvdictProgress.loadedBytes)} / {cvdictProgress.totalBytes === null
+                      ? '?'
+                      : formatBytes(cvdictProgress.totalBytes)}
+                  </span>
+                ) : null}
+              </div>
+              <div>
+                {t(locale, 'settings.cvdictInstalledEntries')}: {cvdictProgress.entryCount} · {t(locale, 'settings.filteredRecords')}: {cvdictProgress.skipped}
+              </div>
+              <button
+                type="button"
+                onClick={cancelCvdictInstall}
+                className="mt-2 rounded-sm border border-border bg-transparent px-2 py-1 text-xs text-ink-secondary transition hover:border-accent-border hover:bg-accent-light hover:text-accent-deep"
+              >
+                {t(locale, 'settings.cancelImport')}
+              </button>
+            </div>
+          ) : null}
+          <dl className="mt-3 grid gap-2 text-xs text-muted sm:grid-cols-4">
+            <div className="rounded-sm border border-border bg-paper-input px-2 py-1.5">
+              <dt>{t(locale, 'settings.cvdictInstalledEntries')}</dt>
+              <dd className="mt-0.5 text-ink-secondary">{settings.cvdict.entryCount || t(locale, 'settings.cvdictNotInstalled')}</dd>
+            </div>
+            <div className="rounded-sm border border-border bg-paper-input px-2 py-1.5">
+              <dt>{t(locale, 'settings.cvdictVersion')}</dt>
+              <dd className="mt-0.5 text-ink-secondary">{settings.cvdict.version ?? '-'}</dd>
+            </div>
+            <div className="rounded-sm border border-border bg-paper-input px-2 py-1.5">
+              <dt>{t(locale, 'settings.cvdictRelease')}</dt>
+              <dd className="mt-0.5 truncate text-ink-secondary">{settings.cvdict.release ?? '-'}</dd>
+            </div>
+            <div className="rounded-sm border border-border bg-paper-input px-2 py-1.5">
+              <dt>{t(locale, 'settings.cvdictInstalledAt')}</dt>
+              <dd className="mt-0.5 text-ink-secondary">
+                {settings.cvdict.installedAt
+                  ? new Intl.DateTimeFormat(locale).format(new Date(settings.cvdict.installedAt))
+                  : t(locale, 'settings.cvdictNotInstalled')}
               </dd>
             </div>
           </dl>

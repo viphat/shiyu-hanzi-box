@@ -26,6 +26,7 @@ export default defineConfig({
       'https://api.moonshot.cn/*',
       'https://open.bigmodel.cn/*',
       'https://translate.googleapis.com/*',
+      'https://raw.githubusercontent.com/*',
     ],
     commands: {
       'save-word': {

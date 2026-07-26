@@ -16,6 +16,19 @@ describe('i18n messages', () => {
     expect(t('zh-CN', 'settings.filteredRecords')).toBe('已过滤记录');
   });
 
+  it('returns CVDICT and Vietnamese definition labels in both locales', () => {
+    expect(t('en', 'dictionary.cvdict')).toBe('CVDICT Vietnamese dictionary');
+    expect(t('en', 'dictionary.cvdictBadge')).toBe('VI');
+    expect(t('en', 'insight.vietnameseDefinitions')).toBe('Vietnamese definitions');
+    expect(t('en', 'settings.cvdictNotInstalled')).toBe('Not installed yet');
+    expect(t('zh-CN', 'dictionary.cvdict')).toBe('CVDICT 越南语词典');
+    expect(t('zh-CN', 'dictionary.cvdictBadge')).toBe('越');
+    expect(t('zh-CN', 'insight.vietnameseDefinitions')).toBe('越南语释义');
+    expect(t('zh-CN', 'settings.cvdictNotInstalled')).toBe('尚未安装');
+    expect(t('en', 'dictionary.hanziiLookup')).toBe('Hanzii · Vietnamese');
+    expect(t('zh-CN', 'dictionary.hanziiLookup')).toBe('Hanzii · 越南语');
+  });
+
   it('falls back to the key when a message is missing', () => {
     expect(t('en', 'missing.key' as never)).toBe('missing.key');
   });

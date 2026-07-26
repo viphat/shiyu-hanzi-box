@@ -1,9 +1,21 @@
 import { storage } from 'wxt/utils/storage';
 import { getInbox, setInbox } from '../storage';
-import { getSettings } from '../settings';
+import {
+  getSettings,
+  recordCvdictInstall,
+  replaceSettings,
+  resetCvdict,
+  setCvdictEnabled,
+} from '../settings';
 import { aiSettingsStorage } from '../ai/settings';
 import { ensureReplicaId, mutateSyncConfig } from './local';
-import type { AiQuoteTranslation, Inbox, QuoteTranslation } from '../types';
+import type {
+  AiQuoteTranslation,
+  CvdictSettings,
+  Inbox,
+  QuoteTranslation,
+  WordAiInsightPatch,
+} from '../types';
 import { projectInbox, wordKey } from './project';
 import { deleteEntity } from './merge';
 import { mergeStampMap } from './registers';
@@ -36,7 +48,7 @@ export async function readDomainSnapshot() {
 let chain: Promise<unknown> = Promise.resolve();
 
 export async function applyLocalMutation(
-  kind: 'inbox' | 'settings' | 'ai',
+  kind: 'inbox' | 'settings' | 'localSettings' | 'ai',
   writer: () => Promise<void>,
 ): Promise<void> {
   const run = chain.then(async () => {
@@ -61,7 +73,7 @@ export async function applyLocalMutation(
       status: cfg.vaultId ? 'pending' : cfg.status,
     }));
   });
-  chain = run;
+  chain = run.catch(() => undefined);
   return run;
 }
 
@@ -123,6 +135,32 @@ export async function mutateInboxSynced(fn: (inbox: Inbox) => Inbox): Promise<In
   return result!;
 }
 
+export type CvdictSettingsMutation =
+  | { operation: 'install'; metadata: Omit<CvdictSettings, 'enabled'> }
+  | { operation: 'setEnabled'; enabled: boolean }
+  | { operation: 'reset' };
+
+/**
+ * Apply a device-local CVDICT settings change in the shared mutation chain.
+ *
+ * The revision bump protects it from a stale coordinator write, while the
+ * localSettings kind deliberately leaves appSettingsUpdatedAt unchanged so
+ * this device-only change cannot make stale portable settings win sync.
+ */
+export async function applyCvdictSettingsMutation(
+  mutation: CvdictSettingsMutation,
+): Promise<void> {
+  await applyLocalMutation('localSettings', async () => {
+    const current = await getSettings();
+    const next = mutation.operation === 'install'
+      ? recordCvdictInstall(current, mutation.metadata)
+      : mutation.operation === 'setEnabled'
+        ? setCvdictEnabled(current, mutation.enabled)
+        : resetCvdict(current);
+    await replaceSettings(next);
+  });
+}
+
 export interface QuoteTranslationPatch {
   quoteId: string;
   slot: 'google' | 'ai';
@@ -151,6 +189,25 @@ export async function applyQuoteTranslation(patch: QuoteTranslationPatch): Promi
         : quote,
     ),
   }));
+}
+
+/** Atomically write exactly one language-specific AI insight field. */
+export async function applyWordAiInsight(patch: WordAiInsightPatch): Promise<void> {
+  await mutateInboxSynced((inbox) => {
+    if (!inbox.words.some((word) => word.id === patch.wordId)) {
+      throw new Error(`Unknown word: ${patch.wordId}`);
+    }
+
+    return {
+      ...inbox,
+      words: inbox.words.map((word) => {
+        if (word.id !== patch.wordId) return word;
+        return patch.language === 'en'
+          ? { ...word, aiInsight: patch.insight, updatedAt: Date.now() }
+          : { ...word, aiVietnameseInsight: patch.insight, updatedAt: Date.now() };
+      }),
+    };
+  });
 }
 
 export async function applyDeletion(keys: string[]): Promise<void> {

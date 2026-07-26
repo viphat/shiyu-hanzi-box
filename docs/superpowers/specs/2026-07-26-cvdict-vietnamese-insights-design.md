@@ -21,6 +21,7 @@ Included:
 - An explicit-click streamed worker download from https://raw.githubusercontent.com/ph0ngp/CVDICT/main/CVDICT.u8.
 - Local IndexedDB parsing and indexing of CVDICT.
 - A separate Vietnamese definition section in expanded Word Insight cards.
+- A click-only Hanzii.net word shortcut while CVDICT is enabled.
 - Independent AI · EN and AI · VI actions and persisted results.
 - Vietnamese AI grounding with locally installed CVDICT exact entries when available.
 - Backup, Markdown, review-reveal, and sync support for separate English and Vietnamese AI results.
@@ -59,6 +60,8 @@ The CVDICT card appears after bundled CC-CEDICT and before the Kaikki fallback.
 Disabling preserves the cache. Removing local data disables CVDICT, clears the matching cache key, and resets metadata. Updating repeats the explicit install flow and changes metadata only after a complete replacement index exists.
 
 When CVDICT is enabled and locally cached, Word Insight renders Vietnamese definitions immediately after English definitions. Exact CVDICT entries are preferred; otherwise it uses the existing component fallback. Pinyin is hidden in this section because it is already displayed above it.
+
+While CVDICT is enabled, Word Insight also shows a localized Hanzii.net lookup shortcut. It is a plain outbound anchor to `https://hanzii.net/search/word/${encodeURIComponent(word.text)}?hl=vi`, built from the captured Simplified `word.text`. Rendering the shortcut performs no fetch and requests no host permission; disabling CVDICT hides it.
 
 AI · EN generates or regenerates English output under AI English insight. AI · VI generates or regenerates Vietnamese output under AI Vietnamese insight. Each action has independent loading, error, and retry state. Running one never hides, clears, or changes the other cached output.
 
@@ -138,8 +141,8 @@ Backup round-trips both fields. Markdown emits separate AI English Insight and A
 - Unconfigured AI disables both actions. Invalid AI JSON, unsafe restored values, and provider failures write nothing.
 - A new profile has no CVDICT request or Vietnamese section.
 - A successful install makes exact and component Vietnamese definitions visible without mixing them into English results.
+- Hanzii lookup is visible only while CVDICT is enabled, uses encoded Simplified `word.text`, and remains click-only.
 - English and Vietnamese AI actions can finish in either order, coexist after local writes, and coexist after sync merge.
 - Old settings, backups, and WordEntry records remain valid.
 - All user-facing strings exist in en and zh-CN.
 - npm run compile, npm test, and npm run build pass, and the raw GitHub origin appears only in optional_host_permissions.
-

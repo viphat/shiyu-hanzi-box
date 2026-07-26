@@ -93,7 +93,11 @@ links are computed at view time and never persisted on `WordEntry`.
 - `lib/dictionary-cache.ts`: IndexedDB cache for the parsed index, keyed by the
   asset hash.
 - `lib/dictionary-loader.ts`: dashboard-only fetch + cache hydrate/build for the
-  compact asset under `public/dictionaries/`.
+  compact asset under `public/dictionaries/`; it keeps CC-CEDICT/Kaikki English
+  entries and the optional CVDICT Vietnamese index separate.
+- `lib/cvdict.ts` / `lib/cvdict-cache.ts`: fixed-source CVDICT validation and a
+  local IndexedDB cache. `entrypoints/settings/cvdict-install.worker.ts` is the
+  explicit-click worker that streams, parses, and writes that cache.
 - `lib/word-insight.ts`: pure composition of dictionary, tone chips, source
   examples, and external links into a `WordInsight`.
 - `lib/pinyin.ts` / `lib/pinyin-helpers.ts`: `pinyin-pro` wrapper for lazy
@@ -102,7 +106,8 @@ links are computed at view time and never persisted on `WordEntry`.
 - `lib/traditional.ts`: `opencc-js` wrapper for lazy Simplified → Taiwan
   Traditional conversion (`cn -> twp`), cached on `EntryBase.traditionalText`
   after an explicit click.
-- `lib/external-dictionaries.ts`: click-only encoded MDBG and 百度汉语 URLs.
+- `lib/external-dictionaries.ts`: click-only encoded Youdao and 百度汉语 URLs,
+  plus Hanzii only while CVDICT is enabled. These links never fetch until clicked.
 - `lib/kaikki.ts`: Kaikki JSONL parser, streaming parser, URL validation, and
   entry hashing. It intentionally filters records with no Han characters or no
   usable `glosses` / `raw_glosses` — progress UI must call these *filtered*
@@ -123,8 +128,9 @@ Every AI result requires an explicit user click. `lib/ai/settings.ts` holds
 single `fetch` to `${baseUrl}/chat/completions` with typed error handling;
 `lib/ai/permissions.ts` lazily requests the configured provider origin.
 
-- `lib/ai/prompt.ts` / `lib/ai/parse.ts`: word insight. Result persists on
-  `WordEntry.aiInsight`.
+- `lib/ai/prompt.ts` / `lib/ai/parse.ts`: language-specific word insight. AI ·
+  EN persists on `WordEntry.aiInsight`; AI · VI persists independently on
+  `WordEntry.aiVietnameseInsight` and receives only CVDICT grounding.
 - `lib/ai/cloze-prompt.ts` / `lib/ai/cloze-parse.ts`: cloze suggestions
   (建议填空).
 - `lib/ai/translate-prompt.ts` / `lib/ai/translate-parse.ts`: quote translation,
@@ -227,8 +233,9 @@ provider API is ever called.
   (`entrypoints/background/sync-mutation-handler.ts`), and on demand.
 - `entrypoints/dashboard/SyncStatusBadge.tsx` shows state;
   `entrypoints/settings/FolderSync.tsx` is the settings UI.
-- Each profile writes only its own replica. Kaikki data and the remembered key
-  never sync.
+- Each profile writes only its own replica. Kaikki and CVDICT indexes (including
+  their IndexedDB caches), plus the remembered key, never sync. Full backups may
+  retain CVDICT settings metadata but not its local index.
 
 ### Export and backup
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseBackup, serializeBackup } from '../lib/backup';
-import type { Inbox, WordEntry } from '../lib/types';
+import type { Inbox, VietnameseAiInsight, WordEntry } from '../lib/types';
 
 const word: WordEntry = {
   id: 'w1',
@@ -43,5 +43,21 @@ describe('backup round-trip with aiInsight', () => {
     const restored = parseBackup(serializeBackup(inbox));
 
     expect(restored.words[0].aiInsight).toBeUndefined();
+  });
+
+  it('round-trips independent English and Vietnamese insights', () => {
+    const englishInsight = word.aiInsight!;
+    const vietnameseInsight: VietnameseAiInsight = {
+      ...englishInsight,
+      summary: 'lời chào',
+      outputLanguage: 'vi',
+    };
+    const restored = parseBackup(serializeBackup({
+      words: [{ ...word, aiInsight: englishInsight, aiVietnameseInsight: vietnameseInsight }],
+      quotes: [],
+    }));
+
+    expect(restored.words[0].aiInsight).toEqual(englishInsight);
+    expect(restored.words[0].aiVietnameseInsight).toEqual(vietnameseInsight);
   });
 });

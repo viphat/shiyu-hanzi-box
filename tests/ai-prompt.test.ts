@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildMessages } from '../lib/ai/prompt';
+import { buildWordInsightMessages } from '../lib/ai/prompt';
 import type { DictionaryEntry, WordEntry } from '../lib/types';
 
 const word: WordEntry = {
@@ -40,6 +40,20 @@ const cedictEntries: DictionaryEntry[] = [
 ];
 
 describe('buildMessages', () => {
+  const buildMessages = (
+    target: WordEntry,
+    pinyin: string | undefined,
+    englishEntries: DictionaryEntry[],
+    recentOccurrence: WordEntry['occurrences'][number] | undefined,
+  ) => buildWordInsightMessages({
+    word: target,
+    language: 'en',
+    pinyin,
+    englishEntries,
+    vietnameseEntries: [],
+    recentOccurrence,
+  });
+
   it('returns a system message and a user message', () => {
     const messages = buildMessages(word, undefined, [], undefined);
 

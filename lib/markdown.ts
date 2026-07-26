@@ -1,5 +1,5 @@
 import { lookupExact } from './dictionary';
-import type { Cloze, DictionaryIndex, QuoteEntry, WordEntry } from './types';
+import type { AiInsight, Cloze, DictionaryIndex, QuoteEntry, WordEntry } from './types';
 
 function esc(value: string): string {
   return value.replace(/\|/g, '\\|');
@@ -34,6 +34,52 @@ function reviewLine(review: WordEntry['review']): string | null {
   return `Review: due ${dueStr}, state ${state}, interval ${review.intervalDays} days`;
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+function isRenderableAiInsight(value: unknown): value is AiInsight {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const insight = value as Record<string, unknown>;
+  return (
+    typeof insight.summary === 'string' &&
+    typeof insight.register === 'string' &&
+    typeof insight.notes === 'string' &&
+    isStringArray(insight.definitions) &&
+    isStringArray(insight.sampleSentences) &&
+    isStringArray(insight.translations) &&
+    isStringArray(insight.collocations) &&
+    insight.sampleSentences.length === insight.translations.length
+  );
+}
+
+function renderAiInsights(
+  lines: string[],
+  entries: Array<{ word: WordEntry; insight: AiInsight }>,
+  heading: string,
+): void {
+  if (entries.length === 0) return;
+  lines.push('');
+  lines.push(heading);
+  for (const { word, insight } of entries) {
+    lines.push(`- ${esc(word.text)}`);
+    if (insight.summary) lines.push(`  - _${esc(insight.summary)}_ (${esc(insight.register)})`);
+    for (const definition of insight.definitions) {
+      lines.push(`  - ${esc(definition)}`);
+    }
+    for (let i = 0; i < insight.sampleSentences.length; i += 1) {
+      lines.push(`  - ${esc(insight.sampleSentences[i])}`);
+      if (insight.translations[i]) {
+        lines.push(`    ${esc(insight.translations[i])}`);
+      }
+    }
+    if (insight.collocations.length > 0) {
+      lines.push(`  - 搭配: ${insight.collocations.map((collocation) => esc(collocation)).join(', ')}`);
+    }
+    if (insight.notes) lines.push(`  - ${esc(insight.notes)}`);
+  }
+}
+
 export function renderDay(
   date: string,
   words: WordEntry[],
@@ -45,6 +91,8 @@ export function renderDay(
 
   if (words.length > 0) {
     lines.push('## Words', '');
+    const englishInsights: Array<{ word: WordEntry; insight: AiInsight }> = [];
+    const vietnameseInsights: Array<{ word: WordEntry; insight: AiInsight }> = [];
     for (const word of words) {
       const pinyin = word.pinyin ? ` _${word.pinyin}_` : '';
       lines.push(`- [ ] **${esc(word.text)}**${pinyin}`);
@@ -58,30 +106,18 @@ export function renderDay(
           lines.push(`  - Dictionary: _${esc(entry.pinyin)}_ ${entry.definitions.map((d) => esc(d)).join('; ')}`);
         }
       }
-      if (word.aiInsight) {
-        const ai = word.aiInsight;
-        lines.push('');
-        lines.push('## AI Insight');
-        lines.push(`- ${esc(word.text)}`);
-        if (ai.summary) lines.push(`  - _${esc(ai.summary)}_ (${esc(ai.register)})`);
-        for (const definition of ai.definitions) {
-          lines.push(`  - ${esc(definition)}`);
-        }
-        for (let i = 0; i < ai.sampleSentences.length; i += 1) {
-          lines.push(`  - ${esc(ai.sampleSentences[i])}`);
-          if (ai.translations[i]) {
-            lines.push(`    ${esc(ai.translations[i])}`);
-          }
-        }
-        if (ai.collocations.length > 0) {
-          lines.push(`  - 搭配: ${ai.collocations.map((collocation) => esc(collocation)).join(', ')}`);
-        }
-        if (ai.notes) lines.push(`  - ${esc(ai.notes)}`);
+      if (isRenderableAiInsight(word.aiInsight)) {
+        englishInsights.push({ word, insight: word.aiInsight });
+      }
+      if (isRenderableAiInsight(word.aiVietnameseInsight)) {
+        vietnameseInsights.push({ word, insight: word.aiVietnameseInsight });
       }
       const rLine = reviewLine(word.review);
       if (rLine) lines.push(`  - ${rLine}`);
       lines.push('');
     }
+    renderAiInsights(lines, englishInsights, '## AI English Insight');
+    renderAiInsights(lines, vietnameseInsights, '## AI Vietnamese Insight');
   }
 
   if (quotes.length > 0) {

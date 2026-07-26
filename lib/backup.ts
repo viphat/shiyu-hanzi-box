@@ -182,8 +182,9 @@ function sanitizeQuoteTranslationsField(quote: QuoteEntry): QuoteEntry {
 }
 
 function hasEntryBase(value: Record<string, unknown>): boolean {
-  // Optional fields added after backup format v1, such as WordEntry.aiInsight,
-  // are intentionally not checked here; cloneJson preserves them on round-trip.
+  // Optional fields added after backup format v1, such as WordEntry.aiInsight
+  // and WordEntry.aiVietnameseInsight, are intentionally not checked here;
+  // cloneJson preserves them on round-trip.
   return (
     isString(value.id) &&
     isString(value.text) &&

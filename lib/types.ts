@@ -77,6 +77,8 @@ export interface WordEntry extends EntryBase {
   occurrences: Occurrence[];
   /** Opt-in AI-generated insight, persisted after explicit user request. */
   aiInsight?: AiInsight;
+  /** Opt-in Vietnamese AI insight, independent from the English output. */
+  aiVietnameseInsight?: VietnameseAiInsight;
 }
 
 export interface QuoteEntry extends EntryBase {
@@ -116,6 +118,15 @@ export interface KaikkiSettings {
   importedAt: number | null;
 }
 
+export interface CvdictSettings {
+  enabled: boolean;
+  hash: string | null;
+  entryCount: number;
+  version: string | null;
+  release: string | null;
+  installedAt: number | null;
+}
+
 export interface SrsSettings {
   desiredRetention: number;
   maximumIntervalDays: number;
@@ -126,6 +137,7 @@ export interface SrsSettings {
 export interface AppSettings {
   uiLocale: UiLocale;
   kaikki: KaikkiSettings;
+  cvdict: CvdictSettings;
   srs: SrsSettings;
 }
 
@@ -165,6 +177,18 @@ export interface AiInsight {
   collocations: string[];
   notes: string;
 }
+
+export type AiInsightLanguage = 'en' | 'vi';
+
+/** Vietnamese AI output uses the same seven content fields as English. */
+export interface VietnameseAiInsight extends AiInsight {
+  outputLanguage: 'vi';
+}
+
+/** Targeted background patch for one word AI output slot. */
+export type WordAiInsightPatch =
+  | { wordId: string; language: 'en'; insight: AiInsight }
+  | { wordId: string; language: 'vi'; insight: VietnameseAiInsight };
 
 /** One English translation of a whole quote, generated on explicit request. */
 export interface QuoteTranslation {
@@ -216,7 +240,7 @@ export interface CompactDictionaryAsset {
   };
 }
 
-export type DictionarySourceId = 'cc-cedict' | 'kaikki';
+export type DictionarySourceId = 'cc-cedict' | 'kaikki' | 'cvdict';
 
 /** One dictionary entry, after the loader materializes it from a compact/runtime asset. */
 export interface DictionaryEntry {
@@ -237,6 +261,19 @@ export interface DictionaryIndex {
   byForm: Map<string, DictionaryEntry[]>;
   /** Longest normalized dictionary key length, used by component segmentation. */
   maxKeyLength: number;
+}
+
+/** Separately loaded local dictionary indexes, grouped by definition language. */
+export interface DictionaryIndexes {
+  english: DictionaryIndex | null;
+  vietnamese: DictionaryIndex | null;
+}
+
+/** Vietnamese definitions are independent from the English insight status. */
+export interface VietnameseDictionaryInsight {
+  exactEntries: DictionaryEntry[];
+  componentEntries: DictionaryEntry[];
+  status: 'disabled' | 'ready' | 'no-definition' | 'dictionary-unavailable';
 }
 
 /** One syllable's tone info for the tone-chip display. */
@@ -266,8 +303,9 @@ export interface HighlightedExample {
 
 /** A click-only outbound dictionary link (no content fetched). */
 export interface ExternalDictionaryLink {
-  label: 'Youdao' | '百度汉语';
-  language: 'Chinese-English' | 'Chinese-Chinese';
+  label: 'Youdao' | '百度汉语' | 'Hanzii';
+  labelKey?: 'dictionary.hanziiLookup';
+  language: 'Chinese-English' | 'Chinese-Chinese' | 'Chinese-Vietnamese';
   url: string;
 }
 
@@ -280,4 +318,5 @@ export interface WordInsight {
   examples: HighlightedExample[];
   externalLinks: ExternalDictionaryLink[];
   status: 'ready' | 'no-definition' | 'dictionary-unavailable';
+  vietnamese: VietnameseDictionaryInsight;
 }

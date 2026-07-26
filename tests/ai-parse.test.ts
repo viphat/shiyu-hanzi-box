@@ -18,6 +18,7 @@ describe('parseAiResponse', () => {
       'deepseek',
       'deepseek-chat',
       'https://api.deepseek.com/v1',
+      'en',
     );
 
     expect(result.ok).toBe(true);
@@ -32,7 +33,7 @@ describe('parseAiResponse', () => {
   });
 
   it('returns a parse error for malformed JSON', () => {
-    const result = parseAiResponse('{ not json }', 'deepseek', 'deepseek-chat', '');
+    const result = parseAiResponse('{ not json }', 'deepseek', 'deepseek-chat', '', 'en');
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -40,7 +41,7 @@ describe('parseAiResponse', () => {
   });
 
   it('returns a parse error for non-object JSON', () => {
-    const result = parseAiResponse('"just a string"', 'deepseek', 'deepseek-chat', '');
+    const result = parseAiResponse('"just a string"', 'deepseek', 'deepseek-chat', '', 'en');
 
     expect(result.ok).toBe(false);
   });
@@ -51,6 +52,7 @@ describe('parseAiResponse', () => {
       'openai',
       'gpt-4o-mini',
       'https://api.openai.com/v1',
+      'en',
     );
 
     expect(result.ok).toBe(false);
@@ -64,6 +66,7 @@ describe('parseAiResponse', () => {
       'deepseek',
       'deepseek-chat',
       '',
+      'en',
     );
 
     expect(result.ok).toBe(true);
@@ -75,6 +78,7 @@ describe('parseAiResponse', () => {
       'deepseek',
       'deepseek-chat',
       '',
+      'en',
     );
 
     expect(result.ok).toBe(false);
@@ -88,6 +92,7 @@ describe('parseAiResponse', () => {
       'deepseek',
       'deepseek-chat',
       '',
+      'en',
     );
 
     expect(result.ok).toBe(false);

@@ -3,7 +3,7 @@ import { deleteEntity, mergeSyncState, mergeQuoteNodes } from '../../lib/sync/me
 import { projectInbox, materialize, wordKey } from '../../lib/sync/project';
 import { DEFAULT_SETTINGS } from '../../lib/settings';
 import { DEFAULT_AI_SETTINGS } from '../../lib/ai/settings';
-import type { Inbox, WordEntry, QuoteEntry } from '../../lib/types';
+import type { AiInsight, Inbox, WordEntry, QuoteEntry, VietnameseAiInsight } from '../../lib/types';
 import type { QuoteNode } from '../../lib/sync/types';
 
 function word(over: Partial<WordEntry>): WordEntry {
@@ -45,6 +45,85 @@ describe('mergeSyncState', () => {
     const stale = proj({ words: [word({ updatedAt: 50 })], quotes: [] }, 'B', 60);
     const merged = mergeSyncState(deleted, stale);
     expect(merged.tombstones[wordKey('你好')]).toBeDefined();
+  });
+
+  it('merges English and Vietnamese insights by each result generatedAt', () => {
+    const insight = (summary: string, generatedAt: number): AiInsight => ({
+      provider: 'deepseek', model: summary, baseUrl: 'https://example.com', generatedAt,
+      summary, register: 'neutral', definitions: [summary], sampleSentences: ['你好。'],
+      translations: [summary], collocations: ['你好吗'], notes: summary,
+    });
+    const vietnamese = (summary: string, generatedAt: number): VietnameseAiInsight => ({
+      ...insight(summary, generatedAt), outputLanguage: 'vi',
+    });
+    const a = proj({
+      words: [word({
+        updatedAt: 900,
+        aiInsight: insight('new English', 300),
+        aiVietnameseInsight: vietnamese('old Vietnamese', 100),
+      })],
+      quotes: [],
+    }, 'A', 900);
+    const b = proj({
+      words: [word({
+        updatedAt: 800,
+        aiInsight: insight('old English', 200),
+        aiVietnameseInsight: vietnamese('new Vietnamese', 400),
+      })],
+      quotes: [],
+    }, 'B', 800);
+
+    const ab = materialize(mergeSyncState(a, b)).inbox.words[0];
+    const ba = materialize(mergeSyncState(b, a)).inbox.words[0];
+    expect(ab.aiInsight?.summary).toBe('new English');
+    expect(ab.aiVietnameseInsight?.summary).toBe('new Vietnamese');
+    expect(ba.aiInsight?.summary).toBe('new English');
+    expect(ba.aiVietnameseInsight?.summary).toBe('new Vietnamese');
+  });
+
+  it('does not let malformed future-dated AI fields suppress valid peer insights', () => {
+    const validEnglish: AiInsight = {
+      provider: 'deepseek', model: 'en-model', baseUrl: 'https://example.com', generatedAt: 200,
+      summary: 'valid English', register: 'neutral', definitions: ['valid English'],
+      sampleSentences: ['你好。'], translations: ['Hello.'], collocations: ['你好吗'],
+      notes: 'Valid English note.',
+    };
+    const validVietnamese: VietnameseAiInsight = {
+      ...validEnglish,
+      model: 'vi-model',
+      generatedAt: 300,
+      summary: 'Tiếng Việt hợp lệ',
+      translations: ['Xin chào.'],
+      notes: 'Ghi chú hợp lệ.',
+      outputLanguage: 'vi',
+    };
+    const valid = proj({
+      words: [word({
+        updatedAt: 400,
+        aiInsight: validEnglish,
+        aiVietnameseInsight: validVietnamese,
+      })],
+      quotes: [],
+    }, 'A', 400);
+    const malformed = proj({
+      words: [word({
+        updatedAt: 100,
+        aiInsight: { generatedAt: 9_000, summary: 42 } as never,
+        aiVietnameseInsight: {
+          generatedAt: 10_000,
+          summary: 42,
+          outputLanguage: 'vi',
+        } as never,
+      })],
+      quotes: [],
+    }, 'B', 100);
+
+    const validThenMalformed = materialize(mergeSyncState(valid, malformed)).inbox.words[0];
+    const malformedThenValid = materialize(mergeSyncState(malformed, valid)).inbox.words[0];
+    expect(validThenMalformed.aiInsight).toEqual(validEnglish);
+    expect(validThenMalformed.aiVietnameseInsight).toEqual(validVietnamese);
+    expect(malformedThenValid.aiInsight).toEqual(validEnglish);
+    expect(malformedThenValid.aiVietnameseInsight).toEqual(validVietnamese);
   });
 });
 

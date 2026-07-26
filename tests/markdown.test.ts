@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { buildIndex } from '../lib/dictionary';
 import { renderDay } from '../lib/markdown';
-import type { AiInsight, DictionaryEntry, QuoteEntry, WordEntry } from '../lib/types';
+import type {
+  AiInsight,
+  DictionaryEntry,
+  QuoteEntry,
+  VietnameseAiInsight,
+  WordEntry,
+} from '../lib/types';
 
 const day = '2026-06-20';
 
@@ -149,6 +155,12 @@ const aiInsight: AiInsight = {
   notes: 'Common greeting.',
 };
 
+const vietnameseInsight: VietnameseAiInsight = {
+  ...aiInsight,
+  summary: 'lời chào thông dụng',
+  outputLanguage: 'vi',
+};
+
 describe('renderDay quote review suppression', () => {
   it('does not emit a Review line for a quote even when quote.review is populated', () => {
     const reviewedQuote: QuoteEntry = {
@@ -195,10 +207,10 @@ describe('renderDay with clozes', () => {
 });
 
 describe('renderDay with AI insight', () => {
-  it('includes an AI Insight subsection when the word has aiInsight', () => {
+  it('includes an English AI Insight subsection when the word has aiInsight', () => {
     const md = renderDay(day, [{ ...word, aiInsight }], []);
 
-    expect(md).toContain('## AI Insight');
+    expect(md).toContain('## AI English Insight');
     expect(md).toContain('hello greeting');
     expect(md).toContain('你好世界。');
     expect(md).toContain('Hello world.');
@@ -208,6 +220,68 @@ describe('renderDay with AI insight', () => {
     const md = renderDay(day, [word], []);
 
     expect(md).not.toContain('AI Insight');
+  });
+
+  it('renders separate English and Vietnamese AI sections', () => {
+    const md = renderDay(day, [{
+      ...word,
+      aiInsight,
+      aiVietnameseInsight: vietnameseInsight,
+    }], []);
+
+    expect(md).toContain('## AI English Insight');
+    expect(md).toContain('## AI Vietnamese Insight');
+    expect(md).toContain(vietnameseInsight.summary);
+  });
+
+  it('groups mixed multi-word AI outputs under one heading per language', () => {
+    const secondWord: WordEntry = {
+      ...word,
+      id: 'w2',
+      text: '再见',
+      normalized: '再见',
+      aiInsight: { ...aiInsight, summary: 'farewell greeting' },
+    };
+    const thirdWord: WordEntry = {
+      ...word,
+      id: 'w3',
+      text: '谢谢',
+      normalized: '谢谢',
+      aiVietnameseInsight: { ...vietnameseInsight, summary: 'lời cảm ơn' },
+    };
+
+    const md = renderDay(day, [
+      { ...word, aiInsight, aiVietnameseInsight: vietnameseInsight },
+      secondWord,
+      thirdWord,
+    ], []);
+
+    expect(md.match(/^## AI English Insight$/gm)).toHaveLength(1);
+    expect(md.match(/^## AI Vietnamese Insight$/gm)).toHaveLength(1);
+    expect(md).toContain('farewell greeting');
+    expect(md).toContain('lời cảm ơn');
+    expect(md.indexOf('**谢谢**')).toBeLessThan(md.indexOf('## AI English Insight'));
+  });
+
+  it('skips malformed restored AI insight data instead of rendering it', () => {
+    const malformed = {
+      ...word,
+      aiInsight: {
+        ...aiInsight,
+        summary: 42,
+        definitions: ['valid', 42],
+      },
+      aiVietnameseInsight: {
+        ...vietnameseInsight,
+        sampleSentences: ['例句'],
+        translations: [],
+      },
+    } as unknown as WordEntry;
+
+    expect(() => renderDay(day, [malformed], [])).not.toThrow();
+    const md = renderDay(day, [malformed], []);
+    expect(md).not.toContain('AI English Insight');
+    expect(md).not.toContain('AI Vietnamese Insight');
   });
 });
 

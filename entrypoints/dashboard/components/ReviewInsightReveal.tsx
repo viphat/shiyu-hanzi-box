@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { t } from '@/lib/i18n';
-import type { UiLocale, WordEntry } from '@/lib/types';
+import type { AppSettings, UiLocale, WordEntry } from '@/lib/types';
 import { useWordInsight } from '../hooks/useWordInsight';
+import { AiInsightSection } from './AiInsightSection';
 import { DefinitionList } from './DefinitionList';
 import { SpeakButton } from './SpeakButton';
 import { SourceExamples } from './SourceExamples';
@@ -11,10 +12,14 @@ export function ReviewInsightReveal({
   word,
   locale,
   initiallyRevealed = false,
+  dictionaryCacheKey = 'default',
+  dictionarySettings,
 }: {
   word: WordEntry;
   locale: UiLocale;
   initiallyRevealed?: boolean;
+  dictionaryCacheKey?: string;
+  dictionarySettings?: AppSettings;
 }) {
   const [revealed, setRevealed] = useState(initiallyRevealed);
 
@@ -29,11 +34,28 @@ export function ReviewInsightReveal({
     );
   }
 
-  return <RevealedReviewInsight word={word} locale={locale} />;
+  return (
+    <RevealedReviewInsight
+      word={word}
+      locale={locale}
+      dictionaryCacheKey={dictionaryCacheKey}
+      dictionarySettings={dictionarySettings}
+    />
+  );
 }
 
-function RevealedReviewInsight({ word, locale }: { word: WordEntry; locale: UiLocale }) {
-  const { insight, loading } = useWordInsight(word);
+function RevealedReviewInsight({
+  word,
+  locale,
+  dictionaryCacheKey,
+  dictionarySettings,
+}: {
+  word: WordEntry;
+  locale: UiLocale;
+  dictionaryCacheKey: string;
+  dictionarySettings?: AppSettings;
+}) {
+  const { insight, loading } = useWordInsight(word, dictionaryCacheKey, dictionarySettings);
 
   if (loading || !insight) {
     return <p className="mt-3 text-xs text-muted">{t(locale, 'insight.loading')}</p>;
@@ -57,15 +79,18 @@ function RevealedReviewInsight({ word, locale }: { word: WordEntry; locale: UiLo
       )}
       <SourceExamples examples={topExamples} externalLinks={[]} locale={locale} />
       {word.aiInsight && (
-        <div className="space-y-1.5 rounded-sm border border-accent-fade bg-paper-light p-3">
-          <p className="text-[11px] font-medium uppercase tracking-[2px] text-accent-deep">AI 释义</p>
-          <p className="text-sm text-ink">{word.aiInsight.summary}</p>
-          {word.aiInsight.definitions.map((definition) => (
-            <p key={definition} className="text-xs text-ink-secondary">
-              {definition}
-            </p>
-          ))}
-        </div>
+        <AiInsightSection
+          title={t(locale, 'ai.englishTitle')}
+          insight={word.aiInsight}
+          generatedByLabel={t(locale, 'ai.generatedBy')}
+        />
+      )}
+      {word.aiVietnameseInsight && (
+        <AiInsightSection
+          title={t(locale, 'ai.vietnameseTitle')}
+          insight={word.aiVietnameseInsight}
+          generatedByLabel={t(locale, 'ai.generatedBy')}
+        />
       )}
     </div>
   );

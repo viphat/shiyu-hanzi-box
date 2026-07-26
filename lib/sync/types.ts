@@ -49,7 +49,11 @@ export interface WordNode {
   /** Logical key value: normalized text. */
   normalized: string;
   /** Canonical public id chosen by earliest createdAt then smallest id. */
-  fields: Record<string, Register<unknown>>;
+  fields: Record<string, Register<unknown>> & {
+    /** Independent optional registers; absence means no opinion, not clear. */
+    aiInsight?: Register<unknown>;
+    aiVietnameseInsight?: Register<unknown>;
+  };
   createdAt: Register<number>;
   occurrences: Record<string, OccurrenceNode>;
   occurrenceTombstones: Record<string, HybridTimestamp>;

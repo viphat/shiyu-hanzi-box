@@ -111,6 +111,27 @@ describe('write routing — sole-writer broker', () => {
     expect((await getSyncConfig()).pending).toBe(true);
   });
 
+  it('requestSyncMutation(wordAiInsight) patches one insight slot and bumps revision', async () => {
+    registerSyncMutationHandler();
+    await saveWord('汉字', SRC);
+    const word = (await getInbox()).words[0];
+    const before = (await syncMetadataStorage.getValue()).revision;
+
+    await requestSyncMutation('wordAiInsight', {
+      wordId: word.id,
+      language: 'vi',
+      insight: {
+        provider: 'deepseek', model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com',
+        generatedAt: 200, summary: 'chữ Hán', register: 'neutral', definitions: ['chữ Hán'],
+        sampleSentences: ['我学汉字。'], translations: ['Tôi học chữ Hán.'],
+        collocations: ['学汉字'], notes: 'Ghi chú.', outputLanguage: 'vi',
+      },
+    });
+
+    expect((await syncMetadataStorage.getValue()).revision).toBeGreaterThan(before);
+    expect((await getInbox()).words[0].aiVietnameseInsight?.summary).toBe('chữ Hán');
+  });
+
   it('requestSyncMutation(ai) bumps revision', async () => {
     registerSyncMutationHandler();
     const before = (await syncMetadataStorage.getValue()).revision;

@@ -6,11 +6,13 @@ export function DefinitionList({
   entries,
   emptyHint,
   locale,
+  showPinyin = true,
 }: {
   title: string;
   entries: DictionaryEntry[];
   emptyHint?: string;
   locale: UiLocale;
+  showPinyin?: boolean;
 }) {
   if (entries.length === 0) {
     if (!emptyHint) return null;
@@ -23,10 +25,15 @@ export function DefinitionList({
         {entries.map((entry) => (
           <li key={`${entry.source ?? 'dictionary'}:${entry.index}`} className="rounded-sm border border-border bg-paper-input px-2 py-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              {entry.pinyin && <span className="text-xs text-accent-deep">{entry.pinyin}</span>}
+              {showPinyin && entry.pinyin && <span className="text-xs text-accent-deep">{entry.pinyin}</span>}
               {entry.source === 'kaikki' && (
                 <span className="rounded-sm border border-accent-border bg-accent-light px-1.5 py-0.5 text-[10px] text-accent-deep">
                   {t(locale, 'dictionary.kaikkiBadge')}
+                </span>
+              )}
+              {entry.source === 'cvdict' && (
+                <span className="rounded-sm border border-accent-border bg-accent-light px-1.5 py-0.5 text-[10px] text-accent-deep">
+                  {t(locale, 'dictionary.cvdictBadge')}
                 </span>
               )}
             </div>

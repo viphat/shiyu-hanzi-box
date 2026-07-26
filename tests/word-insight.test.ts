@@ -138,6 +138,25 @@ const asset: CompactDictionaryAsset = {
 };
 
 const index: DictionaryIndex = buildIndex(materializeEntries(asset));
+const englishOnly = (english: DictionaryIndex | null) => ({ english, vietnamese: null });
+const englishIndex = buildIndex([
+  {
+    index: 0,
+    traditional: '你好',
+    simplified: '你好',
+    pinyin: 'ni3 hao3',
+    definitions: ['hello'],
+  },
+]);
+const vietnameseIndex = buildIndex([
+  {
+    index: 0,
+    traditional: '你好',
+    simplified: '你好',
+    pinyin: 'ni3 hao3',
+    definitions: ['xin chào'],
+  },
+]);
 
 const word = (over: Partial<WordEntry>): WordEntry => ({
   id: 'w1',
@@ -166,7 +185,7 @@ describe('computeWordInsight', () => {
         },
       ],
     });
-    const insight = computeWordInsight(w, index);
+    const insight = computeWordInsight(w, englishOnly(index));
     expect(insight.status).toBe('ready');
     expect(insight.displayText).toBe('你好');
     expect(insight.exactEntries).toHaveLength(1);
@@ -179,14 +198,14 @@ describe('computeWordInsight', () => {
 
   it('tries the normalized key when captured text is decorated', () => {
     const w = word({ text: '你好！', normalized: '你好' });
-    const insight = computeWordInsight(w, index);
+    const insight = computeWordInsight(w, englishOnly(index));
     expect(insight.status).toBe('ready');
     expect(insight.exactEntries[0].simplified).toBe('你好');
   });
 
   it('uses pinyin-pro tone chips when no exact match exists', () => {
     const w = word({ text: '不存在词', normalized: '不存在词' });
-    const insight = computeWordInsight(w, index);
+    const insight = computeWordInsight(w, englishOnly(index));
     expect(insight.status).toBe('no-definition');
     expect(insight.exactEntries).toEqual([]);
     expect(insight.toneChips[0].source).toBe('pinyin-pro');
@@ -194,7 +213,7 @@ describe('computeWordInsight', () => {
 
   it('runs component fallback for a multi-char word with no exact match', () => {
     const w = word({ text: '龙龙', normalized: '龙龙' });
-    const insight = computeWordInsight(w, index);
+    const insight = computeWordInsight(w, englishOnly(index));
     expect(insight.status).toBe('no-definition');
     expect(insight.componentEntries.map((e) => e.simplified)).toEqual(['龙', '龙']);
   });
@@ -211,7 +230,7 @@ describe('computeWordInsight', () => {
       },
     ]);
     const w = word({ text: '滞胀', normalized: '滞胀' });
-    const insight = computeWordInsight(w, fallbackIndex);
+    const insight = computeWordInsight(w, englishOnly(fallbackIndex));
 
     expect(insight.status).toBe('ready');
     expect(insight.exactEntries[0].definitions).toEqual(['stagflation']);
@@ -241,7 +260,7 @@ describe('computeWordInsight', () => {
       },
     ]);
     const w = word({ text: '滞涨', normalized: '滞涨' });
-    const insight = computeWordInsight(w, fallbackIndex);
+    const insight = computeWordInsight(w, englishOnly(fallbackIndex));
 
     expect(insight.status).toBe('ready');
     expect(insight.exactEntries).toHaveLength(1);
@@ -251,9 +270,9 @@ describe('computeWordInsight', () => {
     ]);
   });
 
-  it('returns dictionary-unavailable status when index is null', () => {
+  it('returns dictionary-unavailable status when the English index is null', () => {
     const w = word({ text: '你好' });
-    const insight = computeWordInsight(w, null);
+    const insight = computeWordInsight(w, englishOnly(null));
     expect(insight.status).toBe('dictionary-unavailable');
     expect(insight.exactEntries).toEqual([]);
     expect(insight.toneChips[0].source).toBe('pinyin-pro');
@@ -270,7 +289,37 @@ describe('computeWordInsight', () => {
       })),
     );
     const w = word({ text: '行' });
-    const insight = computeWordInsight(w, many);
+    const insight = computeWordInsight(w, englishOnly(many));
     expect(insight.exactEntries.length).toBeLessThanOrEqual(5);
+  });
+
+  it('keeps Vietnamese entries out of English exactEntries', () => {
+    const insight = computeWordInsight(word({}), {
+      english: englishIndex,
+      vietnamese: vietnameseIndex,
+    });
+
+    expect(insight.exactEntries[0].definitions).toEqual(['hello']);
+    expect(insight.vietnamese.exactEntries[0].definitions).toEqual(['xin chào']);
+  });
+
+  it('marks Vietnamese definitions disabled when CVDICT is inactive', () => {
+    const insight = computeWordInsight(word({}), englishOnly(index));
+
+    expect(insight.vietnamese).toMatchObject({
+      status: 'disabled',
+      exactEntries: [],
+      componentEntries: [],
+    });
+  });
+
+  it('marks Vietnamese definitions unavailable when enabled metadata has no cache', () => {
+    const insight = computeWordInsight(word({}), englishOnly(index), true);
+
+    expect(insight.vietnamese).toMatchObject({
+      status: 'dictionary-unavailable',
+      exactEntries: [],
+      componentEntries: [],
+    });
   });
 });

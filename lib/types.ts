@@ -226,7 +226,7 @@ export interface CompactDictionaryAsset {
   };
 }
 
-export type DictionarySourceId = 'cc-cedict' | 'kaikki';
+export type DictionarySourceId = 'cc-cedict' | 'kaikki' | 'cvdict';
 
 /** One dictionary entry, after the loader materializes it from a compact/runtime asset. */
 export interface DictionaryEntry {
@@ -247,6 +247,19 @@ export interface DictionaryIndex {
   byForm: Map<string, DictionaryEntry[]>;
   /** Longest normalized dictionary key length, used by component segmentation. */
   maxKeyLength: number;
+}
+
+/** Separately loaded local dictionary indexes, grouped by definition language. */
+export interface DictionaryIndexes {
+  english: DictionaryIndex | null;
+  vietnamese: DictionaryIndex | null;
+}
+
+/** Vietnamese definitions are independent from the English insight status. */
+export interface VietnameseDictionaryInsight {
+  exactEntries: DictionaryEntry[];
+  componentEntries: DictionaryEntry[];
+  status: 'disabled' | 'ready' | 'no-definition' | 'dictionary-unavailable';
 }
 
 /** One syllable's tone info for the tone-chip display. */
@@ -290,4 +303,5 @@ export interface WordInsight {
   examples: HighlightedExample[];
   externalLinks: ExternalDictionaryLink[];
   status: 'ready' | 'no-definition' | 'dictionary-unavailable';
+  vietnamese: VietnameseDictionaryInsight;
 }

@@ -50,6 +50,18 @@ export function App() {
   const { settings, loading: settingsLoading } = useSettings();
   const onboarding = useOnboarding();
   const locale = settings.uiLocale;
+  const dictionaryCacheKey = useMemo(
+    () => JSON.stringify({
+      kaikki: { enabled: settings.kaikki.enabled, hash: settings.kaikki.hash },
+      cvdict: { enabled: settings.cvdict.enabled, hash: settings.cvdict.hash },
+    }),
+    [
+      settings.kaikki.enabled,
+      settings.kaikki.hash,
+      settings.cvdict.enabled,
+      settings.cvdict.hash,
+    ],
+  );
   const [aiSettings, setAiSettingsState] = useState<AiSettings>(DEFAULT_AI_SETTINGS);
 
   useEffect(() => {
@@ -434,7 +446,13 @@ export function App() {
               locale={locale}
             />
           ) : tab === 'words' ? (
-            <WordList words={matches.words} onUpdate={updateWord} onDelete={deleteWord} locale={locale} />
+            <WordList
+              words={matches.words}
+              onUpdate={updateWord}
+              onDelete={deleteWord}
+              locale={locale}
+              dictionaryCacheKey={dictionaryCacheKey}
+            />
           ) : (
             <QuoteList
               quotes={matches.quotes}

@@ -21,11 +21,13 @@ export function WordCard({
   onUpdate,
   onDelete,
   locale,
+  dictionaryCacheKey = 'default',
 }: {
   word: WordEntry;
   onUpdate: (patch: Partial<WordEntry>) => void;
   onDelete: () => void;
   locale: UiLocale;
+  dictionaryCacheKey?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [note, setNote] = useState(word.note);
@@ -129,7 +131,7 @@ export function WordCard({
 
       {expanded && (
         <div className="mt-4 space-y-3 border-t border-border pt-3 text-sm">
-          <WordInsightPanel word={word} locale={locale} />
+          <WordInsightPanel word={word} locale={locale} dictionaryCacheKey={dictionaryCacheKey} />
 
           {occurrences.length > 0 && (
             <details className="rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs">

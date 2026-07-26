@@ -1,42 +1,54 @@
 import { useEffect, useMemo, useState } from 'react';
 import { loadDictionary } from '@/lib/dictionary-loader';
 import { computeWordInsight } from '@/lib/word-insight';
-import type { DictionaryIndex, WordEntry, WordInsight } from '@/lib/types';
+import type { DictionaryIndexes, WordEntry, WordInsight } from '@/lib/types';
 
 type LoadState =
-  | { phase: 'loading'; index: null }
-  | { phase: 'ready'; index: DictionaryIndex | null };
+  | { phase: 'loading'; indexes: null; cvdictEnabled: false }
+  | { phase: 'ready'; indexes: DictionaryIndexes; cvdictEnabled: boolean };
 
-let sessionLoad: Promise<LoadState> | null = null;
+const sessionLoads = new Map<string, Promise<LoadState>>();
 
-async function ensureLoaded(): Promise<LoadState> {
-  if (!sessionLoad) {
-    sessionLoad = loadDictionary().then((result) => ({
+async function ensureLoaded(cacheKey: string): Promise<LoadState> {
+  let load = sessionLoads.get(cacheKey);
+  if (!load) {
+    load = loadDictionary().then((result) => ({
       phase: 'ready' as const,
-      index: result.index,
+      indexes: result.indexes,
+      cvdictEnabled: result.cvdictEnabled,
     }));
+    sessionLoads.set(cacheKey, load);
   }
-  return sessionLoad;
+  return load;
 }
 
-export function useWordInsight(word: WordEntry): {
+export function useWordInsight(word: WordEntry, dictionaryCacheKey = 'default'): {
   insight: WordInsight | null;
   loading: boolean;
 } {
-  const [state, setState] = useState<LoadState>({ phase: 'loading', index: null });
+  const [state, setState] = useState<LoadState>({
+    phase: 'loading',
+    indexes: null,
+    cvdictEnabled: false,
+  });
 
   useEffect(() => {
     let cancelled = false;
-    ensureLoaded().then((loaded) => {
+    setState({ phase: 'loading', indexes: null, cvdictEnabled: false });
+    ensureLoaded(dictionaryCacheKey).then((loaded) => {
       if (!cancelled) setState(loaded);
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [dictionaryCacheKey]);
 
   const insight = useMemo(
-    () => (state.phase === 'ready' ? computeWordInsight(word, state.index) : null),
+    () => (
+      state.phase === 'ready'
+        ? computeWordInsight(word, state.indexes, state.cvdictEnabled)
+        : null
+    ),
     [word, state],
   );
 

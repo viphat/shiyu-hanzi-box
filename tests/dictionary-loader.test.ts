@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildIndex } from '../lib/dictionary';
 import { loadDictionary } from '../lib/dictionary-loader';
+import { setCvdictCache } from '../lib/cvdict-cache';
 import { setKaikkiCache } from '../lib/kaikki-cache';
 import {
   DEFAULT_SETTINGS,
+  getSettings,
+  recordCvdictInstall,
   recordKaikkiImport,
   settingsStorage,
 } from '../lib/settings';
@@ -32,6 +35,15 @@ const asset: CompactDictionaryAsset = {
 
 const cache = new Map<string, string>();
 const kaikkiCache = new Map<string, string>();
+const cvdictCache = new Map<string, string>();
+
+const cvdictMeta = {
+  hash: 'cv1',
+  entryCount: 1,
+  version: '1.0.1',
+  release: '2024-12-02T17:46:19Z',
+  installedAt: 100,
+};
 
 vi.mock('wxt/browser', () => ({
   browser: {
@@ -45,6 +57,7 @@ describe('loadDictionary', () => {
     vi.unstubAllGlobals();
     cache.clear();
     kaikkiCache.clear();
+    cvdictCache.clear();
     vi.stubGlobal('__dictCacheStore', {
       get: (k: string) => Promise.resolve(cache.get(k) ?? null),
       set: (k: string, v: string) => {
@@ -57,6 +70,14 @@ describe('loadDictionary', () => {
       get: (k: string) => Promise.resolve(kaikkiCache.get(k) ?? null),
       set: (k: string, v: string) => {
         kaikkiCache.set(k, v);
+        return Promise.resolve();
+      },
+      clear: () => Promise.resolve(),
+    });
+    vi.stubGlobal('__cvdictCacheStore', {
+      get: (k: string) => Promise.resolve(cvdictCache.get(k) ?? null),
+      set: (k: string, v: string) => {
+        cvdictCache.set(k, v);
         return Promise.resolve();
       },
       clear: () => Promise.resolve(),
@@ -75,11 +96,11 @@ describe('loadDictionary', () => {
         });
       });
 
-    const { index, status } = await loadDictionary();
+    const { indexes, status } = await loadDictionary();
     expect(status).toBe('built');
     expect(fetchSpy).toHaveBeenCalledWith('https://ext/dictionaries/cc-cedict-manifest.json');
     expect(fetchSpy).toHaveBeenCalledWith('https://ext/dictionaries/cc-cedict.compact.json');
-    expect(index!.byForm.get('你好')).toHaveLength(1);
+    expect(indexes.english!.byForm.get('你好')).toHaveLength(1);
     expect(cache.has('hash1')).toBe(true);
   });
 
@@ -99,9 +120,9 @@ describe('loadDictionary', () => {
       headers: { 'content-type': 'application/json' },
     }));
 
-    const { index, status } = await loadDictionary();
+    const { indexes, status } = await loadDictionary();
     expect(status).toBe('cached');
-    expect(index!.byForm.get('你好')).toHaveLength(1);
+    expect(indexes.english!.byForm.get('你好')).toHaveLength(1);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(fetchSpy).toHaveBeenCalledWith('https://ext/dictionaries/cc-cedict-manifest.json');
   });
@@ -109,7 +130,7 @@ describe('loadDictionary', () => {
   it('returns unavailable when fetch fails', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network'));
     const result = await loadDictionary();
-    expect(result.index).toBeNull();
+    expect(result.indexes.english).toBeNull();
     expect(result.status).toBe('unavailable');
   });
 
@@ -125,7 +146,7 @@ describe('loadDictionary', () => {
     });
 
     const result = await loadDictionary();
-    expect(result.index).toBeNull();
+    expect(result.indexes.english).toBeNull();
     expect(result.status).toBe('unavailable');
   });
 
@@ -155,7 +176,7 @@ describe('loadDictionary', () => {
     });
 
     const result = await loadDictionary();
-    const hits = result.index!.byForm.get('滞胀')!;
+    const hits = result.indexes.english!.byForm.get('滞胀')!;
     expect(hits[0]).toMatchObject({
       definitions: ['stagflation'],
       source: 'kaikki',
@@ -189,7 +210,7 @@ describe('loadDictionary', () => {
     });
 
     const result = await loadDictionary();
-    const hits = result.index!.byForm.get('你好')!;
+    const hits = result.indexes.english!.byForm.get('你好')!;
     expect(hits.map((hit) => hit.definitions[0])).toEqual(['hello', 'Kaikki hello']);
     expect(hits.map((hit) => hit.source)).toEqual(['cc-cedict', 'kaikki']);
   });
@@ -213,6 +234,54 @@ describe('loadDictionary', () => {
     });
 
     const result = await loadDictionary();
-    expect(result.index!.byForm.get('滞胀')).toBeUndefined();
+    expect(result.indexes.english!.byForm.get('滞胀')).toBeUndefined();
+  });
+
+  it('loads enabled cached CVDICT separately from English definitions', async () => {
+    await settingsStorage.setValue(recordCvdictInstall(DEFAULT_SETTINGS, cvdictMeta));
+    await setCvdictCache('cv1', buildIndex([
+      { index: 0, traditional: '你好', simplified: '你好', pinyin: 'ni3 hao3', definitions: ['xin chào'] },
+    ]));
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const body = String(url).endsWith('cc-cedict-manifest.json') ? meta : asset;
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+
+    const result = await loadDictionary(await getSettings());
+
+    expect(result.indexes.english!.byForm.get('你好')![0].definitions).toEqual(['hello']);
+    expect(result.indexes.vietnamese!.byForm.get('你好')![0].definitions).toEqual(['xin chào']);
+  });
+
+  it('keeps an enabled CVDICT index unavailable when this profile has no cache', async () => {
+    await settingsStorage.setValue(recordCvdictInstall(DEFAULT_SETTINGS, cvdictMeta));
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const body = String(url).endsWith('cc-cedict-manifest.json') ? meta : asset;
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+
+    const result = await loadDictionary(await getSettings());
+
+    expect(result.cvdictEnabled).toBe(true);
+    expect(result.indexes.vietnamese).toBeNull();
+  });
+
+  it('keeps CVDICT available when the English dictionary cannot load', async () => {
+    await settingsStorage.setValue(recordCvdictInstall(DEFAULT_SETTINGS, cvdictMeta));
+    await setCvdictCache('cv1', buildIndex([
+      { index: 0, traditional: '你好', simplified: '你好', pinyin: 'ni3 hao3', definitions: ['xin chào'] },
+    ]));
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network'));
+
+    const result = await loadDictionary(await getSettings());
+
+    expect(result.indexes.english).toBeNull();
+    expect(result.indexes.vietnamese!.byForm.get('你好')![0].definitions).toEqual(['xin chào']);
   });
 });

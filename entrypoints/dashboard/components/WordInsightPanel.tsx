@@ -14,8 +14,16 @@ import { ToneChips } from './ToneChips';
  * a hook conditionally. The hook loads the dictionary once per dashboard
  * session, so mounting this for an expanded card is cheap after the first.
  */
-export function WordInsightPanel({ word, locale }: { word: WordEntry; locale: UiLocale }) {
-  const { insight, loading } = useWordInsight(word);
+export function WordInsightPanel({
+  word,
+  locale,
+  dictionaryCacheKey = 'default',
+}: {
+  word: WordEntry;
+  locale: UiLocale;
+  dictionaryCacheKey?: string;
+}) {
+  const { insight, loading } = useWordInsight(word, dictionaryCacheKey);
   const { state: aiState, error: aiError, requestInsight } = useAiInsight(
     word,
     insight?.exactEntries ?? [],
@@ -41,6 +49,24 @@ export function WordInsightPanel({ word, locale }: { word: WordEntry; locale: Ui
 
       {insight.status === 'no-definition' && insight.componentEntries.length === 0 && (
         <p className="text-xs text-muted">{t(locale, 'insight.noLocalDefinition')}</p>
+      )}
+
+      {insight.vietnamese.status === 'ready' && insight.vietnamese.exactEntries.length > 0 && (
+        <DefinitionList
+          title={t(locale, 'insight.vietnameseDefinitions')}
+          entries={insight.vietnamese.exactEntries}
+          locale={locale}
+          showPinyin={false}
+        />
+      )}
+
+      {insight.vietnamese.status === 'no-definition' && insight.vietnamese.componentEntries.length > 0 && (
+        <DefinitionList
+          title={t(locale, 'insight.vietnameseDefinitions')}
+          entries={insight.vietnamese.componentEntries}
+          locale={locale}
+          showPinyin={false}
+        />
       )}
 
       {insight.status === 'dictionary-unavailable' && (

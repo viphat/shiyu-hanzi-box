@@ -8,11 +8,13 @@ export function WordList({
   onUpdate,
   onDelete,
   locale,
+  dictionaryCacheKey = 'default',
 }: {
   words: WordEntry[];
   onUpdate: (id: string, patch: Partial<WordEntry>) => void;
   onDelete: (id: string) => void;
   locale: UiLocale;
+  dictionaryCacheKey?: string;
 }) {
   if (words.length === 0) {
     return (
@@ -35,6 +37,7 @@ export function WordList({
           onUpdate={(patch) => onUpdate(word.id, patch)}
           onDelete={() => onDelete(word.id)}
           locale={locale}
+          dictionaryCacheKey={dictionaryCacheKey}
         />
       ))}
     </div>

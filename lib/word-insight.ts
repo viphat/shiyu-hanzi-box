@@ -4,12 +4,13 @@ import { displayableOccurrences } from './occurrences';
 import { cedictPinyinToChips, inferToneChips } from './pinyin-helpers';
 import type {
   DictionaryEntry,
-  DictionaryIndex,
+  DictionaryIndexes,
   HighlightedExample,
   HighlightRange,
   Occurrence,
   WordEntry,
   WordInsight,
+  VietnameseDictionaryInsight,
 } from './types';
 
 const SCAN_LIMIT = 1000;
@@ -122,14 +123,21 @@ const MAX_EXACT_ENTRIES = 5;
  * Combine dictionary lookup, tone analysis, highlighted examples, and
  * external links into a non-persisted WordInsight.
  *
- * Pass `null` for `index` when the dictionary asset could not be loaded.
+ * Pass a null English index when the bundled dictionary asset could not load.
  */
 export function computeWordInsight(
   word: WordEntry,
-  index: DictionaryIndex | null,
+  indexes: DictionaryIndexes,
+  cvdictEnabled = false,
 ): WordInsight {
   const displayText = word.text;
   const externalLinks = buildExternalLinks(displayText);
+  const vietnamese = computeVietnameseInsight(
+    word,
+    indexes.vietnamese,
+    cvdictEnabled || indexes.vietnamese !== null,
+  );
+  const index = indexes.english;
 
   if (index === null) {
     const examples = buildHighlightedExamples(displayText, word.occurrences);
@@ -141,6 +149,7 @@ export function computeWordInsight(
       examples,
       externalLinks,
       status: 'dictionary-unavailable',
+      vietnamese,
     };
   }
 
@@ -173,6 +182,7 @@ export function computeWordInsight(
       examples,
       externalLinks,
       status: 'ready',
+      vietnamese,
     };
   }
 
@@ -189,7 +199,34 @@ export function computeWordInsight(
     examples,
     externalLinks,
     status: 'no-definition',
+    vietnamese,
   };
+}
+
+function computeVietnameseInsight(
+  word: WordEntry,
+  index: DictionaryIndexes['vietnamese'],
+  enabled: boolean,
+): VietnameseDictionaryInsight {
+  if (!enabled) {
+    return { exactEntries: [], componentEntries: [], status: 'disabled' };
+  }
+  if (!index) {
+    return { exactEntries: [], componentEntries: [], status: 'dictionary-unavailable' };
+  }
+
+  const exactEntries = uniqueEntries([
+    ...lookupExact(index, word.text),
+    ...lookupExact(index, word.normalized),
+  ]).slice(0, MAX_EXACT_ENTRIES);
+  if (exactEntries.length > 0) {
+    return { exactEntries, componentEntries: [], status: 'ready' };
+  }
+
+  const componentEntries = segmentComponents(index, word.text)
+    .map((segment) => segment.entry)
+    .filter((entry): entry is DictionaryEntry => entry !== undefined);
+  return { exactEntries: [], componentEntries, status: 'no-definition' };
 }
 
 function uniqueEntries(entries: DictionaryEntry[]): DictionaryEntry[] {

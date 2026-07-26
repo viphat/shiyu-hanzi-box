@@ -1,5 +1,4 @@
-import type { WordEntry } from '@/lib/types';
-import type { UiLocale } from '@/lib/types';
+import type { AppSettings, UiLocale, WordEntry } from '@/lib/types';
 import { t } from '@/lib/i18n';
 import { WordCard } from './WordCard';
 
@@ -9,12 +8,14 @@ export function WordList({
   onDelete,
   locale,
   dictionaryCacheKey = 'default',
+  dictionarySettings,
 }: {
   words: WordEntry[];
   onUpdate: (id: string, patch: Partial<WordEntry>) => void;
   onDelete: (id: string) => void;
   locale: UiLocale;
   dictionaryCacheKey?: string;
+  dictionarySettings?: AppSettings;
 }) {
   if (words.length === 0) {
     return (
@@ -38,6 +39,7 @@ export function WordList({
           onDelete={() => onDelete(word.id)}
           locale={locale}
           dictionaryCacheKey={dictionaryCacheKey}
+          dictionarySettings={dictionarySettings}
         />
       ))}
     </div>

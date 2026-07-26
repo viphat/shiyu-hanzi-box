@@ -10,7 +10,7 @@ import {
   occurrenceSourceLabel,
 } from '@/lib/occurrences';
 import { t } from '@/lib/i18n';
-import type { UiLocale, WordEntry } from '@/lib/types';
+import type { AppSettings, UiLocale, WordEntry } from '@/lib/types';
 import { PinyinButton } from './PinyinButton';
 import { SpeakButton } from './SpeakButton';
 import { TraditionalButton } from './TraditionalButton';
@@ -22,12 +22,14 @@ export function WordCard({
   onDelete,
   locale,
   dictionaryCacheKey = 'default',
+  dictionarySettings,
 }: {
   word: WordEntry;
   onUpdate: (patch: Partial<WordEntry>) => void;
   onDelete: () => void;
   locale: UiLocale;
   dictionaryCacheKey?: string;
+  dictionarySettings?: AppSettings;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [note, setNote] = useState(word.note);
@@ -131,7 +133,12 @@ export function WordCard({
 
       {expanded && (
         <div className="mt-4 space-y-3 border-t border-border pt-3 text-sm">
-          <WordInsightPanel word={word} locale={locale} dictionaryCacheKey={dictionaryCacheKey} />
+          <WordInsightPanel
+            word={word}
+            locale={locale}
+            dictionaryCacheKey={dictionaryCacheKey}
+            dictionarySettings={dictionarySettings}
+          />
 
           {occurrences.length > 0 && (
             <details className="rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs">

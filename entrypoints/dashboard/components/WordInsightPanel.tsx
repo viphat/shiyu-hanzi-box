@@ -1,5 +1,5 @@
 import { t } from '@/lib/i18n';
-import type { UiLocale, WordEntry } from '@/lib/types';
+import type { AppSettings, UiLocale, WordEntry } from '@/lib/types';
 import { useAiInsight } from '../hooks/useAiInsight';
 import { useWordInsight } from '../hooks/useWordInsight';
 import { AiInsightSection } from './AiInsightSection';
@@ -18,12 +18,14 @@ export function WordInsightPanel({
   word,
   locale,
   dictionaryCacheKey = 'default',
+  dictionarySettings,
 }: {
   word: WordEntry;
   locale: UiLocale;
   dictionaryCacheKey?: string;
+  dictionarySettings?: AppSettings;
 }) {
-  const { insight, loading } = useWordInsight(word, dictionaryCacheKey);
+  const { insight, loading } = useWordInsight(word, dictionaryCacheKey, dictionarySettings);
   const { state: aiState, error: aiError, requestInsight } = useAiInsight(
     word,
     insight?.exactEntries ?? [],

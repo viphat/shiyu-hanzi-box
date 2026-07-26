@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { loadDictionary } from '@/lib/dictionary-loader';
 import { computeWordInsight } from '@/lib/word-insight';
-import type { DictionaryIndexes, WordEntry, WordInsight } from '@/lib/types';
+import type { AppSettings, DictionaryIndexes, WordEntry, WordInsight } from '@/lib/types';
 
 type LoadState =
   | { phase: 'loading'; indexes: null; cvdictEnabled: false }
@@ -9,10 +9,13 @@ type LoadState =
 
 const sessionLoads = new Map<string, Promise<LoadState>>();
 
-async function ensureLoaded(cacheKey: string): Promise<LoadState> {
+async function ensureLoaded(
+  cacheKey: string,
+  settings?: AppSettings,
+): Promise<LoadState> {
   let load = sessionLoads.get(cacheKey);
   if (!load) {
-    load = loadDictionary().then((result) => ({
+    load = loadDictionary(settings).then((result) => ({
       phase: 'ready' as const,
       indexes: result.indexes,
       cvdictEnabled: result.cvdictEnabled,
@@ -22,7 +25,11 @@ async function ensureLoaded(cacheKey: string): Promise<LoadState> {
   return load;
 }
 
-export function useWordInsight(word: WordEntry, dictionaryCacheKey = 'default'): {
+export function useWordInsight(
+  word: WordEntry,
+  dictionaryCacheKey = 'default',
+  dictionarySettings?: AppSettings,
+): {
   insight: WordInsight | null;
   loading: boolean;
 } {
@@ -35,7 +42,7 @@ export function useWordInsight(word: WordEntry, dictionaryCacheKey = 'default'):
   useEffect(() => {
     let cancelled = false;
     setState({ phase: 'loading', indexes: null, cvdictEnabled: false });
-    ensureLoaded(dictionaryCacheKey).then((loaded) => {
+    ensureLoaded(dictionaryCacheKey, dictionarySettings).then((loaded) => {
       if (!cancelled) setState(loaded);
     });
     return () => {

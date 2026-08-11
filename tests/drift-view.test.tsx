@@ -240,4 +240,80 @@ describe('DriftView', () => {
 
     expect(onBack).toHaveBeenCalledWith(expect.anything(), MAX_DRIFT_LEVEL, '2026-08-11');
   });
+
+  it('skips a history entry archived elsewhere and lands on the most recent surviving one', () => {
+    // Regression test for Back landing on a card no longer in the pool. The
+    // *display* already tolerates this by falling back to pool[0] (see
+    // `active` in DriftView), which is exactly what makes the pre-fix bug
+    // easy to miss: with only one archived history entry, pool[0] can
+    // coincidentally *be* the right answer. This test picks entries so
+    // pool[0] after the archive is a *different* card than the correct
+    // restore target, so a pre-fix `back()` would visibly show the wrong
+    // card, call onBack with the wrong entry, and report the wrong
+    // previousLevel.
+    const words = [
+      word({ id: 'wa', normalized: 'a', text: '甲' }),
+      word({ id: 'wb', normalized: 'b', text: '乙' }),
+      word({ id: 'wc', normalized: 'c', text: '丙' }),
+      word({ id: 'wd', normalized: 'd', text: '丁' }),
+    ];
+    // Distinct levels per entry so the asserted previousLevel below can only
+    // match the entry `back()` is actually supposed to land on.
+    const store: DriftStore = {
+      weights: { 'word:a': 1, 'word:b': -1, 'word:c': 2 },
+      days: {},
+    };
+    const onBack = vi.fn();
+    const text = () => container.querySelector('[data-testid="drift-text"]')!.textContent;
+
+    render({ words, quotes: [] }, { store, onBack });
+
+    // Pool is sorted by driftKey ('word:a' < ... < 'word:d') and `random` is
+    // pinned to 0, so this walks deterministically: 甲 -> 乙 -> 丙 (window
+    // size 2 for a 4-card pool), pushing all three onto the history stack in
+    // that order, 丙 on top.
+    expect(text()).toBe('甲');
+    click('drift-up');
+    expect(text()).toBe('乙');
+    click('drift-up');
+    expect(text()).toBe('丙');
+    click('drift-up');
+
+    // 丙 (the top of the history stack) is archived in "another tab": drop it
+    // from the pool by re-rendering with updated inbox, on the same root, so
+    // DriftView's internal history/recent state carries over exactly as a
+    // real prop update would leave it.
+    const wc = words[2];
+    act(() => {
+      root.render(
+        <DriftView
+          inbox={{ words: [words[0], words[1], { ...wc, status: 'archived' }, words[3]], quotes: [] }}
+          store={store}
+          onThumb={() => {}}
+          onSkip={() => {}}
+          onBack={onBack}
+          locale="en"
+          random={() => 0}
+          now={() => NOW}
+        />,
+      );
+    });
+
+    click('drift-back');
+
+    // Lands on 乙 (previousLevel -1), skipping over the archived 丙
+    // (previousLevel 2) entirely — not the pool-order fallback 甲 that a
+    // pre-fix back() would show (丙's own driftKey lookup misses, pool[0] is
+    // 甲, and 甲 ≠ 乙 is exactly the divergence this test is built to catch).
+    expect(text()).toBe('乙');
+    expect(onBack).toHaveBeenCalledWith(expect.objectContaining({ normalized: 'b' }), -1, '2026-08-11');
+    expect(onBack).not.toHaveBeenCalledWith(expect.objectContaining({ normalized: 'c' }), expect.anything(), expect.anything());
+
+    // The archived 丙 frame and the now-consumed 乙 frame must both be gone
+    // from history — a second Back should skip straight to 甲, not re-surface
+    // either of them.
+    click('drift-back');
+    expect(text()).toBe('甲');
+    expect(onBack).toHaveBeenCalledWith(expect.objectContaining({ normalized: 'a' }), 1, '2026-08-11');
+  });
 });

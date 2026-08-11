@@ -4,20 +4,20 @@ import { fakeBrowser } from '@webext-core/fake-browser';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useDrift } from '../entrypoints/dashboard/hooks/useDrift';
-import { nudgeLevel, type DriftStore } from '../lib/drift';
-import { getDriftStore, replaceDriftStore } from '../lib/drift-storage';
+import { useSettings } from '../entrypoints/dashboard/hooks/useSettings';
+import { getSettings, replaceSettings } from '../lib/settings';
+import type { AppSettings } from '../lib/types';
 
-vi.mock('../lib/drift-storage', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../lib/drift-storage')>();
-  return { ...actual, getDriftStore: vi.fn(actual.getDriftStore) };
+vi.mock('../lib/settings', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/settings')>();
+  return { ...actual, getSettings: vi.fn(actual.getSettings) };
 });
 
 let container: HTMLDivElement;
 let root: Root;
 
-function Probe({ onRender }: { onRender: (state: ReturnType<typeof useDrift>) => void }) {
-  onRender(useDrift());
+function Probe({ onRender }: { onRender: (state: ReturnType<typeof useSettings>) => void }) {
+  onRender(useSettings());
   return null;
 }
 
@@ -34,58 +34,46 @@ afterEach(async () => {
   container.remove();
 });
 
-describe('useDrift', () => {
-  it('loads the persisted store', async () => {
-    await replaceDriftStore({ weights: { '你好': 2 }, days: {} });
+describe('useSettings', () => {
+  it('loads the persisted settings', async () => {
+    await replaceSettings({ ...(await getSettings()), uiLocale: 'en' });
 
-    let latest: ReturnType<typeof useDrift> | null = null;
+    let latest: ReturnType<typeof useSettings> | null = null;
     await act(async () => {
       root.render(<Probe onRender={(state) => { latest = state; }} />);
     });
 
     expect(latest!.loading).toBe(false);
-    expect(latest!.driftStore.weights).toEqual({ '你好': 2 });
-  });
-
-  it('writes a mutation through to storage', async () => {
-    let latest: ReturnType<typeof useDrift> | null = null;
-    await act(async () => {
-      root.render(<Probe onRender={(state) => { latest = state; }} />);
-    });
-
-    await act(async () => {
-      await latest!.mutateDrift((store) => nudgeLevel(store, '你好', 1));
-    });
-
-    expect(latest!.driftStore.weights).toEqual({ '你好': 1 });
+    expect(latest!.settings.uiLocale).toBe('en');
   });
 
   it('picks up an external write via the storage watcher', async () => {
-    let latest: ReturnType<typeof useDrift> | null = null;
+    let latest: ReturnType<typeof useSettings> | null = null;
     await act(async () => {
       root.render(<Probe onRender={(state) => { latest = state; }} />);
     });
 
     await act(async () => {
-      await replaceDriftStore({ weights: {}, days: { '2026-08-11': 3 } });
+      await replaceSettings({ ...(await getSettings()), uiLocale: 'en' });
     });
 
-    expect(latest!.driftStore.days).toEqual({ '2026-08-11': 3 });
+    expect(latest!.settings.uiLocale).toBe('en');
   });
 
   it('does not let a slow initial read clobber a fresher value the watcher already delivered', async () => {
     // Seed a value that will still be sitting in storage when the (mocked,
-    // deliberately slow) initial getDriftStore() call for this mount
+    // deliberately slow) initial getSettings() call for this mount
     // eventually resolves.
-    await replaceDriftStore({ weights: { stale: 1 }, days: {} });
+    await replaceSettings({ ...(await getSettings()), uiLocale: 'zh-CN' });
 
-    let resolveInitial!: (value: DriftStore) => void;
-    const deferredInitialRead = new Promise<DriftStore>((resolve) => {
+    let resolveInitial!: (value: AppSettings) => void;
+    const deferredInitialRead = new Promise<AppSettings>((resolve) => {
       resolveInitial = resolve;
     });
-    vi.mocked(getDriftStore).mockReturnValueOnce(deferredInitialRead);
+    const staleSnapshot = await getSettings();
+    vi.mocked(getSettings).mockReturnValueOnce(deferredInitialRead);
 
-    let latest: ReturnType<typeof useDrift> | null = null;
+    let latest: ReturnType<typeof useSettings> | null = null;
     await act(async () => {
       root.render(<Probe onRender={(state) => { latest = state; }} />);
     });
@@ -97,18 +85,18 @@ describe('useDrift', () => {
     // delivered before the slow initial read resolves — the race this
     // guards against.
     await act(async () => {
-      await replaceDriftStore({ weights: { fresh: 2 }, days: {} });
+      await replaceSettings({ ...staleSnapshot, uiLocale: 'en' });
     });
-    expect(latest!.driftStore.weights).toEqual({ fresh: 2 });
+    expect(latest!.settings.uiLocale).toBe('en');
     expect(latest!.loading).toBe(false);
 
     // Now let the stale initial read resolve. Without the fix, this
     // overwrites the fresher, watcher-delivered value with the stale one
     // captured before the watcher fired.
     await act(async () => {
-      resolveInitial({ weights: { stale: 1 }, days: {} });
+      resolveInitial(staleSnapshot);
     });
-    expect(latest!.driftStore.weights).toEqual({ fresh: 2 });
+    expect(latest!.settings.uiLocale).toBe('en');
     expect(latest!.loading).toBe(false);
   });
 });

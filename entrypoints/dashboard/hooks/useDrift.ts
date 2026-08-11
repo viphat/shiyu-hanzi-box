@@ -13,14 +13,24 @@ export function useDrift() {
 
   useEffect(() => {
     mountedRef.current = true;
+    // The initial read and the watcher subscription race: a write's watcher
+    // event can land before this in-flight getDriftStore() resolves, and
+    // without this flag the initial read would then apply its
+    // already-stale snapshot on top of the fresher value the watcher just
+    // delivered. Once the watcher has delivered anything, it's a strictly
+    // more current source of truth than the initial read, so the initial
+    // read's result is discarded rather than applied.
+    let watcherDelivered = false;
     void getDriftStore().then((value) => {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || watcherDelivered) return;
       setDriftStore(value);
       setLoading(false);
     });
     const unwatch = watchDriftStore((next) => {
       if (!mountedRef.current) return;
+      watcherDelivered = true;
       setDriftStore(next);
+      setLoading(false);
     });
     return () => {
       mountedRef.current = false;

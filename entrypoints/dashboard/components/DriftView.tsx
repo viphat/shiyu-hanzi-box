@@ -144,13 +144,25 @@ export function DriftView({
 
   function back() {
     if (busyRef.current) return;
-    const last = history[history.length - 1];
-    if (!last) return;
+    // An entry on the history stack can be archived in another tab between
+    // being recorded and Back being pressed. Landing on it anyway would be a
+    // lie: the very next render can't find it in `pool` and falls back to
+    // `pool[0]` (see `active` above), so Back would visibly show a card it
+    // never claimed to restore. Walk back past any such entries to the most
+    // recent one still in the pool, and land on that instead. Entries walked
+    // past are simply dropped — their card is gone, so there is nothing to
+    // restore or display for them.
+    let index = history.length - 1;
+    while (index >= 0 && !pool.some((entry) => driftKey(entry) === driftKey(history[index].entry))) {
+      index -= 1;
+    }
+    if (index < 0) return;
+    const last = history[index];
     busyRef.current = true;
     setBusy(true);
     try {
       void onBack(last.entry, last.previousLevel, last.dayKey);
-      setHistory((prev) => prev.slice(0, -1));
+      setHistory((prev) => prev.slice(0, index));
       setRecent(() => last.recentBefore);
       setCurrent(last.entry);
     } finally {

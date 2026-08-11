@@ -215,7 +215,7 @@ encrypted replica transport reached through the File System Access API — no
 provider API is ever called.
 
 - `lib/sync/types.ts`: the CRDT `SyncState` — HLC-stamped LWW registers plus
-  add-wins OR-Sets (occurrences, review events, quote tags).
+  add-wins OR-Sets (occurrences, review events, quote tags, cloze blanks).
 - `lib/sync/project.ts`: projects inbox ↔ state. Tag add-stamps are carried
   forward so unrelated edits never move them. Quote translations project as
   **two separate registers** (`translationGoogle`, `translationAi`) so
@@ -223,6 +223,13 @@ provider API is ever called.
   stamped by its slot's own `generatedAt` rather than the quote's `updatedAt` so
   an unrelated edit cannot revert a peer's newer translation. An absent slot
   emits no register at all — never `null`, which could otherwise erase a peer.
+  Cloze blanks project as one node per blank (LWW span/hint/wordId plus its own
+  review events and scheduler snapshot — one blank is one FSRS card), keyed by
+  `Cloze.id` with carried-forward add stamps like tags. **Anything a quote or
+  word carries must be projected**: `materialize` rebuilds each entry as a
+  fresh literal and the coordinator writes it over the local inbox, so an
+  unprojected field is deleted on the next pass, not merely left unsynced —
+  `tests/sync/project.test.ts` round-trips a fully-populated quote to catch it.
 - `lib/sync/merge.ts`: the deterministic merge. `coordinator.ts`: the sole
   writer, debounced. `connect.ts`: create/join vault and folder authorization.
   `crypto.ts` / `vault.ts`: encrypt the whole payload (including the AI key)

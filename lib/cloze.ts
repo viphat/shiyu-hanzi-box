@@ -53,6 +53,18 @@ export function countParkedQuotes(quotes: QuoteEntry[]): number {
 }
 
 /**
+ * Plan the sync side of a cloze write: the ids that existed before but are gone
+ * after. Removal is not representable as absence in the synced OR-Set, so the
+ * caller must turn these into `removeClozes` tombstones from the SAME snapshot
+ * it builds the next inbox from — otherwise a peer (or this device's own
+ * persisted state) resurrects the blank on the next pass.
+ */
+export function planClozeWrite(old: Cloze[] | undefined, next: Cloze[]): string[] {
+  const kept = new Set(next.map((c) => c.id));
+  return (old ?? []).filter((c) => !kept.has(c.id)).map((c) => c.id);
+}
+
+/**
  * Validate and create a Cloze from a raw [start, end) selection against the
  * given text and existing clozes. Returns null when invalid (empty, out-of-range,
  * or overlapping with any existing cloze).

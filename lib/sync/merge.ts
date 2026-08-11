@@ -2,6 +2,7 @@ import { compareTimestamps } from './clock';
 import { mergeRegisterMap, mergeStampMap } from './registers';
 import { liftLegacyTags } from './project';
 import type {
+  ClozeNode,
   HybridTimestamp,
   OccurrenceNode,
   QuoteNode,
@@ -101,6 +102,20 @@ export function mergeWordNodes(a: WordNode, b: WordNode): WordNode {
   };
 }
 
+export function mergeClozeNodes(a: ClozeNode, b: ClozeNode): ClozeNode {
+  const events = mergeReviewEvents(a.reviewEvents, b.reviewEvents);
+  return {
+    id: a.id,
+    // Later add stamp wins, exactly as mergeStampMap resolves tag add stamps:
+    // a re-add that was minted above a tombstone must survive merging with the
+    // pre-removal add stamp still held by a stale peer.
+    addedAt: compareTimestamps(a.addedAt, b.addedAt) >= 0 ? a.addedAt : b.addedAt,
+    fields: mergeRegisterMap(a.fields, b.fields),
+    reviewEvents: events,
+    snapshot: pickSnapshot(events, a.snapshot, b.snapshot),
+  };
+}
+
 export function mergeQuoteNodes(a: QuoteNode, b: QuoteNode): QuoteNode {
   const la = liftLegacyTags(a);
   const lb = liftLegacyTags(b);
@@ -111,6 +126,8 @@ export function mergeQuoteNodes(a: QuoteNode, b: QuoteNode): QuoteNode {
     fields: mergeRegisterMap(la.fields, lb.fields),
     tags: mergeStampMap(la.tags ?? {}, lb.tags ?? {}),
     tagTombstones: mergeStampMap(la.tagTombstones ?? {}, lb.tagTombstones ?? {}),
+    clozes: mergeNodeMap(la.clozes ?? {}, lb.clozes ?? {}, mergeClozeNodes),
+    clozeTombstones: mergeStampMap(la.clozeTombstones ?? {}, lb.clozeTombstones ?? {}),
     reviewEvents: events,
     snapshot: pickSnapshot(events, la.snapshot, lb.snapshot),
   };

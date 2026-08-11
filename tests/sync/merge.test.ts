@@ -4,7 +4,7 @@ import { projectInbox, materialize, wordKey } from '../../lib/sync/project';
 import { DEFAULT_SETTINGS } from '../../lib/settings';
 import { DEFAULT_AI_SETTINGS } from '../../lib/ai/settings';
 import type { AiInsight, Inbox, WordEntry, QuoteEntry, VietnameseAiInsight } from '../../lib/types';
-import type { QuoteNode } from '../../lib/sync/types';
+import type { ClozeNode, QuoteNode } from '../../lib/sync/types';
 
 function word(over: Partial<WordEntry>): WordEntry {
   return {
@@ -224,5 +224,71 @@ describe('tag resurrection regression', () => {
     // A merges B's replica: foo must stay removed.
     const merged = mergeSyncState(a, b);
     expect(materialize(merged).inbox.quotes[0].tags).toEqual([]);
+  });
+});
+
+function clozeNode(over: Partial<ClozeNode> = {}): ClozeNode {
+  return {
+    id: 'c1',
+    addedAt: ts(10),
+    fields: {
+      start: { value: 0, stamp: ts(10) },
+      end: { value: 2, stamp: ts(10) },
+    },
+    reviewEvents: {},
+    ...over,
+  };
+}
+
+describe('mergeQuoteNodes cloze OR-Set', () => {
+  it('unions blanks added concurrently on two devices', () => {
+    const a = qnode({ clozes: { c1: clozeNode() } });
+    const b = qnode({ clozes: { c2: clozeNode({ id: 'c2', addedAt: ts(11, 'B') }) } });
+    expect(Object.keys(mergeQuoteNodes(a, b).clozes!).sort()).toEqual(['c1', 'c2']);
+  });
+
+  it('a remove suppresses a stale add it causally saw', () => {
+    const a = qnode({ clozes: { c1: clozeNode() }, clozeTombstones: { c1: ts(20) } });
+    const b = qnode({ clozes: { c1: clozeNode() } });
+    const m = mergeQuoteNodes(a, b);
+    expect(m.clozeTombstones!.c1.wallTime).toBe(20);
+    expect(m.clozes!.c1.addedAt.wallTime).toBe(10);
+  });
+
+  it('keeps the later add stamp so a re-add beats a stale peer copy', () => {
+    const a = qnode({ clozes: { c1: clozeNode({ addedAt: ts(30, 'B') }) } });
+    const b = qnode({ clozes: { c1: clozeNode() }, clozeTombstones: { c1: ts(20) } });
+    const m = mergeQuoteNodes(a, b);
+    expect(m.clozes!.c1.addedAt.wallTime).toBe(30);
+    expect(m.clozeTombstones!.c1.wallTime).toBe(20);
+  });
+
+  it('unions review events logged for the same blank on two devices', () => {
+    const event = (id: string, at: number, replica: string) => ({
+      id,
+      reviewedAt: at,
+      eventVersion: 1,
+      payload: { reviewedAt: at, rating: 'good' },
+      stamp: ts(at, replica),
+    });
+    const snapshot = (id: string, at: number, replica: string) => ({
+      payload: { dueAt: at + 1000, intervalDays: 3, repetitions: 1, lapses: 0 },
+      reviewEventId: id,
+      stamp: ts(at, replica),
+    });
+    const a = qnode({
+      clozes: {
+        c1: clozeNode({ reviewEvents: { e1: event('e1', 100, 'A') }, snapshot: snapshot('e1', 100, 'A') }),
+      },
+    });
+    const b = qnode({
+      clozes: {
+        c1: clozeNode({ reviewEvents: { e2: event('e2', 200, 'B') }, snapshot: snapshot('e2', 200, 'B') }),
+      },
+    });
+    const m = mergeQuoteNodes(a, b);
+    expect(Object.keys(m.clozes!.c1.reviewEvents).sort()).toEqual(['e1', 'e2']);
+    // Later review wins the scheduler snapshot.
+    expect(m.clozes!.c1.snapshot?.reviewEventId).toBe('e2');
   });
 });

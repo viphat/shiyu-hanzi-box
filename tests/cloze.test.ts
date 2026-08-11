@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { clozeFromRange, countParkedQuotes, isParkedQuote, parseClozeMarkup, seedMarkup } from '../lib/cloze';
+import {
+  clozeFromRange,
+  countParkedQuotes,
+  isParkedQuote,
+  parseClozeMarkup,
+  planClozeWrite,
+  seedMarkup,
+} from '../lib/cloze';
 import type { Cloze, QuoteEntry } from '../lib/types';
 
 function makeQuote(overrides: Partial<QuoteEntry> = {}): QuoteEntry {
@@ -198,5 +205,29 @@ describe('seedMarkup', () => {
   it('escapes literal braces already present in the text', () => {
     const text = '集合 {x} 表示';
     expect(seedMarkup(text, [])).toBe('集合 \\{x\\} 表示');
+  });
+});
+
+describe('planClozeWrite', () => {
+  it('reports the ids present before the write but not after', () => {
+    const old: Cloze[] = [
+      { id: 'a', start: 0, end: 1 },
+      { id: 'b', start: 2, end: 3 },
+    ];
+    expect(planClozeWrite(old, [{ id: 'b', start: 2, end: 3 }])).toEqual(['a']);
+  });
+
+  it('reports nothing when a blank is only edited', () => {
+    const old: Cloze[] = [{ id: 'a', start: 0, end: 1 }];
+    expect(planClozeWrite(old, [{ id: 'a', start: 0, end: 1, hint: 'pinyin' }])).toEqual([]);
+  });
+
+  it('reports every id when the markup editor replaces the whole set', () => {
+    const old: Cloze[] = [{ id: 'a', start: 0, end: 1 }];
+    expect(planClozeWrite(old, [{ id: 'fresh', start: 0, end: 2 }])).toEqual(['a']);
+  });
+
+  it('treats an absent old set as nothing to remove', () => {
+    expect(planClozeWrite(undefined, [{ id: 'a', start: 0, end: 1 }])).toEqual([]);
   });
 });

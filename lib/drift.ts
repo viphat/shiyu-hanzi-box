@@ -104,11 +104,16 @@ export function pickDriftCard(
   const candidates = pool.filter((entry) => !blocked.has(driftKey(entry)));
   // For a singleton pool, windowSize is 0, so blocked is empty and the sole
   // entry is always a genuine candidate — no fallback needed there. More
-  // generally, windowSize < pool.length guarantees candidates is non-empty
-  // for a correctly-sized `recent` list. But the fallback below is load-
-  // bearing, not dead code: a caller can pass a hand-built `recent` longer
-  // than the window (or containing keys outside the pool), which could
-  // otherwise still block every candidate and leave nothing to draw from.
+  // generally, windowSize < pool.length by construction (recentWindowSize
+  // halves and caps), so blocked can never cover every *distinct* candidate.
+  // The fallback below is load-bearing, not dead code, but not for the reason
+  // it might look like: `recent.slice(-windowSize)` above already caps
+  // `blocked` regardless of how long a caller-supplied `recent` is, so an
+  // over-long or out-of-pool `recent` isn't the risk. What it actually
+  // defends against is the windowSize < pool.length invariant being violated
+  // — e.g. duplicate driftKeys within `pool` (which shrinks the number of
+  // distinct candidates below windowSize while pool.length stays the same),
+  // or a future regression in recentWindowSize that drops the guarantee.
   const usable = candidates.length > 0 ? candidates : pool;
 
   let total = 0;

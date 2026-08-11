@@ -144,4 +144,29 @@ describe('drift in the stats tab', () => {
     );
     expect(container.textContent).toContain(messages.en['stats.safeReviewed']);
   });
+
+  it('shows the drifted-today count in the Today section when greater than zero', async () => {
+    await render(
+      <ReviewStatsTab stats={makeStats({ driftedToday: 7 })} srsStats={makeSrs()} locale="en" />,
+    );
+    expect(container.textContent).toContain('7 drifted today');
+  });
+
+  it('leaves the pre-Drift Today section unchanged when nothing was drifted today', async () => {
+    await render(
+      <ReviewStatsTab stats={makeStats({ driftedToday: 0 })} srsStats={makeSrs()} locale="en" />,
+    );
+    expect(container.textContent).not.toContain('drifted today');
+  });
+
+  it('leaves the lifetime totalReviews figure unchanged when totalDrifted is set', async () => {
+    await render(
+      <ReviewStatsTab
+        stats={makeStats({ totalReviews: 1234, totalDrifted: 42 })}
+        srsStats={makeSrs()}
+        locale="en"
+      />,
+    );
+    expect(container.textContent).toContain('1,234 reviews all-time');
+  });
 });

@@ -69,6 +69,12 @@ export function ReviewStatsTab({
           dueNow: srsStats.dueNow,
           dueLater: srsStats.dueLaterToday,
         })}
+        {stats.driftedToday > 0 && (
+          <>
+            {' · '}
+            {formatMessage(locale, 'stats.driftedToday', { n: stats.driftedToday })}
+          </>
+        )}
       </section>
 
       {/* Activity heatmap */}

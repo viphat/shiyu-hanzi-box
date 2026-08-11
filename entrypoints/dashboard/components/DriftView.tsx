@@ -16,7 +16,6 @@ import { toPinyin } from '@/lib/pinyin';
 import { localDayKey } from '@/lib/srs';
 import type { AppSettings, Entry, QuoteEntry, UiLocale, WordEntry } from '@/lib/types';
 import { ReviewInsightReveal } from './ReviewInsightReveal';
-import { SpeakButton } from './SpeakButton';
 
 /** What Back needs to fully undo one advance. */
 interface DriftHistoryItem {
@@ -71,13 +70,15 @@ export function DriftView({
   );
   const [recent, setRecent] = useState<string[]>([]);
   const [history, setHistory] = useState<DriftHistoryItem[]>([]);
-  // Stops a second click from firing onThumb/onSkip/onBack again while the
-  // first one is still in flight (see ReviewQueue's `busy`, which the three
-  // action buttons here otherwise have no equivalent of). `busy` state drives
-  // the `disabled` attribute; `busyRef` is the actual gate — a click handler
-  // reads state as of the *last render*, so two clicks arriving before React
-  // re-renders would both see `busy === false` no matter when `setBusy(true)`
-  // is called. The ref is mutated immediately, so it closes that gap too.
+  // `busy`/`busyRef` mirror ReviewQueue's `busy` guard, but note what this one
+  // actually does: thumb/skip/back are fully synchronous (onThumb/onSkip/onBack
+  // are fired with `void`, never awaited), so busyRef is set back to `false`
+  // before the click handler returns — it does not span any async gap and
+  // cannot block a second, later click event. `busy` state drives the
+  // `disabled` attribute, but React batches the paired setBusy(true)/(false)
+  // calls within the same handler, so the button never visibly disables
+  // either. The guard's real effect is limited to reentrancy within a single
+  // call stack (e.g. a handler that ends up invoking itself synchronously).
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
 
@@ -253,8 +254,9 @@ export function DriftCard({
 
       {entry.kind === 'word' ? (
         <div className="mt-4 flex flex-col gap-3">
-          <SpeakButton text={entry.text} locale={locale} />
-          {/* initiallyRevealed: Drift never hides anything. */}
+          {/* initiallyRevealed: Drift never hides anything. ReviewInsightReveal
+              renders its own SpeakButton, so this doesn't render a second one
+              (see ReviewQueue.tsx, which relies on the same single button). */}
           <ReviewInsightReveal
             word={entry}
             locale={locale}

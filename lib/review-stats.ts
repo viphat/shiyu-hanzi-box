@@ -214,7 +214,7 @@ export function computeReviewStats(
   const activeDays = new Map(dayCounts);
   let totalDrifted = 0;
   for (const [day, count] of Object.entries(driftDays)) {
-    if (count <= 0) continue;
+    if (!Number.isFinite(count) || count <= 0) continue;
     totalDrifted += count;
     activeDays.set(day, (activeDays.get(day) ?? 0) + count);
   }

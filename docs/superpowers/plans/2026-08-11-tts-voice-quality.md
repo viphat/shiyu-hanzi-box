@@ -149,6 +149,29 @@ describe('rankVoices', () => {
     expect(rankVoices(voices, false)[0].name).toBe('Meijia');
   });
 
+  it('keeps the OS default ahead of a voice stacking every other bonus', () => {
+    const voices = [
+      candidate({
+        name: 'Xiaoxiao Premium Neural',
+        lang: 'zh-CN',
+        isRemote: true,
+        index: 0,
+      }),
+      candidate({ name: 'Meijia', lang: 'zh-TW', isDefault: true, index: 1 }),
+    ];
+
+    expect(rankVoices(voices, true)[0].name).toBe('Meijia');
+  });
+
+  it('scores the zh-CN bonus regardless of tag casing', () => {
+    const voices = [
+      candidate({ name: 'Lowercase Tag', lang: 'zh-cn', index: 0 }),
+      candidate({ name: 'Other Region', lang: 'zh-TW', index: 1 }),
+    ];
+
+    expect(rankVoices(voices, false)[0].name).toBe('Lowercase Tag');
+  });
+
   it('never auto-selects an Eloquence voice even when it is the OS default', () => {
     const voices = [
       candidate({ name: 'Eddy (Chinese (China mainland))', isDefault: true, index: 0 }),
@@ -352,8 +375,6 @@ export function clampTtsRate(rate: number): number {
 
 export function scoreVoice(candidate: VoiceCandidate): number {
   let score = 0;
-  // The user's own OS System Voice outranks every heuristic below it.
-  if (candidate.isDefault) score += 100;
   const lower = candidate.name.toLowerCase();
   if (lower.includes('premium')) score += 40;
   if (lower.includes('enhanced') || lower.includes('neural')) score += 30;
@@ -361,8 +382,18 @@ export function scoreVoice(candidate: VoiceCandidate): number {
   // Only reachable when the user has opted into network voices; rankVoices
   // filters remote voices out otherwise.
   if (candidate.isRemote) score += 25;
-  if (candidate.lang === 'zh-CN') score += 10;
+  if (candidate.lang.toLowerCase() === 'zh-cn') score += 10;
   return score;
+}
+
+/**
+ * The OS System Voice wins by construction rather than by out-scoring the
+ * heuristics: name-based bonuses can stack past any fixed bonus, so tier on
+ * isDefault first and only then fall back to score and source order.
+ */
+function compareVoices(a: VoiceCandidate, b: VoiceCandidate): number {
+  if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
+  return scoreVoice(b) - scoreVoice(a) || a.index - b.index;
 }
 
 /** Chinese voices eligible for automatic selection, best first. */
@@ -375,7 +406,7 @@ export function rankVoices(
     .filter((candidate) => !isEloquenceVoice(candidate.name))
     .filter((candidate) => allowNetworkVoices || !candidate.isRemote)
     .slice()
-    .sort((a, b) => scoreVoice(b) - scoreVoice(a) || a.index - b.index);
+    .sort(compareVoices);
 }
 
 /** Every Chinese voice for the picker, best first — including ones never auto-selected. */
@@ -383,7 +414,7 @@ export function listChineseVoices(candidates: VoiceCandidate[]): VoiceCandidate[
   return candidates
     .filter((candidate) => isChineseVoice(candidate.lang))
     .slice()
-    .sort((a, b) => scoreVoice(b) - scoreVoice(a) || a.index - b.index);
+    .sort(compareVoices);
 }
 
 export function selectVoice(
@@ -408,7 +439,7 @@ export function selectVoice(
 - [ ] **Step 5: Run the tests to verify they pass**
 
 Run: `npx vitest run tests/tts-voices.test.ts`
-Expected: PASS, 18 tests.
+Expected: PASS, 20 tests.
 
 - [ ] **Step 6: Type-check and commit**
 
@@ -1693,7 +1724,23 @@ i18n table in the spec's `## UI` section so it matches what shipped:
 | `tts.noNetworkVoices` | This browser reports no network voices. | 此浏览器未提供网络语音。 |
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Correct the ranking table's `isDefault` row**
+
+The spec claims "`isDefault` outscores every combination of the rest". That is
+false as arithmetic — the other bonuses sum to 125 against a 100 bonus — and the
+implementation tiers on `isDefault` before consulting the score instead. In the
+`### Ranking` section, remove the `isDefault` row from the score table and
+replace the sentence beginning "`isDefault` outscores every combination" with:
+
+```markdown
+Ordering tiers on `isDefault` first and only falls back to the score table
+below, so an explicit OS choice wins by construction: name-based bonuses can
+stack past any fixed bonus, so a bonus large enough "today" is not a guarantee.
+Eloquence voices cannot reach the comparator at all, so an Eloquence OS default
+is skipped rather than selected.
+```
+
+- [ ] **Step 5: Commit**
 
 ```bash
 git add docs/superpowers/specs/2026-08-11-tts-voice-quality-design.md

@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the state it materialized — so on a synced profile the first pass
   silently deleted every blank and its per-cloze FSRS scheduling, emptying the
   quote review queue.
+- **Restoring a backup now removes blanks it does not carry.** A restore
+  replaces the whole inbox, but a blank missing from the backup was only absent,
+  not removed, so the next sync pass brought it back and the restore failed to
+  stick. Tags, occurrences and whole entries dropped by a restore still have
+  this behavior.
 
 ### Added
 

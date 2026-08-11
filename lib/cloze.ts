@@ -1,5 +1,5 @@
 import { makeId } from './id';
-import type { Cloze, QuoteEntry } from './types';
+import type { Cloze, Inbox, QuoteEntry } from './types';
 
 /** Unicode punctuation test: matches \p{P} */
 function isUnicodePunct(ch: string): boolean {
@@ -62,6 +62,32 @@ export function countParkedQuotes(quotes: QuoteEntry[]): number {
 export function planClozeWrite(old: Cloze[] | undefined, next: Cloze[]): string[] {
   const kept = new Set(next.map((c) => c.id));
   return (old ?? []).filter((c) => !kept.has(c.id)).map((c) => c.id);
+}
+
+/**
+ * Plan the sync side of a backup restore: a restore replaces the whole inbox,
+ * so every blank the backup does not carry is a removal and needs the same
+ * `removeClozes` tombstones a manual delete would write. Per the sync design,
+ * a restore is a local synchronized mutation that propagates on the next pass;
+ * without this it does not stick — a peer (or this device's own persisted
+ * state) materializes the dropped blanks straight back.
+ *
+ * Only quotes the restore actually carries are planned. A quote the backup
+ * drops entirely is an ENTITY deletion, a separate concern — tombstoning its
+ * blanks would only make it come back parked.
+ */
+export function planClozeRestore(
+  current: Inbox,
+  restored: Inbox,
+): Array<{ quoteId: string; clozeIds: string[] }> {
+  const before = new Map(current.quotes.map((quote) => [quote.id, quote.clozes]));
+  const removals: Array<{ quoteId: string; clozeIds: string[] }> = [];
+  for (const quote of restored.quotes) {
+    if (!before.has(quote.id)) continue;
+    const clozeIds = planClozeWrite(before.get(quote.id), quote.clozes ?? []);
+    if (clozeIds.length > 0) removals.push({ quoteId: quote.id, clozeIds });
+  }
+  return removals;
 }
 
 /**

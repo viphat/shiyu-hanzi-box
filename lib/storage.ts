@@ -39,7 +39,20 @@ let writeChain: Promise<unknown> = Promise.resolve();
 export async function mutateInbox(
   fn: (inbox: Inbox) => Inbox | Promise<Inbox>,
 ): Promise<Inbox> {
-  const run = writeChain.then(() => getInbox()).then((inbox) => fn(inbox));
-  writeChain = run.then(setInbox);
+  const run = writeChain
+    .then(() => getInbox())
+    .then(async (inbox) => {
+      const next = await fn(inbox);
+      // Persist inside `run` so callers only resolve once the write landed —
+      // awaiting `mutateInbox` then reading storage must not see the old value.
+      await setInbox(next);
+      return next;
+    });
+  // The chain is shared by every later mutation, so it must never stay
+  // rejected: a thrown mutator or a failed write (quota, invalidated
+  // extension context) would otherwise short-circuit all subsequent writes
+  // for the life of the page. Swallow it here; `run` still carries the error
+  // back to the caller that caused it.
+  writeChain = run.catch(() => {});
   return run;
 }

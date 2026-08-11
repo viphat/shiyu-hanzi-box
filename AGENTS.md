@@ -236,13 +236,22 @@ provider API is ever called.
   under a passphrase whose derived key is remembered locally. `files.ts`: folder
   I/O. `local.ts`: `local:syncConfig`. `mutations.ts`: `local:syncMetadata` and
   queued mutations.
+- Occurrence identity is derived from the word's LOGICAL key
+  (`word:<normalized>`), never `word.id`: merge picks a canonical word id, so an
+  id-derived key re-filed the same capture under a second identity on the losing
+  profile. `normalizeOccurrenceIds` folds nodes authored under the old rule,
+  tombstones included — same tolerant-cross-version-read shape as
+  `liftLegacyTags`.
 - OR-Set members (tags, cloze blanks, occurrences) and whole entries are removed
   by an explicit tombstone mutation, never by dropping them from the inbox —
   absence merges as "no opinion", so a peer resurrects them. Any write path that
   can drop something must plan its removals off the same snapshot it writes: the
   dashboard edits via `useInbox.mutateWithRemovals`, a backup restore via the
   `restore` mutation (`applyRestore` + `lib/sync/restore.ts`
-  `planRestoreRemovals`). `applyRestore` also re-stamps every restored entry as
+  `planRestoreRemovals`). Review events are the one OR-Set with no user-facing
+  removal — only a restore prunes them, via `discardStaleReviews`, and a
+  snapshot whose review was discarded counts as orphaned so the restored
+  scheduler state wins. `applyRestore` also re-stamps every restored entry as
   of now, so the backup's content wins the merge against the state being rolled
   back — without it a restore cannot undo a delete or an edit. `updatedAt` is a
   sync recency key only; nothing in the UI, export or scheduler reads it.

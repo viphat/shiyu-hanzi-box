@@ -1,6 +1,6 @@
 import { requestSyncMutation } from './sync-mutation-handler';
 import { getInbox } from '../../lib/storage';
-import { wordKey, legacyOccurrenceId } from '../../lib/sync/project';
+import { wordKey, occurrenceId } from '../../lib/sync/project';
 import type { UndoCaptureMessage } from '../../lib/capture';
 import type { Occurrence } from '../../lib/types';
 
@@ -36,11 +36,11 @@ export async function undoCapture(message: UndoCaptureMessage): Promise<void> {
   const occ = message.occurrence;
   if (!occ) return;
   if (message.normalized) {
-    const occurrenceId = legacyOccurrenceId(message.entryId, {
+    const id = occurrenceId(message.normalized, {
       sourceTitle: '', sourceDomain: '', ...occ,
     } as Occurrence);
     await requestSyncMutation('removeOccurrence', {
-      removals: [{ normalized: message.normalized, occurrenceId }],
+      removals: [{ normalized: message.normalized, occurrenceId: id }],
     });
   }
   await requestSyncMutation('inbox', {

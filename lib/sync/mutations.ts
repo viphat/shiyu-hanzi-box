@@ -17,7 +17,7 @@ import type {
   WordAiInsightPatch,
 } from '../types';
 import { projectInbox, wordKey } from './project';
-import { planRestoreRemovals } from './restore';
+import { discardStaleReviews, planRestoreRemovals } from './restore';
 import { deleteEntity } from './merge';
 import { mergeStampMap } from './registers';
 import {
@@ -446,6 +446,8 @@ export async function applyRestore(next: Inbox): Promise<void> {
       node.occurrenceTombstones[occurrenceId] = at(now);
     }
 
+    discardStaleReviews(state, next, at(now));
+
     // Every restored entry is re-stamped as of now. Conflicts resolve by
     // recency, so a backup's own (older) timestamps lose to the very state the
     // user is rolling back — the restored content would be silently reverted on
@@ -518,6 +520,15 @@ export async function reconcileOnStartup(): Promise<void> {
       if (prev?.clozeTombstones) {
         node.clozeTombstones = mergeStampMap(prev.clozeTombstones, node.clozeTombstones ?? {});
       }
+      if (prev?.reviewTombstones) {
+        node.reviewTombstones = mergeStampMap(prev.reviewTombstones, node.reviewTombstones ?? {});
+      }
+      for (const [clozeId, clozeNode] of Object.entries(node.clozes ?? {})) {
+        const prevCloze = prev?.clozes?.[clozeId]?.reviewTombstones;
+        if (prevCloze) {
+          clozeNode.reviewTombstones = mergeStampMap(prevCloze, clozeNode.reviewTombstones ?? {});
+        }
+      }
     }
   }
   // Per-word occurrence removals live only in each word node's
@@ -527,9 +538,12 @@ export async function reconcileOnStartup(): Promise<void> {
   // remote replica still holding the occurrence resurrects it.
   if (meta.state?.words) {
     for (const [id, node] of Object.entries(state.words)) {
-      const prevTombstones = meta.state.words[id]?.occurrenceTombstones;
-      if (prevTombstones) {
-        node.occurrenceTombstones = mergeStampMap(prevTombstones, node.occurrenceTombstones ?? {});
+      const prev = meta.state.words[id];
+      if (prev?.occurrenceTombstones) {
+        node.occurrenceTombstones = mergeStampMap(prev.occurrenceTombstones, node.occurrenceTombstones ?? {});
+      }
+      if (prev?.reviewTombstones) {
+        node.reviewTombstones = mergeStampMap(prev.reviewTombstones, node.reviewTombstones ?? {});
       }
     }
   }

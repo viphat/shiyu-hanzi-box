@@ -1,6 +1,6 @@
 import { compareTimestamps } from './clock';
 import { mergeRegisterMap, mergeStampMap } from './registers';
-import { liftLegacyTags } from './project';
+import { liftLegacyTags, liveReviewEvents, normalizeOccurrenceIds } from './project';
 import type {
   ClozeNode,
   HybridTimestamp,
@@ -75,8 +75,13 @@ function earliestCreatedAt(a: Register<number>, b: Register<number>): Register<n
   return compareTimestamps(a.stamp, b.stamp) <= 0 ? a : b;
 }
 
-export function mergeWordNodes(a: WordNode, b: WordNode): WordNode {
+export function mergeWordNodes(x: WordNode, y: WordNode): WordNode {
+  // Fold word-id-keyed occurrences onto their canonical ids before unioning,
+  // or the same capture merges as two members.
+  const a = normalizeOccurrenceIds(x);
+  const b = normalizeOccurrenceIds(y);
   const events = mergeReviewEvents(a.reviewEvents, b.reviewEvents);
+  const reviewTombstones = mergeStampMap(a.reviewTombstones ?? {}, b.reviewTombstones ?? {});
   const fields = mergeRegisterMap(a.fields, b.fields) as WordNode['fields'];
   const createdAt = earliestCreatedAt(a.createdAt, b.createdAt);
   // Canonical id: earliest createdAt then smallest id.
@@ -98,12 +103,16 @@ export function mergeWordNodes(a: WordNode, b: WordNode): WordNode {
     occurrences: mergeOccurrences(a.occurrences, b.occurrences),
     occurrenceTombstones: mergeStampMap(a.occurrenceTombstones, b.occurrenceTombstones),
     reviewEvents: events,
-    snapshot: pickSnapshot(events, a.snapshot, b.snapshot),
+    reviewTombstones,
+    // A snapshot whose review was discarded by a restore counts as orphaned, so
+    // the restored scheduler state wins instead of the rolled-back one.
+    snapshot: pickSnapshot(liveReviewEvents({ reviewEvents: events, reviewTombstones } as WordNode), a.snapshot, b.snapshot),
   };
 }
 
 export function mergeClozeNodes(a: ClozeNode, b: ClozeNode): ClozeNode {
   const events = mergeReviewEvents(a.reviewEvents, b.reviewEvents);
+  const reviewTombstones = mergeStampMap(a.reviewTombstones ?? {}, b.reviewTombstones ?? {});
   return {
     id: a.id,
     // Later add stamp wins, exactly as mergeStampMap resolves tag add stamps:
@@ -112,7 +121,8 @@ export function mergeClozeNodes(a: ClozeNode, b: ClozeNode): ClozeNode {
     addedAt: compareTimestamps(a.addedAt, b.addedAt) >= 0 ? a.addedAt : b.addedAt,
     fields: mergeRegisterMap(a.fields, b.fields),
     reviewEvents: events,
-    snapshot: pickSnapshot(events, a.snapshot, b.snapshot),
+    reviewTombstones,
+    snapshot: pickSnapshot(liveReviewEvents({ reviewEvents: events, reviewTombstones } as ClozeNode), a.snapshot, b.snapshot),
   };
 }
 
@@ -120,6 +130,7 @@ export function mergeQuoteNodes(a: QuoteNode, b: QuoteNode): QuoteNode {
   const la = liftLegacyTags(a);
   const lb = liftLegacyTags(b);
   const events = mergeReviewEvents(la.reviewEvents, lb.reviewEvents);
+  const reviewTombstones = mergeStampMap(la.reviewTombstones ?? {}, lb.reviewTombstones ?? {});
   return {
     id: la.id,
     createdAt: earliestCreatedAt(la.createdAt, lb.createdAt),
@@ -129,7 +140,8 @@ export function mergeQuoteNodes(a: QuoteNode, b: QuoteNode): QuoteNode {
     clozes: mergeNodeMap(la.clozes ?? {}, lb.clozes ?? {}, mergeClozeNodes),
     clozeTombstones: mergeStampMap(la.clozeTombstones ?? {}, lb.clozeTombstones ?? {}),
     reviewEvents: events,
-    snapshot: pickSnapshot(events, la.snapshot, lb.snapshot),
+    reviewTombstones,
+    snapshot: pickSnapshot(liveReviewEvents({ reviewEvents: events, reviewTombstones } as QuoteNode), la.snapshot, lb.snapshot),
   };
 }
 

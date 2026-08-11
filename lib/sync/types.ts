@@ -58,6 +58,8 @@ export interface WordNode {
   occurrences: Record<string, OccurrenceNode>;
   occurrenceTombstones: Record<string, HybridTimestamp>;
   reviewEvents: Record<string, ReviewEventNode>;
+  /** review event id -> discard stamp; written only by a backup restore. */
+  reviewTombstones?: Record<string, HybridTimestamp>;
   snapshot?: SchedulerSnapshotNode;
 }
 
@@ -75,6 +77,8 @@ export interface ClozeNode {
   /** start, end, hint, wordId. */
   fields: Record<string, Register<unknown>>;
   reviewEvents: Record<string, ReviewEventNode>;
+  /** review event id -> discard stamp; written only by a backup restore. */
+  reviewTombstones?: Record<string, HybridTimestamp>;
   snapshot?: SchedulerSnapshotNode;
 }
 
@@ -91,6 +95,8 @@ export interface QuoteNode {
   /** cloze id -> remove stamp. */
   clozeTombstones?: Record<string, HybridTimestamp>;
   reviewEvents: Record<string, ReviewEventNode>;
+  /** review event id -> discard stamp; written only by a backup restore. */
+  reviewTombstones?: Record<string, HybridTimestamp>;
   snapshot?: SchedulerSnapshotNode;
 }
 

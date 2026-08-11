@@ -104,10 +104,14 @@ rare, never impossible — it can resurface when the user is ready for it, and a
 thumb-up walks it straight back. Keys absent from the inbox are ignored on read,
 so orphaned weights need no garbage collection.
 
+`lib/drift.ts` also exports a pure `normalizeDriftStore` that clamps levels and
+drops malformed entries read back from disk or restored from a backup file. It
+lives in the pure module rather than the storage one so `lib/backup.ts` can
+sanitize an untrusted `drift` blob without gaining a storage dependency.
+
 Storage wrapper in `lib/drift-storage.ts` (`local:drift`), following the shape
 of `lib/settings.ts`: `getDriftStore`, `mutateDriftStore`, `replaceDriftStore`,
-`watchDriftStore`, and a `normalizeDriftStore` that clamps levels and drops
-malformed entries read back from disk.
+and `watchDriftStore`, each normalizing on the way in and out.
 
 ### Pool and picker
 

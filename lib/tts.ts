@@ -1,5 +1,6 @@
 import type { Browser } from 'wxt/browser';
 import {
+  clampTtsRate,
   DEFAULT_TTS_SETTINGS,
   listChineseVoices,
   selectVoice,
@@ -23,6 +24,8 @@ let selected: VoiceCandidate | null = null;
 let activeUtterance: SpeechSynthesisUtterance | null = null;
 let activeChromeSpeech = false;
 let activeSpeechToken = 0;
+/** Name of the voice powering the in-flight utterance, so revoked eligibility can be detected. */
+let speakingVoiceName: string | null = null;
 let listenerRegistered = false;
 let chromeListenerRegistered = false;
 
@@ -123,8 +126,26 @@ function findWebVoice(name: string | undefined): SpeechSynthesisVoice | null {
   return webVoices.find((voice) => voice.name === name) ?? null;
 }
 
+function isSpeakingVoiceStillEligible(): boolean {
+  if (speakingVoiceName === null) return true;
+  return candidates.some(
+    (candidate) =>
+      candidate.name === speakingVoiceName &&
+      (settings.allowNetworkVoices || !candidate.isRemote),
+  );
+}
+
 function updateAvailableState(): TtsState {
   resolveSelection();
+
+  // Revoking consent for off-device synthesis — or losing the voice entirely —
+  // must stop audio already in flight, not merely change what plays next. Being
+  // out-ranked by a voice that arrived later is not a reason to interrupt.
+  if (state.status === 'speaking' && !isSpeakingVoiceStillEligible()) {
+    cancelActiveSpeech();
+    setState(selected ? { status: 'idle' } : { status: 'unavailable' });
+    return state;
+  }
 
   if (selected) {
     if (state.status === 'speaking') {
@@ -218,7 +239,7 @@ export function isChineseVoiceAvailable(): boolean {
 
 /** Push the user's saved preferences in. Keeps this module free of storage imports. */
 export function configureTts(next: TtsSettings): void {
-  settings = next;
+  settings = { ...next, rate: clampTtsRate(next.rate) };
   updateAvailableState();
 }
 
@@ -246,6 +267,7 @@ export function subscribeTts(listener: TtsListener): () => void {
  * about to start the next.
  */
 function cancelActiveSpeech(): void {
+  speakingVoiceName = null;
   if (activeChromeSpeech) {
     activeSpeechToken += 1;
     activeChromeSpeech = false;
@@ -281,6 +303,7 @@ function speakWithChromeTts(chromeTts: NonNullable<ChromeLike['tts']>, text: str
   const token = activeSpeechToken;
   activeChromeSpeech = true;
   const lang = selected?.lang || 'zh-CN';
+  speakingVoiceName = selected?.name ?? null;
 
   setState({ status: 'speaking', text });
 
@@ -301,12 +324,14 @@ function speakWithChromeTts(chromeTts: NonNullable<ChromeLike['tts']>, text: str
           event.type === 'cancelled'
         ) {
           activeChromeSpeech = false;
+          speakingVoiceName = null;
           setState(selected ? { status: 'idle' } : { status: 'unavailable' });
         }
       },
     });
   } catch {
     activeChromeSpeech = false;
+    speakingVoiceName = null;
     speakWithWebSpeech(text);
   }
 }
@@ -329,15 +354,18 @@ function speakWithWebSpeech(text: string): void {
   utterance.onend = () => {
     if (activeUtterance !== utterance) return;
     activeUtterance = null;
+    speakingVoiceName = null;
     setState({ status: 'idle' });
   };
   utterance.onerror = () => {
     if (activeUtterance !== utterance) return;
     activeUtterance = null;
+    speakingVoiceName = null;
     setState({ status: 'idle' });
   };
 
   activeUtterance = utterance;
+  speakingVoiceName = selected?.name ?? null;
   setState({ status: 'speaking', text });
   synth.speak(utterance);
 }
@@ -347,6 +375,7 @@ export function stop(): void {
   if (chromeTts?.stop && activeChromeSpeech) {
     activeSpeechToken += 1;
     activeChromeSpeech = false;
+    speakingVoiceName = null;
     chromeTts.stop();
     setState(selected ? { status: 'idle' } : { status: 'unavailable' });
     return;
@@ -355,11 +384,13 @@ export function stop(): void {
   const synth = getSynth();
   if (!synth) {
     activeUtterance = null;
+    speakingVoiceName = null;
     setState({ status: 'unavailable' });
     return;
   }
 
   activeUtterance = null;
+  speakingVoiceName = null;
   synth.cancel();
   setState(selected ? { status: 'idle' } : { status: 'unavailable' });
 }

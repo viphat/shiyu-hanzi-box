@@ -359,6 +359,20 @@ describe('tts', () => {
     expect(getSelectedVoiceName()).toBe('Tingting');
   });
 
+  it('clamps an out-of-range rate before it reaches the utterance', async () => {
+    // configureTts is the module's only settings entry point; the [0.5, 1.5]
+    // clamp is a binding constraint that must hold here too, not only in
+    // normalizeSettings before storage.
+    const { configureTts, speak } = await initWithVoices([
+      createMockVoice('zh-CN', 'Tingting'),
+    ]);
+
+    configureTts({ voiceName: null, rate: 9, allowNetworkVoices: false });
+    speak('你好');
+
+    expect(speakCalls[0].rate).toBe(1.5);
+  });
+
   it('applies the configured rate to Web Speech', async () => {
     const { configureTts, speak } = await initWithVoices([
       createMockVoice('zh-CN', 'Tingting'),
@@ -495,17 +509,51 @@ describe('tts', () => {
   });
 
   it('cancels web speech when allowNetworkVoices is turned off mid-speech', async () => {
+    // A local voice must also exist here, so `selected` falls back to it
+    // instead of becoming null — otherwise this test would pass by accident
+    // via the `!selected` unavailable path instead of exercising the
+    // eligibility check that actually guards a still-speaking remote voice.
     const { configureTts, speak } = await initWithVoices([
       createMockVoice('zh-CN', 'Google 普通话', { localService: false }),
+      createMockVoice('zh-CN', 'Tingting'),
     ]);
 
-    configureTts({ voiceName: null, rate: 1, allowNetworkVoices: true });
+    configureTts({ voiceName: 'Google 普通话', rate: 1, allowNetworkVoices: true });
     speak('你好');
     expect(speechSynthesis.speak).toHaveBeenCalledTimes(1);
+    expect(speakCalls[0].voice?.name).toBe('Google 普通话');
     speechSynthesis.cancel.mockClear();
 
-    configureTts({ voiceName: null, rate: 1, allowNetworkVoices: false });
+    configureTts({ voiceName: 'Google 普通话', rate: 1, allowNetworkVoices: false });
 
     expect(speechSynthesis.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not cancel mid-utterance merely because a better voice arrived', async () => {
+    // Being out-ranked by a newly-arrived voice is not a reason to interrupt
+    // audio already playing — only losing eligibility (voice removed, or its
+    // network-voice consent revoked) should cancel.
+    const { configureTts, getTtsState, speak } = await initWithVoices([
+      createMockVoice('zh-CN', 'Tingting'),
+    ]);
+
+    // Auto-select, so `selected` is free to move to a better-ranked voice.
+    configureTts({ voiceName: null, rate: 1, allowNetworkVoices: false });
+    speak('你好');
+    expect(getTtsState()).toEqual({ status: 'speaking', text: '你好' });
+    expect(speakCalls[0].voice?.name).toBe('Tingting');
+    speechSynthesis.cancel.mockClear();
+
+    // A higher-ranked local voice (Premium) shows up mid-utterance via a late
+    // voiceschanged event. Tingting is still installed and still eligible —
+    // it is merely no longer the top pick.
+    mockVoices = [
+      createMockVoice('zh-CN', 'Tingting'),
+      createMockVoice('zh-CN', 'Premium Voice'),
+    ];
+    emitVoicesChanged();
+
+    expect(speechSynthesis.cancel).not.toHaveBeenCalled();
+    expect(getTtsState()).toEqual({ status: 'speaking', text: '你好' });
   });
 });

@@ -24,10 +24,11 @@ import {
   enableKaikki,
   recordKaikkiImport,
   resetKaikki,
+  setReviewMode,
   setSrsSettings,
   setUiLocale,
 } from '@/lib/settings';
-import type { AiSettings, UiLocale } from '@/lib/types';
+import type { AiSettings, ReviewMode, UiLocale } from '@/lib/types';
 import { useSettings } from '../dashboard/hooks/useSettings';
 import { AiSettingsPanel } from './AiSettingsPanel';
 import { FolderSync } from './FolderSync';
@@ -622,6 +623,51 @@ export function SettingsApp() {
               </dd>
             </div>
           </dl>
+        </section>
+
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-[0_1px_3px_rgba(90,75,50,0.06)]">
+          <h2 className="text-sm font-medium tracking-[1px] text-ink-secondary">
+            {t(locale, 'settings.reviewMode')}
+          </h2>
+          <p className="mt-1 text-xs text-muted">{t(locale, 'settings.reviewModeHint')}</p>
+
+          <div className="mt-3 space-y-2">
+            {(
+              [
+                { mode: 'srs' as const, testId: 'review-mode-srs', label: 'settings.modeSrs', hint: 'settings.modeSrsHint' },
+                { mode: 'drift' as const, testId: 'review-mode-drift', label: 'settings.modeDrift', hint: 'settings.modeDriftHint' },
+              ] satisfies Array<{
+                mode: ReviewMode;
+                testId: string;
+                label: 'settings.modeSrs' | 'settings.modeDrift';
+                hint: 'settings.modeSrsHint' | 'settings.modeDriftHint';
+              }>
+            ).map((option) => (
+              <label
+                key={option.mode}
+                className={`flex cursor-pointer gap-3 rounded-xl border p-3 transition ${
+                  settings.reviewMode === option.mode
+                    ? 'border-accent bg-card-soft'
+                    : 'border-border hover:border-accent-fade'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="review-mode"
+                  data-testid={option.testId}
+                  checked={settings.reviewMode === option.mode}
+                  onChange={() => {
+                    void mutate((current) => setReviewMode(current, option.mode));
+                  }}
+                  className="mt-1 accent-[var(--color-accent)]"
+                />
+                <span>
+                  <span className="block text-sm text-ink">{t(locale, option.label)}</span>
+                  <span className="block text-xs text-muted">{t(locale, option.hint)}</span>
+                </span>
+              </label>
+            ))}
+          </div>
         </section>
 
         <section className="rounded-2xl border border-border bg-card p-4 shadow-[0_1px_3px_rgba(90,75,50,0.06)]">

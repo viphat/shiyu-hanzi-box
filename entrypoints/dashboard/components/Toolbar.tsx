@@ -3,6 +3,8 @@ import { useRef, useState, type ChangeEvent } from 'react';
 import { browser } from 'wxt/browser';
 import { BackupParseError, restoreFullBackup, serializeFullBackup } from '@/lib/backup';
 import { loadDictionary } from '@/lib/dictionary-loader';
+import type { DriftStore } from '@/lib/drift';
+import { getDriftStore } from '@/lib/drift-storage';
 import { buildExportMap, exportInboxAsZip } from '@/lib/export';
 import { formatMessage, t } from '@/lib/i18n';
 import type { AiSettings, AppSettings, Inbox, UiLocale } from '@/lib/types';
@@ -20,7 +22,13 @@ export function Toolbar({
   inbox: Inbox;
   query: string;
   onQuery: (query: string) => void;
-  onRestore: (restored: { inbox: Inbox; settings?: AppSettings; aiSettings?: AiSettings }) => Promise<void> | void;
+  onRestore: (restored: {
+    inbox: Inbox;
+    settings?: AppSettings;
+    aiSettings?: AiSettings;
+    /** Absent when the restored file predates Drift (see restoreFullBackup). */
+    drift?: DriftStore;
+  }) => Promise<void> | void;
   locale: UiLocale;
   settings: AppSettings;
   aiSettings: AiSettings;
@@ -77,7 +85,7 @@ export function Toolbar({
   async function downloadBackup() {
     const confirmed = window.confirm(t(locale, 'sync.warn.backupUnencrypted'));
     if (!confirmed) return;
-    const json = serializeFullBackup(inbox, settings, aiSettings);
+    const json = serializeFullBackup(inbox, settings, aiSettings, await getDriftStore());
     const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
     await downloadBlob(blob, `shiyu-hanzi-box-backup-${todayStamp()}.json`);
     setMessage({ tone: 'success', text: t(locale, 'toolbar.backupReady') });

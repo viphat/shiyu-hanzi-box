@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BackupParseError, createFullBackup, restoreFullBackup, serializeFullBackup } from '../../lib/backup';
+import { EMPTY_DRIFT_STORE } from '../../lib/drift';
 import { DEFAULT_SETTINGS } from '../../lib/settings';
 import { DEFAULT_AI_SETTINGS } from '../../lib/ai/settings';
 import { EMPTY_INBOX } from '../../lib/types';
@@ -74,7 +75,18 @@ describe('drift in the full backup', () => {
     const out = restoreFullBackup(v3);
     expect(out.settings).toBeDefined();
     expect(out.aiSettings?.apiKey).toBe('sk-secret');
-    expect(out.drift).toEqual({ weights: {}, days: {} });
+    // A v3 file has no `drift` key at all — this must come back `undefined`,
+    // not an implied empty store, or a caller that treats "empty" and
+    // "absent" the same way wipes the user's whole drift history on restore.
+    expect(out.drift).toBeUndefined();
+  });
+
+  it('returns an explicit (not undefined) empty drift store when the v4 file carries one', () => {
+    // Distinguishes "the backup carried an empty drift store" (wipe) from
+    // "the backup predates Drift" (leave local store alone) — the two must
+    // not collapse to the same return value.
+    const raw = serializeFullBackup(EMPTY_INBOX, DEFAULT_SETTINGS, DEFAULT_AI_SETTINGS, EMPTY_DRIFT_STORE);
+    expect(restoreFullBackup(raw).drift).toEqual({ weights: {}, days: {} });
   });
 
   it('keeps the v3 error message wording for a malformed v3 inbox', () => {
@@ -97,16 +109,16 @@ describe('drift in the full backup', () => {
     expect(restoreFullBackup(raw).drift).toEqual({ weights: { a: 2 }, days: {} });
   });
 
-  it('defaults drift to empty when the key is absent from a v4 file', () => {
+  it('leaves drift undefined when the key is absent from a v4 file', () => {
     const raw = JSON.stringify({
       app: 'shiyu-hanzi-box',
       formatVersion: 4,
       inbox: EMPTY_INBOX,
     });
-    expect(restoreFullBackup(raw).drift).toEqual({ weights: {}, days: {} });
+    expect(restoreFullBackup(raw).drift).toBeUndefined();
   });
 
-  it('defaults drift to empty for an inbox-only v2 backup', () => {
+  it('leaves drift undefined for an inbox-only v2 backup', () => {
     // exportedAt included: parseBackup's readInboxPayload requires it for any
     // envelope-shaped object (app/formatVersion/exportedAt + inbox present) —
     // pre-existing, unrelated to drift, and out of scope for this task.
@@ -116,6 +128,6 @@ describe('drift in the full backup', () => {
       exportedAt: '2026-01-01T00:00:00.000Z',
       inbox: EMPTY_INBOX,
     });
-    expect(restoreFullBackup(raw).drift).toEqual({ weights: {}, days: {} });
+    expect(restoreFullBackup(raw).drift).toBeUndefined();
   });
 });

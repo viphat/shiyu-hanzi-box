@@ -132,6 +132,15 @@ describe('write routing — sole-writer broker', () => {
     expect((await getInbox()).words[0].aiVietnameseInsight?.summary).toBe('chữ Hán');
   });
 
+  it('requestSyncMutation(reviewMode) bumps revision and marks pending', async () => {
+    registerSyncMutationHandler();
+    const before = (await syncMetadataStorage.getValue()).revision;
+    await requestSyncMutation('reviewMode', 'drift');
+    const after = (await syncMetadataStorage.getValue()).revision;
+    expect(after).toBeGreaterThan(before);
+    expect((await getSyncConfig()).pending).toBe(true);
+  });
+
   it('requestSyncMutation(ai) bumps revision', async () => {
     registerSyncMutationHandler();
     const before = (await syncMetadataStorage.getValue()).revision;

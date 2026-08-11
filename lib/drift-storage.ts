@@ -36,8 +36,23 @@ export async function mutateDriftStore(
   return run;
 }
 
+/**
+ * Full replace (used by backup restore), routed through the same writeChain
+ * as mutateDriftStore rather than writing directly. Restore and a thumb tap
+ * happening around the same time both go through driftStorage.setValue with
+ * no ordering between them otherwise — a thumb already in flight when this
+ * lands could resolve after it and resurrect the pre-restore weight it was
+ * meant to replace. Chaining here gives it the same total order as every
+ * other write.
+ */
 export async function replaceDriftStore(store: DriftStore): Promise<void> {
-  await driftStorage.setValue(normalizeDriftStore(store));
+  const normalized = normalizeDriftStore(store);
+  const write = writeChain.then(() => driftStorage.setValue(normalized));
+  // Same rationale as mutateDriftStore: never let a failed write here leave
+  // the module-level chain permanently rejected for later callers, while
+  // still rejecting to this call's own awaiter below.
+  writeChain = write.catch(() => {});
+  await write;
 }
 
 export function watchDriftStore(

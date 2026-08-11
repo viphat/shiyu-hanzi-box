@@ -273,3 +273,78 @@ describe('CVDICT-local settings mutations', () => {
     expect(merged.portableSettings).toEqual({ uiLocale: 'en', srs: newerSrs });
   });
 });
+
+// ---------------------------------------------------------------------------
+// reviewMode is per-device, matching the CVDICT decision above: flipping it
+// must not bump appSettingsUpdatedAt, or one device's copy of the genuinely
+// synced fields (uiLocale, srs.*) would win the next merge over a change made
+// on another device, even though the user only touched their review mode.
+// ---------------------------------------------------------------------------
+describe('reviewMode mutations', () => {
+  beforeEach(() => fakeBrowser.reset());
+
+  it('persists reviewMode without advancing the portable-settings stamp', async () => {
+    const srs = { ...DEFAULT_SETTINGS.srs, newCardsPerDay: 7 };
+    await replaceSettings({ ...DEFAULT_SETTINGS, uiLocale: 'en', srs });
+    await syncMetadataStorage.setValue({
+      revision: 4,
+      state: null,
+      lastDigest: null,
+      appSettingsUpdatedAt: 100,
+      aiSettingsUpdatedAt: 0,
+    });
+    await mutateSyncConfig((config) => ({ ...config, vaultId: 'vault-1' }));
+    registerSyncMutationHandler();
+
+    await requestSyncMutation('reviewMode', 'drift');
+
+    const settings = await getSettings();
+    const meta = await syncMetadataStorage.getValue();
+    expect(settings).toEqual({ ...DEFAULT_SETTINGS, uiLocale: 'en', srs, reviewMode: 'drift' });
+    expect(meta.revision).toBe(5);
+    expect(meta.appSettingsUpdatedAt).toBe(100); // unchanged
+    expect((await getSyncConfig()).pending).toBe(true);
+    expect((await browser.alarms.get(SYNC_DEBOUNCE_ALARM))?.name).toBe(SYNC_DEBOUNCE_ALARM);
+  });
+
+  it('does not let stale portable settings win after reviewMode is flipped on a second replica', async () => {
+    const newerSrs = { ...DEFAULT_SETTINGS.srs, desiredRetention: 0.95, newCardsPerDay: 8 };
+    const newerPortable = { ...DEFAULT_SETTINGS, uiLocale: 'en' as const, srs: newerSrs };
+    const replicaA = projectInbox(
+      EMPTY_INBOX,
+      newerPortable,
+      DEFAULT_AI_SETTINGS,
+      { replicaId: 'A', wallTime: 200, settingsStamp: 200, aiStamp: 0 },
+    );
+
+    await replaceSettings(DEFAULT_SETTINGS);
+    await syncMetadataStorage.setValue({
+      revision: 0,
+      state: null,
+      lastDigest: null,
+      appSettingsUpdatedAt: 100,
+      aiSettingsUpdatedAt: 0,
+    });
+    registerSyncMutationHandler();
+    await requestSyncMutation('reviewMode', 'drift');
+
+    const staleSettings = await getSettings();
+    const staleMeta = await syncMetadataStorage.getValue();
+    const replicaB = projectInbox(
+      EMPTY_INBOX,
+      staleSettings,
+      DEFAULT_AI_SETTINGS,
+      {
+        replicaId: 'B',
+        wallTime: 300,
+        settingsStamp: staleMeta.appSettingsUpdatedAt,
+        aiStamp: 0,
+      },
+    );
+
+    const merged = materialize(mergeSyncState(replicaA, replicaB));
+    expect(staleSettings.reviewMode).toBe('drift');
+    expect(staleMeta.appSettingsUpdatedAt).toBe(100);
+    expect(merged.portableSettings).toEqual({ uiLocale: 'en', srs: newerSrs });
+  });
+});

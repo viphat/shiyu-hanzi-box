@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatMessage, t } from '../lib/i18n';
+import { formatMessage, messages, t } from '../lib/i18n';
 
 describe('i18n messages', () => {
   it('returns English settings labels', () => {
@@ -129,5 +129,48 @@ describe('i18n messages', () => {
     expect(t('zh-CN', 'cloze.applyMarks')).toBe('应用');
     expect(t('zh-CN', 'cloze.aiSuggest')).toBe('建议填空');
     expect(t('zh-CN', 'cloze.aiNoSuggestions')).toBe('没有可用的填空建议。');
+  });
+});
+
+describe('drift strings', () => {
+  const keys = [
+    'drift.title',
+    'drift.seeMore',
+    'drift.seeLess',
+    'drift.skip',
+    'drift.back',
+    'drift.emptyTitle',
+    'drift.emptyBody',
+    'drift.weightLabel',
+    'drift.weightDot',
+    'settings.reviewMode',
+    'settings.reviewModeHint',
+    'settings.modeSrs',
+    'settings.modeSrsHint',
+    'settings.modeDrift',
+    'settings.modeDriftHint',
+    'stats.driftedToday',
+    'stats.totalDrifted',
+    'stats.legendDrift',
+    'stats.heatmapCellDrift',
+  ] as const;
+
+  it('defines every drift key in both locales', () => {
+    for (const key of keys) {
+      expect(messages.en).toHaveProperty(key);
+      expect(messages['zh-CN']).toHaveProperty(key);
+    }
+  });
+
+  it('interpolates the drift heatmap tooltip', () => {
+    expect(formatMessage('en', 'stats.heatmapCellDrift', { date: '2026-08-11', n: 3, d: 7 }))
+      .toContain('2026-08-11');
+    expect(formatMessage('en', 'stats.heatmapCellDrift', { date: '2026-08-11', n: 3, d: 7 }))
+      .toContain('7');
+  });
+
+  it('interpolates the lifetime drift figure in both locales', () => {
+    expect(formatMessage('en', 'stats.totalDrifted', { n: '1,234' })).toContain('1,234');
+    expect(formatMessage('zh-CN', 'stats.totalDrifted', { n: '1,234' })).toContain('1,234');
   });
 });

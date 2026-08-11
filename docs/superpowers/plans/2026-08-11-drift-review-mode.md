@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Drift **never** writes FSRS state. No task may touch `lib/srs.ts` scheduling, `ReviewState`, or `Cloze.review`.
-- Drift weights key on `normalized` for words and `quote:${id}` for quotes — **never** on `WordEntry.id`, which `pickWordId` (`lib/sync/project.ts:400`) can change when two replicas merge.
+- Drift weights key on the word's `normalized` text, **never** on `WordEntry.id`, which `pickWordId` (`lib/sync/project.ts:400`) can change when two replicas merge. Both kinds are namespaced — `word:${normalized}` and `quote:${id}` — so the two key spaces cannot collide.
 - Drift state lives in the `local:drift` storage item. It is **not** added to the inbox, to `SyncState`, or to `materialize`'s `portableSettings`. The reason is `lib/sync/coordinator.ts:70`, which calls `setInbox(materialize(merged).inbox)` — a blind full replace, so any entry field not projected into `SyncState` is deleted on every sync pass. (Clozes used to be such a field; that was fixed separately in `9218ffa`..`837b831`, which does not change the rule.)
 - `AppSettings.reviewMode` defaults to `'srs'`. Existing users see no change until they opt in.
 - Drift levels are clamped to the closed range `[-2, 2]`. Nothing is ever hidden, muted, or removed from the pool.
@@ -120,7 +120,7 @@ function seeded(values: number[]): () => number {
 
 describe('driftKey', () => {
   it('keys words by normalized, not by id', () => {
-    expect(driftKey(word({ id: 'anything', normalized: '你好' }))).toBe('你好');
+    expect(driftKey(word({ id: 'anything', normalized: '你好' }))).toBe('word:你好');
   });
 
   it('keys quotes by a namespaced id', () => {
@@ -204,7 +204,7 @@ describe('recordDriftDay', () => {
 describe('buildDriftPool', () => {
   it('mixes words and quotes', () => {
     const pool = buildDriftPool(inbox([word()], [quote()]));
-    expect(pool.map(driftKey).sort()).toEqual(['quote:q1', '你好']);
+    expect(pool.map(driftKey).sort()).toEqual(['quote:q1', 'word:你好']);
   });
 
   it('includes parked quotes, which SRS can never show', () => {
@@ -257,35 +257,35 @@ describe('pickDriftCard', () => {
 
   it('draws proportionally to 2 ** level', () => {
     // a at level 2 => weight 4, b at level 0 => weight 1, total 5.
-    const store: DriftStore = { weights: { a: 2 }, days: {} };
+    const store: DriftStore = { weights: { 'word:a': 2 }, days: {} };
     // roll 2.5 lands inside a's [0, 4) band.
-    expect(driftKey(pickDriftCard(pool, store, [], seeded([0.5]))!)).toBe('a');
+    expect(driftKey(pickDriftCard(pool, store, [], seeded([0.5]))!)).toBe('word:a');
     // roll 4.5 lands inside b's [4, 5) band.
-    expect(driftKey(pickDriftCard(pool, store, [], seeded([0.9]))!)).toBe('b');
+    expect(driftKey(pickDriftCard(pool, store, [], seeded([0.9]))!)).toBe('word:b');
   });
 
   it('treats an absent key as neutral weight 1', () => {
     // Both neutral, total 2; roll 1.5 lands in b's band.
-    expect(driftKey(pickDriftCard(pool, EMPTY_DRIFT_STORE, [], seeded([0.75]))!)).toBe('b');
+    expect(driftKey(pickDriftCard(pool, EMPTY_DRIFT_STORE, [], seeded([0.75]))!)).toBe('word:b');
   });
 
   it('excludes keys inside the recent window', () => {
     // Pool of 2 => window 1, so the single recent key is blocked.
-    expect(driftKey(pickDriftCard(pool, EMPTY_DRIFT_STORE, ['a'], seeded([0]))!)).toBe('b');
+    expect(driftKey(pickDriftCard(pool, EMPTY_DRIFT_STORE, ['word:a'], seeded([0]))!)).toBe('word:b');
   });
 
   it('only honours the last `window` recent keys', () => {
     // Window is 1, so 'b' has aged out and only 'a' is blocked.
-    expect(driftKey(pickDriftCard(pool, EMPTY_DRIFT_STORE, ['b', 'a'], seeded([0]))!)).toBe('b');
+    expect(driftKey(pickDriftCard(pool, EMPTY_DRIFT_STORE, ['word:b', 'word:a'], seeded([0]))!)).toBe('word:b');
   });
 
   it('repeats the only card in a single-entry pool', () => {
     const solo = buildDriftPool(inbox([a], []));
-    expect(driftKey(pickDriftCard(solo, EMPTY_DRIFT_STORE, ['a'], seeded([0]))!)).toBe('a');
+    expect(driftKey(pickDriftCard(solo, EMPTY_DRIFT_STORE, ['word:a'], seeded([0]))!)).toBe('word:a');
   });
 
   it('ignores orphaned weight keys for entries no longer in the pool', () => {
-    const store: DriftStore = { weights: { gone: 2, a: 0, b: 0 }, days: {} };
+    const store: DriftStore = { weights: { gone: 2, 'word:a': 0, 'word:b': 0 }, days: {} };
     expect(pickDriftCard(pool, store, [], seeded([0.99]))).not.toBeNull();
   });
 
@@ -370,12 +370,13 @@ export interface DriftStore {
 export const EMPTY_DRIFT_STORE: DriftStore = { weights: {}, days: {} };
 
 /**
- * Weights key on the sync key space, not on `entry.id`. `pickWordId` in
+ * Weights key on `normalized`, not on `entry.id`. `pickWordId` in
  * lib/sync/project.ts chooses a canonical id when two replicas merge the same
- * word, so a word's id can change under the user; `normalized` cannot.
+ * word, so a word's id can change under the user; `normalized` cannot. Both
+ * kinds are prefixed so a word key can never equal a quote key.
  */
 export function driftKey(entry: Entry): string {
-  return entry.kind === 'word' ? entry.normalized : `quote:${entry.id}`;
+  return entry.kind === 'word' ? `word:${entry.normalized}` : `quote:${entry.id}`;
 }
 
 export function clampLevel(level: number): DriftLevel {

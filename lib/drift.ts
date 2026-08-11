@@ -96,10 +96,19 @@ export function pickDriftCard(
 ): Entry | null {
   if (pool.length === 0) return null;
 
-  const blocked = new Set(recent.slice(-recentWindowSize(pool.length)));
+  const windowSize = recentWindowSize(pool.length);
+  // `recent.slice(-windowSize)` would be wrong for windowSize === 0: slice's
+  // start index is only treated as "from the end" when strictly negative, and
+  // -0 < 0 is false, so slice(-0) returns the *whole* array instead of none.
+  const blocked = new Set(windowSize > 0 ? recent.slice(-windowSize) : []);
   const candidates = pool.filter((entry) => !blocked.has(driftKey(entry)));
-  // recentWindowSize < pool.length guarantees this is non-empty; the fallback
-  // is here so a caller passing a hand-built `recent` can never get null.
+  // For a singleton pool, windowSize is 0, so blocked is empty and the sole
+  // entry is always a genuine candidate — no fallback needed there. More
+  // generally, windowSize < pool.length guarantees candidates is non-empty
+  // for a correctly-sized `recent` list. But the fallback below is load-
+  // bearing, not dead code: a caller can pass a hand-built `recent` longer
+  // than the window (or containing keys outside the pool), which could
+  // otherwise still block every candidate and leave nothing to draw from.
   const usable = candidates.length > 0 ? candidates : pool;
 
   let total = 0;

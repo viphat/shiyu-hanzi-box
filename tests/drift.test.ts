@@ -225,8 +225,12 @@ describe('pickDriftCard', () => {
   });
 
   it('ignores orphaned weight keys for entries no longer in the pool', () => {
+    // 'gone' is not a pool entry, so its heavy weight (level 2 => 4x) must
+    // never enter the candidate set or the weight total. Both real entries
+    // are neutral, so total weight is 2 ('a' at [0,1), 'b' at [1,2)); a low
+    // roll landing on 'a' pins that the total wasn't inflated by 'gone'.
     const store: DriftStore = { weights: { gone: 2, 'word:a': 0, 'word:b': 0 }, days: {} };
-    expect(pickDriftCard(pool, store, [], seeded([0.99]))).not.toBeNull();
+    expect(driftKey(pickDriftCard(pool, store, [], seeded([0.1]))!)).toBe('word:a');
   });
 
   it('never returns null for a non-empty pool even at roll 1', () => {

@@ -427,6 +427,33 @@ describe('TtsSettingsPanel', () => {
       expect(onSave).toHaveBeenCalledTimes(1);
     });
 
+    it('does not save twice when a sibling field is committed mid-drag', async () => {
+      // Committing the voice select saves the draft, which already carries the
+      // rate the drag has reached — so the rate is no longer uncommitted. If it
+      // stayed pending, the eventual release would write the identical object a
+      // second time.
+      const onSave = vi.fn();
+      await act(async () => {
+        root.render(<RateInputHarness onSave={onSave} />);
+      });
+
+      const rateInput = () => container.querySelector<HTMLInputElement>('#tts-rate')!;
+      const voiceSelect = () => container.querySelector<HTMLSelectElement>('#tts-voice')!;
+
+      await setRangeValue(rateInput(), '1.3');
+      expect(onSave).not.toHaveBeenCalled();
+
+      await setSelectValue(voiceSelect(), 'Meijia');
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(onSave).toHaveBeenLastCalledWith(
+        expect.objectContaining({ rate: 1.3, voiceName: 'Meijia' }),
+      );
+
+      await fireOnRange(rateInput(), 'pointerup');
+
+      expect(onSave).toHaveBeenCalledTimes(1);
+    });
+
     it('keeps an in-flight drag when an unrelated field is written externally', async () => {
       // The resync effect used to reset the whole draft — and clear the
       // pending drag — whenever ANY of the three fields changed. So an

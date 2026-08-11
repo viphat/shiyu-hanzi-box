@@ -105,6 +105,10 @@ export function TtsSettingsPanel({
   }
 
   function commit(next: TtsSettings) {
+    // `next` is built from the current draft, so it already carries whatever
+    // rate a drag in flight has reached — that rate is now saved, and leaving
+    // it pending would make the eventual release fire a duplicate write.
+    pendingRateRef.current = null;
     setDraft(next);
     onSave(next);
   }

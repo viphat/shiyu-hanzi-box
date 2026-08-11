@@ -42,6 +42,10 @@ import { wordKey } from '@/lib/sync/project';
 import { addTag, planTagWrite, planTagRemovalAcrossQuotes, removeTag, normalizeTag, tagCounts, quoteMatchesTags } from '@/lib/tags';
 import { computeReviewStats } from '@/lib/review-stats';
 import { planClozeWrite } from '@/lib/cloze';
+import { DriftView } from './components/DriftView';
+import { useDrift } from './hooks/useDrift';
+import { driftKey, nudgeLevel, recordDriftDay, setLevel, type DriftLevel } from '@/lib/drift';
+import { replaceDriftStore } from '@/lib/drift-storage';
 
 type Tab = 'review' | 'words' | 'quotes' | 'stats';
 type StatusFilter = 'all' | Status;
@@ -78,6 +82,8 @@ export function App() {
       unwatch();
     };
   }, []);
+  const { driftStore, mutateDrift } = useDrift();
+  const driftMode = settings.reviewMode === 'drift';
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<Tab>('review');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('inbox');
@@ -156,8 +162,8 @@ export function App() {
   const srsStats: SrsStats = srsSnapshot.stats;
 
   const reviewStats = useMemo(
-    () => computeReviewStats(inbox, reviewNow),
-    [inbox, reviewNow],
+    () => computeReviewStats(inbox, reviewNow, driftStore.days),
+    [inbox, reviewNow, driftStore.days],
   );
 
   const reviewItems = useMemo(
@@ -339,6 +345,28 @@ export function App() {
     );
   }
 
+  async function driftThumb(
+    entry: Entry,
+    delta: 1 | -1,
+    _previousLevel: DriftLevel,
+    dayKey: string,
+  ) {
+    const key = driftKey(entry);
+    await mutateDrift((store) => recordDriftDay(nudgeLevel(store, key, delta), dayKey, 1));
+  }
+
+  async function driftSkip(dayKey: string) {
+    await mutateDrift((store) => recordDriftDay(store, dayKey, 1));
+  }
+
+  /** Restores the exact pre-tap level, so undoing a clamped tap is correct. */
+  async function driftBack(entry: Entry, previousLevel: DriftLevel, dayKey: string) {
+    const key = driftKey(entry);
+    await mutateDrift((store) =>
+      recordDriftDay(setLevel(store, key, previousLevel), dayKey, -1),
+    );
+  }
+
   return (
     <div className="min-h-screen text-ink">
       {onboarding.open && (
@@ -406,6 +434,8 @@ export function App() {
             await replace(restored.inbox);
             if (restored.settings) await requestSyncMutation('settings', restored.settings);
             if (restored.aiSettings) await requestSyncMutation('ai', restored.aiSettings);
+            // Drift lives outside the sync domain — write it directly.
+            await replaceDriftStore(restored.drift);
           }}
           locale={locale}
           settings={settings}
@@ -432,11 +462,11 @@ export function App() {
                     review: reviewDueCount,
                     words: inbox.words.length,
                     quotes: inbox.quotes.length,
-                  }, locale)}
+                  }, locale, driftMode)}
                 </button>
               ))}
             </div>
-            {tab === 'stats' ? null : tab === 'review' ? (
+            {tab === 'stats' || (tab === 'review' && driftMode) ? null : tab === 'review' ? (
               <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-sm text-muted">
                 <BookOpen className="h-4 w-4 text-accent-deep" />
                 {t(locale, 'app.reviewToday')}
@@ -463,14 +493,27 @@ export function App() {
           {tab === 'stats' ? (
             <ReviewStatsTab stats={reviewStats} srsStats={srsStats} locale={locale} />
           ) : tab === 'review' ? (
-            <ReviewQueue
-              items={reviewItems}
-              onAnswer={answerEntry}
-              onPostpone={postponeEntry}
-              locale={locale}
-              dictionaryCacheKey={dictionaryCacheKey}
-              dictionarySettings={settings}
-            />
+            driftMode ? (
+              <DriftView
+                inbox={inbox}
+                store={driftStore}
+                onThumb={driftThumb}
+                onSkip={driftSkip}
+                onBack={driftBack}
+                locale={locale}
+                dictionaryCacheKey={dictionaryCacheKey}
+                dictionarySettings={settings}
+              />
+            ) : (
+              <ReviewQueue
+                items={reviewItems}
+                onAnswer={answerEntry}
+                onPostpone={postponeEntry}
+                locale={locale}
+                dictionaryCacheKey={dictionaryCacheKey}
+                dictionarySettings={settings}
+              />
+            )
           ) : tab === 'words' ? (
             <WordList
               words={matches.words}
@@ -544,9 +587,14 @@ function getTabLabel(
   tab: Tab,
   counts: { review: number; words: number; quotes: number },
   locale: UiLocale,
+  driftMode = false,
 ): string {
   if (tab === 'stats') return t(locale, 'tab.stats');
-  if (tab === 'review') return `${t(locale, 'tab.review')} (${counts.review})`;
+  if (tab === 'review') {
+    return driftMode
+      ? t(locale, 'drift.title')
+      : `${t(locale, 'tab.review')} (${counts.review})`;
+  }
   if (tab === 'words') return `${t(locale, 'tab.words')} (${counts.words})`;
   return `${t(locale, 'tab.quotes')} (${counts.quotes})`;
 }

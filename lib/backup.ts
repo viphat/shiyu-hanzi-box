@@ -1,6 +1,7 @@
 import { clozesOverlap } from './cloze';
 import { migrateQuoteCategoryToTags } from './tags';
 import { sanitizeQuoteTranslations } from './translate/validate';
+import { EMPTY_DRIFT_STORE, normalizeDriftStore, type DriftStore } from './drift';
 import type {
   AiSettings,
   AppSettings,
@@ -341,7 +342,14 @@ function cloneInbox(inbox: Inbox): Inbox {
 // Full backup (format version 3): inbox + app settings + AI settings
 // ---------------------------------------------------------------------------
 
-export const FULL_BACKUP_FORMAT_VERSION = 3 as const;
+export const FULL_BACKUP_FORMAT_VERSION = 4 as const;
+
+/**
+ * v3 files are still first-class. The detection below must accept both — a
+ * strict === on the current constant would send every v3 backup down the
+ * inbox-only fallback and silently drop the user's settings and API key.
+ */
+const SUPPORTED_FULL_BACKUP_VERSIONS: readonly number[] = [3, 4];
 
 export interface FullBackup {
   app: typeof BACKUP_APP;
@@ -350,12 +358,15 @@ export interface FullBackup {
   inbox: Inbox;
   settings: AppSettings;
   aiSettings: AiSettings;
+  /** Added in v4. Absent in v3 files, which restore as an empty store. */
+  drift: DriftStore;
 }
 
 export function createFullBackup(
   inbox: Inbox,
   settings: AppSettings,
   aiSettings: AiSettings,
+  drift: DriftStore = EMPTY_DRIFT_STORE,
   exportedAt = new Date(),
 ): FullBackup {
   return {
@@ -365,6 +376,7 @@ export function createFullBackup(
     inbox: cloneInbox(inbox),
     settings,
     aiSettings,
+    drift: normalizeDriftStore(drift),
   };
 }
 
@@ -372,9 +384,14 @@ export function serializeFullBackup(
   inbox: Inbox,
   settings: AppSettings,
   aiSettings: AiSettings,
+  drift: DriftStore = EMPTY_DRIFT_STORE,
   exportedAt = new Date(),
 ): string {
-  return `${JSON.stringify(createFullBackup(inbox, settings, aiSettings, exportedAt), null, 2)}\n`;
+  return `${JSON.stringify(
+    createFullBackup(inbox, settings, aiSettings, drift, exportedAt),
+    null,
+    2,
+  )}\n`;
 }
 
 function isAppSettings(value: unknown): value is AppSettings {
@@ -401,6 +418,7 @@ export function restoreFullBackup(raw: string): {
   inbox: Inbox;
   settings?: AppSettings;
   aiSettings?: AiSettings;
+  drift: DriftStore;
 } {
   let parsed: unknown;
   try {
@@ -410,22 +428,27 @@ export function restoreFullBackup(raw: string): {
   }
 
   const value = parsed as Record<string, unknown>;
-  if (value && value.formatVersion === FULL_BACKUP_FORMAT_VERSION) {
+  const version = value?.formatVersion;
+  if (typeof version === 'number' && SUPPORTED_FULL_BACKUP_VERSIONS.includes(version)) {
     if (!isInbox(value.inbox)) {
-      throw new BackupParseError('Invalid v3 backup: inbox is malformed.');
+      throw new BackupParseError(`Invalid v${version} backup: inbox is malformed.`);
     }
     if (value.settings !== undefined && !isAppSettings(value.settings)) {
-      throw new BackupParseError('Invalid v3 backup: settings is malformed.');
+      throw new BackupParseError(`Invalid v${version} backup: settings is malformed.`);
     }
     if (value.aiSettings !== undefined && !isAiSettings(value.aiSettings)) {
-      throw new BackupParseError('Invalid v3 backup: aiSettings is malformed.');
+      throw new BackupParseError(`Invalid v${version} backup: aiSettings is malformed.`);
     }
     return {
       inbox: cloneInbox(value.inbox as Inbox),
       settings: value.settings as AppSettings | undefined,
       aiSettings: value.aiSettings as AiSettings | undefined,
+      // Peer-supplied and untrusted — normalize rather than cast.
+      drift: isRecord(value.drift)
+        ? normalizeDriftStore(value.drift as Partial<DriftStore>)
+        : EMPTY_DRIFT_STORE,
     };
   }
-  // Fallback: treat as inbox-only backup (formatVersion 2 or lower); settings/AI left undefined.
-  return { inbox: parseBackup(raw) };
+  // Fallback: inbox-only backup (formatVersion 2 or lower); settings/AI absent.
+  return { inbox: parseBackup(raw), drift: EMPTY_DRIFT_STORE };
 }

@@ -72,7 +72,6 @@ natural-sounding one. Cloud neural TTS was considered and deferred; see
 - Support remote/network voices where they exist, behind an opt-in that is off
   by default.
 - Route playback to the engine that actually owns the selected voice.
-- Ship the warm-up utterance the original design specified but never landed.
 
 ## Non-Goals
 
@@ -128,16 +127,17 @@ Auto-selection applies a hard filter, then scores the survivors.
 
 | Signal | Points |
 | --- | --- |
-| `isDefault` — the user's own OS System Voice | +100 |
 | Name contains `Premium` | +40 |
 | Name contains `Enhanced` or `Neural` | +30 |
 | Known-good family: `Tingting`, `婷婷`, `Huihui`, `Yaoyao`, `Xiaoxiao`, `Yunxi`, `Yunyang`, `Google 普通话` | +20 |
 | `isRemote` (only reachable when opted in) | +25 |
 | `lang === 'zh-CN'` | +10 |
 
-`isDefault` outscores every combination of the rest, so an explicit OS choice
-always wins. Eloquence voices cannot reach the scorer, so an Eloquence OS
-default cannot be auto-selected — it is simply skipped.
+Ordering tiers on `isDefault` first and only falls back to the score table
+below, so an explicit OS choice wins by construction: name-based bonuses can
+stack past any fixed bonus, so a bonus large enough "today" is not a guarantee.
+Eloquence voices cannot reach the comparator at all, so an Eloquence OS default
+is skipped rather than selected.
 
 Ranking is pure and synchronous over `VoiceCandidate[]`, which makes it directly
 unit-testable with no DOM mocking.
@@ -198,13 +198,22 @@ Changing `voiceName` or `allowNetworkVoices` re-resolves the active voice
 immediately. Changing `rate` takes effect on the next utterance; in-flight
 speech is not restarted.
 
-### Warm-up
+### Warm-up (not implemented)
 
-Ship the `warmedUp`-guarded priming utterance from
-[the original design](2026-06-22-tts-design.md) — a `volume: 0` one-character
-utterance spoken and immediately cancelled once per session, after the voice
-list first resolves. Scoped to the **Web Speech path only**; the dropped-first-
-utterance bug is a Web Speech bug and `chrome.tts` does not exhibit it.
+The original TTS design specified a `warmedUp`-guarded silent utterance to work
+around Chrome dropping the first `speechSynthesis.speak()` of a session. It is
+deliberately not implemented.
+
+Three tests in `tests/tts.test.ts` assert that nothing is spoken before a user
+click, that no cancel precedes the first utterance, and that speaking a word
+produces exactly one `speak()` call. Every warm-up placement violates at least
+one of them, and the first of those assertions guards a real property — browsers
+block audio before user interaction.
+
+The bug is old, is not reproducible on current Chrome, and has never been
+reported for this extension. Revisit only if a dropped first utterance is
+actually observed; the fix would then be a non-cancelling primer on the first
+`speak()` call, which costs only the one-utterance-per-word assertion.
 
 ## UI
 
@@ -253,6 +262,8 @@ New keys in both `en` and `zh-CN`:
 | `tts.badgeSystem` | System | 系统 |
 | `tts.noVoices` | No Chinese voice is installed on this system. | 系统未安装中文语音。 |
 | `tts.voiceMissing` | The saved voice is unavailable; using the best available one. | 已保存的语音不可用，正在使用最佳可用语音。 |
+| `tts.testSample` | 这个词的发音 | 这个词的发音 |
+| `tts.noNetworkVoices` | This browser reports no network voices. | 此浏览器未提供网络语音。 |
 
 ## Testing
 
@@ -277,7 +288,6 @@ Behavioural cases against the existing mocks:
   voices — the routing regression this design fixes.
 - `rate` reaches both `chrome.tts.speak` options and the
   `SpeechSynthesisUtterance`.
-- The warm-up fires once per session, on the Web Speech path only.
 - `configureTts` re-resolves the active voice.
 
 ### `tests/settings.test.ts` (extend)

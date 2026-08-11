@@ -1,5 +1,5 @@
 import { ThumbsDown, ThumbsUp, SkipForward, Undo2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   buildDriftPool,
   driftKey,
@@ -25,6 +25,15 @@ interface DriftHistoryItem {
   previousLevel: DriftLevel;
   /** The local day the advance was counted on, so a session across midnight undoes the right one. */
   dayKey: string;
+  /**
+   * `recent` exactly as it was immediately before this advance. `recent` is a
+   * capped sliding window (`pickDriftCard`'s no-repeat ring), not a plain
+   * growing stack, so once it starts evicting, popping its last element on
+   * Back can't recover the evicted key. Snapshotting it here — and restoring
+   * it verbatim in `back()` — sidesteps that entirely, the same way
+   * `previousLevel` sidesteps computing an inverse nudge.
+   */
+  recentBefore: string[];
 }
 
 export function DriftView({
@@ -62,13 +71,25 @@ export function DriftView({
   );
   const [recent, setRecent] = useState<string[]>([]);
   const [history, setHistory] = useState<DriftHistoryItem[]>([]);
+  // Stops a second click from firing onThumb/onSkip/onBack again while the
+  // first one is still in flight (see ReviewQueue's `busy`, which the three
+  // action buttons here otherwise have no equivalent of). `busy` state drives
+  // the `disabled` attribute; `busyRef` is the actual gate — a click handler
+  // reads state as of the *last render*, so two clicks arriving before React
+  // re-renders would both see `busy === false` no matter when `setBusy(true)`
+  // is called. The ref is mutated immediately, so it closes that gap too.
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
 
-  // The pool can change under us (an entry archived in another tab). Fall back
-  // deterministically rather than drawing during render — calling the RNG in
-  // render would pick a different card on every re-render.
+  // The pool can change under us (an entry archived in another tab, or a note
+  // added elsewhere). Fall back deterministically rather than drawing during
+  // render — calling the RNG in render would pick a different card on every
+  // re-render. Derive from the pool by key rather than reusing `current`
+  // directly, so an entry edited elsewhere is shown fresh rather than stale.
   const currentKey = current ? driftKey(current) : null;
-  const inPool = currentKey !== null && pool.some((entry) => driftKey(entry) === currentKey);
-  const active = inPool ? current : (pool[0] ?? null);
+  const activeFromPool =
+    currentKey !== null ? (pool.find((entry) => driftKey(entry) === currentKey) ?? null) : null;
+  const active = activeFromPool ?? pool[0] ?? null;
 
   if (pool.length === 0 || !active) {
     return (
@@ -79,34 +100,62 @@ export function DriftView({
     );
   }
 
-  function advance(item: DriftHistoryItem) {
+  function advance(item: Omit<DriftHistoryItem, 'recentBefore'>) {
     const key = driftKey(item.entry);
-    const nextRecent = [...recent, key].slice(-Math.max(1, recentWindowSize(pool.length)));
-    setRecent(nextRecent);
-    setHistory((prev) => [...prev, item]);
+    // Snapshot `recent` as it stood before this advance — copied, not the
+    // live reference — so `back()` can restore it verbatim even after the
+    // window has evicted keys a plain `slice(0, -1)` could never recover.
+    const recentBefore = [...recent];
+    const nextRecent = [...recentBefore, key].slice(-Math.max(1, recentWindowSize(pool.length)));
+    setHistory((prev) => [...prev, { ...item, recentBefore }]);
+    setRecent(() => nextRecent);
     setCurrent(pickDriftCard(pool, store, nextRecent, random));
   }
 
   function thumb(delta: 1 | -1) {
-    const dayKey = localDayKey(now());
-    const previousLevel = getLevel(store, driftKey(active!));
-    void onThumb(active!, delta, previousLevel, dayKey);
-    advance({ entry: active!, previousLevel, dayKey });
+    if (busyRef.current || !active) return;
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      const dayKey = localDayKey(now());
+      const previousLevel = getLevel(store, driftKey(active));
+      void onThumb(active, delta, previousLevel, dayKey);
+      advance({ entry: active, previousLevel, dayKey });
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
   }
 
   function skip() {
-    const dayKey = localDayKey(now());
-    void onSkip(dayKey);
-    advance({ entry: active!, previousLevel: getLevel(store, driftKey(active!)), dayKey });
+    if (busyRef.current || !active) return;
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      const dayKey = localDayKey(now());
+      void onSkip(dayKey);
+      advance({ entry: active, previousLevel: getLevel(store, driftKey(active)), dayKey });
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
   }
 
   function back() {
+    if (busyRef.current) return;
     const last = history[history.length - 1];
     if (!last) return;
-    void onBack(last.entry, last.previousLevel, last.dayKey);
-    setHistory((prev) => prev.slice(0, -1));
-    setRecent((prev) => prev.slice(0, -1));
-    setCurrent(last.entry);
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      void onBack(last.entry, last.previousLevel, last.dayKey);
+      setHistory((prev) => prev.slice(0, -1));
+      setRecent(() => last.recentBefore);
+      setCurrent(last.entry);
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
   }
 
   return (
@@ -124,7 +173,8 @@ export function DriftView({
           <button
             data-testid="drift-back"
             onClick={back}
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-muted transition hover:text-ink-secondary"
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-muted transition hover:text-ink-secondary disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Undo2 className="h-4 w-4" />
             {t(locale, 'drift.back')}
@@ -138,7 +188,8 @@ export function DriftView({
             data-testid="drift-down"
             onClick={() => thumb(-1)}
             title={t(locale, 'drift.seeLess')}
-            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card-soft px-4 py-1.5 text-sm text-ink-secondary transition hover:border-accent-fade"
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card-soft px-4 py-1.5 text-sm text-ink-secondary transition hover:border-accent-fade disabled:cursor-not-allowed disabled:opacity-50"
           >
             <ThumbsDown className="h-4 w-4" />
             {t(locale, 'drift.seeLess')}
@@ -147,7 +198,8 @@ export function DriftView({
             data-testid="drift-skip"
             onClick={skip}
             title={t(locale, 'drift.skip')}
-            className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm text-muted transition hover:text-ink-secondary"
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm text-muted transition hover:text-ink-secondary disabled:cursor-not-allowed disabled:opacity-50"
           >
             <SkipForward className="h-4 w-4" />
             {t(locale, 'drift.skip')}
@@ -156,7 +208,8 @@ export function DriftView({
             data-testid="drift-up"
             onClick={() => thumb(1)}
             title={t(locale, 'drift.seeMore')}
-            className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-on-accent shadow-sm transition hover:bg-accent-deep"
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-on-accent shadow-sm transition hover:bg-accent-deep disabled:cursor-not-allowed disabled:opacity-50"
           >
             <ThumbsUp className="h-4 w-4" />
             {t(locale, 'drift.seeMore')}

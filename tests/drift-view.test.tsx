@@ -4,7 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DriftView } from '../entrypoints/dashboard/components/DriftView';
-import { EMPTY_DRIFT_STORE } from '../lib/drift';
+import { driftKey, EMPTY_DRIFT_STORE, MAX_DRIFT_LEVEL, type DriftStore } from '../lib/drift';
 import { messages } from '../lib/i18n';
 import type { Inbox, QuoteEntry, WordEntry } from '../lib/types';
 
@@ -174,5 +174,70 @@ describe('DriftView', () => {
   it('renders a five-dot weight scale', () => {
     render({ words: [word()], quotes: [] });
     expect(container.querySelectorAll('[data-testid="drift-dot"]')).toHaveLength(5);
+  });
+
+  it('restores the exact no-repeat window across Backs that cross an eviction', () => {
+    // Regression test for the `recent` ring/history desync: `recent` is a
+    // capped sliding window, not a growing stack, so once it starts
+    // evicting, undoing by popping its last element (the pre-fix `back()`)
+    // can never recover an evicted key.
+    //
+    // A *single* Back can't expose this by itself: redoing the exact action
+    // that was undone re-appends the same key that was just discarded, and
+    // slicing back down to the window size collapses the buggy and correct
+    // `recent` arrays to the same result either way (that key was always
+    // going to be evicted again). Two Backs break that symmetry — the
+    // second one lands on a redo of a *different* key, so the desync
+    // becomes observable in which card gets drawn next.
+    const words = [
+      word({ id: 'wa', normalized: 'a', text: '甲' }),
+      word({ id: 'wb', normalized: 'b', text: '乙' }),
+      word({ id: 'wc', normalized: 'c', text: '丙' }),
+      word({ id: 'wd', normalized: 'd', text: '丁' }),
+    ];
+    render({ words, quotes: [] });
+    const text = () => container.querySelector('[data-testid="drift-text"]')!.textContent;
+
+    // Pool is sorted by driftKey ('word:a' < 'word:b' < ...), and `random`
+    // is pinned to 0, so `pickDriftCard` deterministically walks the pool
+    // in order, skipping whatever the no-repeat window blocks.
+    expect(text()).toBe('甲');
+    click('drift-up'); // 甲 -> 乙
+    expect(text()).toBe('乙');
+    click('drift-up'); // 乙 -> 丙
+    expect(text()).toBe('丙');
+    click('drift-up'); // 丙 -> 甲 (pool size 4 -> window size 2: this advance evicts 甲's key)
+    expect(text()).toBe('甲');
+
+    click('drift-back'); // undo the 丙 advance
+    expect(text()).toBe('丙');
+    click('drift-back'); // undo the 乙 advance
+    expect(text()).toBe('乙');
+
+    // Correctly restored, the window still holds both 甲 and 乙 (exactly as
+    // it did the first time we stood on 乙), so the next draw must skip
+    // both and land on 丙 — reproducing the original run. The pre-fix
+    // version has already lost 甲 from the window by this point and wrongly
+    // redraws it instead.
+    click('drift-up');
+    expect(text()).toBe('丙');
+  });
+
+  it('reports the clamped level, not an off-by-one, when Back undoes a no-op at the max bound', () => {
+    // All the other tests render with EMPTY_DRIFT_STORE, so `previousLevel`
+    // is always 0 and this never gets exercised: thumbing up an entry
+    // already at MAX_DRIFT_LEVEL is a clamped no-op, and Back must report
+    // the bound level it actually was (2), not compute `level - delta` and
+    // land one step off it (1). This is the exact case `previousLevel`
+    // exists to handle.
+    const words = [word({ normalized: 'a', text: '甲' })];
+    const store: DriftStore = { weights: { [driftKey(words[0])]: MAX_DRIFT_LEVEL }, days: {} };
+    const onBack = vi.fn();
+    render({ words, quotes: [] }, { store, onBack });
+
+    click('drift-up'); // clamped no-op: already at MAX_DRIFT_LEVEL
+    click('drift-back');
+
+    expect(onBack).toHaveBeenCalledWith(expect.anything(), MAX_DRIFT_LEVEL, '2026-08-11');
   });
 });

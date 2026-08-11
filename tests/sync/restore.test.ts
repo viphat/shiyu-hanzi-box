@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { planRestoreRemovals } from '../../lib/sync/restore';
-import { legacyOccurrenceId } from '../../lib/sync/project';
+import { occurrenceId } from '../../lib/sync/project';
 import type { Cloze, Inbox, Occurrence, QuoteEntry, WordEntry } from '../../lib/types';
 
 function quote(over: Partial<QuoteEntry> = {}): QuoteEntry {
@@ -81,20 +81,19 @@ describe('planRestoreRemovals', () => {
       inbox([word({ occurrences: [occ(100)] })], []),
     );
     expect(out.occurrences).toEqual([
-      { normalized: '你好', occurrenceId: legacyOccurrenceId('w1', occ(200)) },
+      { normalized: '你好', occurrenceId: occurrenceId('你好', occ(200)) },
     ]);
   });
 
-  it('keys occurrence ids off the local word id, not the backup copy', () => {
+  it('keys occurrence ids off the word logical key, so a backup from another profile still matches', () => {
     // A backup from another profile can carry a different id for the same
-    // normalized word. Tombstones must match the ids projection actually
-    // minted here, which derive from THIS device's word id.
+    // normalized word; the tombstone must still name the id projection minted.
     const out = planRestoreRemovals(
       inbox([word({ id: 'local', occurrences: [occ(100)] })], []),
       inbox([word({ id: 'from-backup', occurrences: [] })], []),
     );
     expect(out.occurrences).toEqual([
-      { normalized: '你好', occurrenceId: legacyOccurrenceId('local', occ(100)) },
+      { normalized: '你好', occurrenceId: occurrenceId('你好', occ(100)) },
     ]);
   });
 

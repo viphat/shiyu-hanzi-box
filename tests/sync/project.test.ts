@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  legacyOccurrenceId,
+  occurrenceId,
   materialize,
   projectInbox,
   liftLegacyTags,
@@ -43,10 +43,10 @@ describe('projection identity', () => {
     expect(wordKey('你好')).toBe('word:你好');
   });
 
-  it('derives stable, deterministic legacy occurrence ids', () => {
+  it('derives stable, deterministic occurrence ids from the word logical key', () => {
     const occ = { sourceTitle: 't', sourceUrl: 'u', sourceDomain: 'd', surrounding: 's', capturedAt: 15 };
-    expect(legacyOccurrenceId('w1', occ)).toBe(legacyOccurrenceId('w1', { ...occ }));
-    expect(legacyOccurrenceId('w1', occ)).not.toBe(legacyOccurrenceId('w2', occ));
+    expect(occurrenceId('你好', occ)).toBe(occurrenceId('你好', { ...occ }));
+    expect(occurrenceId('你好', occ)).not.toBe(occurrenceId('再见', occ));
   });
 });
 

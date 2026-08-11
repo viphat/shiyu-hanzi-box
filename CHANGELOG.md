@@ -14,14 +14,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the state it materialized — so on a synced profile the first pass
   silently deleted every blank and its per-cloze FSRS scheduling, emptying the
   quote review queue.
+- **No more duplicated source occurrences.** When two profiles captured the
+  same word independently, sync picked one profile's word id as canonical and
+  the other profile then re-filed every one of that word's captures under a
+  second identity — showing each source twice. Occurrence identity no longer
+  depends on the word id, and existing duplicates collapse on the next sync.
 - **Restoring a backup now sticks on a synced profile.** A restore replaces the
   whole inbox, but anything missing from the backup — a word, a quote, a tag, a
   cloze blank, a source occurrence — was only absent, not removed, so the next
   sync pass brought it all back from another device. Restores are also
   authoritative in the other direction now: content the backup carries is
   applied even when the current data is newer, so a restore can undo a deletion
-  or an edit (and undo a restore). The restore is applied as a single
-  all-or-nothing operation.
+  or an edit (and undo a restore), and it now rolls back review history and
+  scheduling as well — for words, quotes and each cloze blank. The restore is
+  applied as a single all-or-nothing operation.
 
 ### Added
 

@@ -248,7 +248,10 @@ provider API is ever called.
   can drop something must plan its removals off the same snapshot it writes: the
   dashboard edits via `useInbox.mutateWithRemovals`, a backup restore via the
   `restore` mutation (`applyRestore` + `lib/sync/restore.ts`
-  `planRestoreRemovals`). `applyRestore` also re-stamps every restored entry as
+  `planRestoreRemovals`). Review events are the one OR-Set with no user-facing
+  removal — only a restore prunes them, via `discardStaleReviews`, and a
+  snapshot whose review was discarded counts as orphaned so the restored
+  scheduler state wins. `applyRestore` also re-stamps every restored entry as
   of now, so the backup's content wins the merge against the state being rolled
   back — without it a restore cannot undo a delete or an edit. `updatedAt` is a
   sync recency key only; nothing in the UI, export or scheduler reads it.

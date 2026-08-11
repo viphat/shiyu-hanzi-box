@@ -14,6 +14,7 @@ import type {
   ClozeNode,
   HybridTimestamp,
   OccurrenceNode,
+  ReviewEventNode,
   QuoteNode,
   Register,
   SyncState,
@@ -218,6 +219,10 @@ function projectWord(word: WordEntry, ctx: BootstrapContext): WordNode {
     },
     occurrences,
     occurrenceTombstones: {},
+    // Reset like every other tombstone map: removals are recorded straight into
+    // the persisted state (here, by a backup restore) and the coordinator's
+    // merge with that state carries them forward.
+    reviewTombstones: {},
     ...projectScheduler(key, word.review, ctx.replicaId),
   };
 }
@@ -262,6 +267,7 @@ function projectCloze(
       hint: reg(cloze.hint ?? null, s),
       wordId: reg(cloze.wordId ?? null, s),
     },
+    reviewTombstones: {},
     ...projectScheduler(clozeKey(quoteId, cloze.id), cloze.review, ctx.replicaId),
   };
 }
@@ -346,6 +352,7 @@ function projectQuote(quote: QuoteEntry, ctx: BootstrapContext, prev?: QuoteNode
     // carries them forward. Projection alone never sees a removal.
     clozeTombstones: {},
     reviewEvents,
+    reviewTombstones: {},
     snapshot,
   };
 }
@@ -420,9 +427,26 @@ function isSchedulerPayload(payload: unknown): payload is ReviewState {
   );
 }
 
-function rebuildReview(node: WordNode | QuoteNode | ClozeNode): ReviewState | undefined {
-  // `?? {}` tolerates a node authored without the map (older or corrupt replica).
+/**
+ * Review events minus the ones a restore discarded. Events are stamped by
+ * their own `reviewedAt`, so a tombstone written now suppresses every review
+ * that had already happened while leaving any later one untouched.
+ */
+export function liveReviewEvents(
+  node: WordNode | QuoteNode | ClozeNode,
+): Record<string, ReviewEventNode> {
   const events = node.reviewEvents ?? {};
+  const tombstones = node.reviewTombstones;
+  if (!tombstones || Object.keys(tombstones).length === 0) return events;
+  const live: Record<string, ReviewEventNode> = {};
+  for (const [id, event] of Object.entries(events)) {
+    if (!isSuppressed(event.stamp, tombstones[id])) live[id] = event;
+  }
+  return live;
+}
+
+function rebuildReview(node: WordNode | QuoteNode | ClozeNode): ReviewState | undefined {
+  const events = liveReviewEvents(node);
   if (!node.snapshot && Object.keys(events).length === 0) return undefined;
   const log = Object.values(events)
     .sort(

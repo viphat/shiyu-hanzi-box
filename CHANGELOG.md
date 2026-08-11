@@ -25,8 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sync pass brought it all back from another device. Restores are also
   authoritative in the other direction now: content the backup carries is
   applied even when the current data is newer, so a restore can undo a deletion
-  or an edit (and undo a restore). The restore is applied as a single
-  all-or-nothing operation.
+  or an edit (and undo a restore), and it now rolls back review history and
+  scheduling as well — for words, quotes and each cloze blank. The restore is
+  applied as a single all-or-nothing operation.
 
 ### Added
 

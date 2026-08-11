@@ -1,7 +1,8 @@
-import { occurrenceId, wordKey } from './project';
+import { clozeKey, legacyReviewEventId, occurrenceId, wordKey } from './project';
 import { planClozeWrite } from '../cloze';
 import { normalizeTags } from '../tags';
-import type { Inbox } from '../types';
+import type { Inbox, ReviewState } from '../types';
+import type { ClozeNode, HybridTimestamp, QuoteNode, SyncState, WordNode } from './types';
 
 export interface RestoreRemovals {
   /** removeTags payload: per quote, the tags the restore dropped. */
@@ -69,4 +70,62 @@ export function planRestoreRemovals(current: Inbox, restored: Inbox): RestoreRem
   }
 
   return out;
+}
+
+/**
+ * Discard the review events an entity holds that the restored copy does not.
+ *
+ * Review events are unioned by id and were never removable, so a restore could
+ * roll an entry's text back but not its reviews: the log — and the scheduler
+ * state derived from it — reappeared on the next merge. Events are stamped by
+ * their own `reviewedAt`, so a tombstone stamped now discards exactly the
+ * reviews that had already happened and cannot touch a later one.
+ *
+ * Mutates `node` in place, matching how applyRestore builds the rest of the
+ * restored state.
+ */
+function tombstoneStaleReviews(
+  node: WordNode | QuoteNode | ClozeNode,
+  entityKey: string,
+  review: ReviewState | undefined,
+  stamp: HybridTimestamp,
+): void {
+  const kept = new Set<string>();
+  (review?.reviewLog ?? []).forEach((entry, index) => {
+    kept.add(legacyReviewEventId(entityKey, entry.reviewedAt, index));
+  });
+  const tombstones = { ...(node.reviewTombstones ?? {}) };
+  for (const id of Object.keys(node.reviewEvents ?? {})) {
+    if (!kept.has(id)) tombstones[id] = stamp;
+  }
+  node.reviewTombstones = tombstones;
+}
+
+/**
+ * Apply `tombstoneStaleReviews` across every entity the restore carries, for
+ * words, quotes and each of a quote's cloze blanks (one blank is one card, so
+ * each owns its own review log). Entities the restore drops need nothing: the
+ * entity or cloze tombstone already suppresses them wholesale.
+ */
+export function discardStaleReviews(
+  state: SyncState,
+  restored: Inbox,
+  stamp: HybridTimestamp,
+): void {
+  for (const word of restored.words) {
+    const key = wordKey(word.normalized);
+    const node = state.words[key];
+    if (node) tombstoneStaleReviews(node, key, word.review, stamp);
+  }
+  for (const quote of restored.quotes) {
+    const node = state.quotes[quote.id];
+    if (!node) continue;
+    tombstoneStaleReviews(node, `quote:${quote.id}`, quote.review, stamp);
+    for (const cloze of quote.clozes ?? []) {
+      const clozeNode = node.clozes?.[cloze.id];
+      if (clozeNode) {
+        tombstoneStaleReviews(clozeNode, clozeKey(quote.id, cloze.id), cloze.review, stamp);
+      }
+    }
+  }
 }

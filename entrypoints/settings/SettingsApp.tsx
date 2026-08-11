@@ -25,12 +25,14 @@ import {
   recordKaikkiImport,
   resetKaikki,
   setSrsSettings,
+  setTtsSettings,
   setUiLocale,
 } from '@/lib/settings';
-import type { AiSettings, ReviewMode, UiLocale } from '@/lib/types';
+import type { AiSettings, ReviewMode, TtsSettings, UiLocale } from '@/lib/types';
 import { useSettings } from '../dashboard/hooks/useSettings';
 import { AiSettingsPanel } from './AiSettingsPanel';
 import { FolderSync } from './FolderSync';
+import { TtsSettingsPanel } from './TtsSettingsPanel';
 import type {
   KaikkiImportProgress,
   KaikkiImportWorkerRequest,
@@ -92,6 +94,10 @@ export function SettingsApp() {
   async function updateLocale(uiLocale: UiLocale) {
     await mutate((current) => setUiLocale(current, uiLocale));
     setMessage({ tone: 'success', text: t(uiLocale, 'settings.saved') });
+  }
+
+  async function updateTtsSettings(tts: TtsSettings) {
+    await mutate((current) => setTtsSettings(current, tts));
   }
 
   async function updateKaikkiEnabled(enabled: boolean) {
@@ -751,6 +757,12 @@ export function SettingsApp() {
             />
           </label>
         </section>
+
+        <TtsSettingsPanel
+          settings={settings.tts}
+          locale={locale}
+          onSave={(next) => void updateTtsSettings(next)}
+        />
 
         <AiSettingsPanel
           settings={aiSettings}

@@ -69,12 +69,17 @@ The optional Kaikki dictionary workflow opens the Kaikki download page in a
 normal browser tab when you click the download button. Imported Kaikki JSONL
 files are processed locally.
 
-Pronunciation is user-triggered. When you click a speaker button, the extension
-passes that saved Chinese word to Chrome's configured text-to-speech engine.
-Speech is normally provided by the operating system or an installed Chrome
-speech engine. Chrome reports that some installed voices may use a remote
-network resource. The extension does not operate its own speech server and does
-not store generated audio.
+### Pronunciation (text-to-speech)
+
+Pronunciation uses the speech voices your browser and operating system already
+provide. By default only on-device voices are used, and nothing leaves your
+computer.
+
+Some platforms also offer network voices, which synthesize speech on a remote
+server. These are disabled by default. If you enable **Allow network voices** in
+Settings → Pronunciation and then select one, the word or phrase being spoken is
+sent to that voice's provider. No other data is included, and the setting can be
+turned off at any time.
 
 ## Folder Sync (optional)
 

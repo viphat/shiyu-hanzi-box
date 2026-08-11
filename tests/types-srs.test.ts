@@ -7,6 +7,7 @@ import type {
   ReviewScheduler,
   ReviewState,
 } from '../lib/types';
+import { DEFAULT_TTS_SETTINGS } from '../lib/settings';
 
 describe('SRS persisted types', () => {
   it('exposes FSRS review enums and shapes', () => {
@@ -83,6 +84,7 @@ describe('SRS persisted types', () => {
         newCardsPerDay: 20,
         enableFuzz: true,
       },
+      tts: DEFAULT_TTS_SETTINGS,
     };
     expect(settings.srs.desiredRetention).toBe(0.9);
   });

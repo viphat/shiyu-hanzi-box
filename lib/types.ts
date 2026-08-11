@@ -152,6 +152,7 @@ export interface AppSettings {
   kaikki: KaikkiSettings;
   cvdict: CvdictSettings;
   srs: SrsSettings;
+  tts: TtsSettings;
 }
 
 // ---------------------------------------------------------------------------

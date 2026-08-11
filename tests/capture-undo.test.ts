@@ -3,7 +3,7 @@ import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { undoCapture } from '../entrypoints/background/capture-undo';
 import { registerSyncMutationHandler } from '../entrypoints/background/sync-mutation-handler';
 import { saveWord, saveQuote } from '../lib/capture';
-import { legacyOccurrenceId } from '../lib/sync/project';
+import { occurrenceId } from '../lib/sync/project';
 import { getInbox } from '../lib/storage';
 import { syncMetadataStorage } from '../lib/sync/mutations';
 
@@ -47,7 +47,7 @@ describe('undoCapture', () => {
     });
     const inbox = await getInbox();
     expect(inbox.words[0].occurrences).toHaveLength(1);
-    const occId = legacyOccurrenceId(wordId, { sourceTitle: '', sourceDomain: '', ...occ });
+    const occId = occurrenceId('你好', { sourceTitle: '', sourceDomain: '', ...occ });
     expect((await syncMetadataStorage.getValue()).state!.words['word:你好'].occurrenceTombstones[occId]).toBeDefined();
   });
 

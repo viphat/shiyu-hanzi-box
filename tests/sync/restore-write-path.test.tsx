@@ -12,7 +12,7 @@ import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { useInbox } from '../../entrypoints/dashboard/hooks/useInbox';
 import { registerSyncMutationHandler } from '../../entrypoints/background/sync-mutation-handler';
 import { syncMetadataStorage } from '../../lib/sync/mutations';
-import { legacyOccurrenceId, wordKey } from '../../lib/sync/project';
+import { occurrenceId, wordKey } from '../../lib/sync/project';
 import { getInbox, setInbox } from '../../lib/storage';
 import type { Cloze, Inbox, Occurrence, QuoteEntry, WordEntry } from '../../lib/types';
 
@@ -120,8 +120,8 @@ describe('useInbox.replace (backup restore)', () => {
     expect(state?.quotes.q1.tagTombstones?.keep).toBeUndefined();
     expect(state?.quotes.q1.clozeTombstones?.b).toBeDefined();
     expect(state?.quotes.q1.clozeTombstones?.a).toBeUndefined();
-    const dropped = legacyOccurrenceId('w1', occ(200));
-    const kept = legacyOccurrenceId('w1', occ(100));
+    const dropped = occurrenceId('你好', occ(200));
+    const kept = occurrenceId('你好', occ(100));
     expect(state?.words[wordKey('你好')].occurrenceTombstones?.[dropped]).toBeDefined();
     expect(state?.words[wordKey('你好')].occurrenceTombstones?.[kept]).toBeUndefined();
   });

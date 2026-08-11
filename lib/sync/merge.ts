@@ -1,6 +1,6 @@
 import { compareTimestamps } from './clock';
 import { mergeRegisterMap, mergeStampMap } from './registers';
-import { liftLegacyTags } from './project';
+import { liftLegacyTags, normalizeOccurrenceIds } from './project';
 import type {
   ClozeNode,
   HybridTimestamp,
@@ -75,7 +75,11 @@ function earliestCreatedAt(a: Register<number>, b: Register<number>): Register<n
   return compareTimestamps(a.stamp, b.stamp) <= 0 ? a : b;
 }
 
-export function mergeWordNodes(a: WordNode, b: WordNode): WordNode {
+export function mergeWordNodes(x: WordNode, y: WordNode): WordNode {
+  // Fold word-id-keyed occurrences onto their canonical ids before unioning,
+  // or the same capture merges as two members.
+  const a = normalizeOccurrenceIds(x);
+  const b = normalizeOccurrenceIds(y);
   const events = mergeReviewEvents(a.reviewEvents, b.reviewEvents);
   const fields = mergeRegisterMap(a.fields, b.fields) as WordNode['fields'];
   const createdAt = earliestCreatedAt(a.createdAt, b.createdAt);

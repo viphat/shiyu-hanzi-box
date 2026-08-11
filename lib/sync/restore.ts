@@ -1,4 +1,4 @@
-import { legacyOccurrenceId, wordKey } from './project';
+import { occurrenceId, wordKey } from './project';
 import { planClozeWrite } from '../cloze';
 import { normalizeTags } from '../tags';
 import type { Inbox } from '../types';
@@ -60,16 +60,11 @@ export function planRestoreRemovals(current: Inbox, restored: Inbox): RestoreRem
   for (const word of restored.words) {
     const before = wordsBefore.get(word.normalized);
     if (!before) continue;
-    // Occurrence ids are derived from the OWNING WORD'S ID plus the capture
-    // tuple, and projection minted the existing ones from this device's word
-    // id. A backup from another profile may carry a different id for the same
-    // normalized word, so both sides are keyed off `before.id` — otherwise the
-    // tombstone would name an id that exists in no replica.
-    const kept = new Set(word.occurrences.map((occ) => legacyOccurrenceId(before.id, occ)));
+    const kept = new Set(word.occurrences.map((occ) => occurrenceId(word.normalized, occ)));
     for (const occ of before.occurrences) {
-      const occurrenceId = legacyOccurrenceId(before.id, occ);
-      if (kept.has(occurrenceId)) continue;
-      out.occurrences.push({ normalized: word.normalized, occurrenceId });
+      const id = occurrenceId(word.normalized, occ);
+      if (kept.has(id)) continue;
+      out.occurrences.push({ normalized: word.normalized, occurrenceId: id });
     }
   }
 

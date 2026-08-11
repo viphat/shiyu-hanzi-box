@@ -236,6 +236,12 @@ provider API is ever called.
   under a passphrase whose derived key is remembered locally. `files.ts`: folder
   I/O. `local.ts`: `local:syncConfig`. `mutations.ts`: `local:syncMetadata` and
   queued mutations.
+- Occurrence identity is derived from the word's LOGICAL key
+  (`word:<normalized>`), never `word.id`: merge picks a canonical word id, so an
+  id-derived key re-filed the same capture under a second identity on the losing
+  profile. `normalizeOccurrenceIds` folds nodes authored under the old rule,
+  tombstones included — same tolerant-cross-version-read shape as
+  `liftLegacyTags`.
 - OR-Set members (tags, cloze blanks, occurrences) and whole entries are removed
   by an explicit tombstone mutation, never by dropping them from the inbox —
   absence merges as "no opinion", so a peer resurrects them. Any write path that

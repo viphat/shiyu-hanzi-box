@@ -21,6 +21,7 @@ import type {
 } from './types';
 import { EMPTY_SYNC_STATE } from './types';
 import { isSuppressed } from './registers';
+import { compareTimestamps } from './clock';
 import { DEFAULT_SETTINGS } from '../settings';
 import { DEFAULT_AI_SETTINGS } from '../ai/settings';
 import { normalizeTags } from '../tags';
@@ -52,8 +53,22 @@ function fnv1a(input: string): string {
 // Legacy bootstrap ID helpers
 // ---------------------------------------------------------------------------
 
-export function legacyOccurrenceId(wordId: string, occ: Occurrence): string {
-  return `occ:${fnv1a(`${wordId}|${occ.sourceUrl}|${occ.surrounding}|${occ.capturedAt}`)}`;
+/**
+ * Stable id for one capture inside its word.
+ *
+ * Derived from the word's LOGICAL key, never its public `id`: merge picks a
+ * canonical word id (earliest createdAt, then smallest id) and materialize
+ * writes that id back into the inbox, so keying off `word.id` re-minted a
+ * second id for the same capture on whichever profile lost the tie — and the
+ * union then showed the user a duplicate occurrence. `normalized` is the
+ * dedupe key itself and cannot change under an entry.
+ *
+ * (The design spec says "owning word ID"; this is a deliberate departure, for
+ * the reason above. Nodes authored under the old rule are folded onto these
+ * ids by `normalizeOccurrenceIds`.)
+ */
+export function occurrenceId(normalized: string, occ: Occurrence): string {
+  return `occ:${fnv1a(`${wordKey(normalized)}|${occ.sourceUrl}|${occ.surrounding}|${occ.capturedAt}`)}`;
 }
 
 export function legacyReviewEventId(entityKey: string, reviewedAt: number, index: number): string {
@@ -165,7 +180,7 @@ function projectWord(word: WordEntry, ctx: BootstrapContext): WordNode {
   const s = stamp(word.updatedAt, ctx.replicaId);
   const occurrences: Record<string, OccurrenceNode> = {};
   for (const occ of word.occurrences) {
-    const id = legacyOccurrenceId(word.id, occ);
+    const id = occurrenceId(word.normalized, occ);
     occurrences[id] = { id, ...occ, stamp: stamp(occ.capturedAt, ctx.replicaId) };
   }
   return {
@@ -469,6 +484,48 @@ function rebuildClozes(node: QuoteNode): Cloze[] {
 // ---------------------------------------------------------------------------
 
 /**
+ * Tolerant cross-version read: fold occurrences authored under the old
+ * word-id-derived ids onto their canonical ids, rebuilt from each node's own
+ * capture tuple. Two nodes for the same capture collapse to one (later stamp
+ * wins), so an upgrade converges instead of duplicating.
+ *
+ * Tombstones are re-keyed through the same map, or a removal recorded under an
+ * old id would stop biting and the upgrade would resurrect the occurrence. A
+ * tombstone whose node is absent from this state cannot be mapped and is left
+ * on its stored id — no worse than before, where ids only ever matched when
+ * the replicas agreed on the word id.
+ *
+ * Safe and cheap to call on already-canonical nodes: it returns the input
+ * untouched when every id already matches.
+ */
+export function normalizeOccurrenceIds(node: WordNode): WordNode {
+  const canonical = new Map<string, string>();
+  let changed = false;
+  for (const [storedId, occ] of Object.entries(node.occurrences ?? {})) {
+    const id = occurrenceId(node.normalized, occ);
+    canonical.set(storedId, id);
+    if (id !== storedId) changed = true;
+  }
+  if (!changed) return node;
+
+  const occurrences: Record<string, OccurrenceNode> = {};
+  for (const [storedId, occ] of Object.entries(node.occurrences)) {
+    const id = canonical.get(storedId)!;
+    const existing = occurrences[id];
+    if (!existing || compareTimestamps(occ.stamp, existing.stamp) > 0) {
+      occurrences[id] = { ...occ, id };
+    }
+  }
+  const occurrenceTombstones: Record<string, HybridTimestamp> = {};
+  for (const [storedId, tomb] of Object.entries(node.occurrenceTombstones ?? {})) {
+    const id = canonical.get(storedId) ?? storedId;
+    const existing = occurrenceTombstones[id];
+    if (!existing || compareTimestamps(tomb, existing) > 0) occurrenceTombstones[id] = tomb;
+  }
+  return { ...node, occurrences, occurrenceTombstones };
+}
+
+/**
  * Tolerant cross-version read: if a node has no OR-Set `tags` map (authored by
  * an older client) but carries a legacy `fields.tags` register, fold that
  * register's value into the OR-Set, each tag stamped with the register's stamp.
@@ -505,8 +562,9 @@ export function materialize(state: SyncState): {
   kaikkiSource: { sourceUrl: string; sourceName: string };
 } {
   const words: WordEntry[] = [];
-  for (const [key, node] of Object.entries(state.words)) {
-    if (isSuppressed(node.fields.updatedAt?.stamp, state.tombstones[key])) continue;
+  for (const [key, raw] of Object.entries(state.words)) {
+    if (isSuppressed(raw.fields.updatedAt?.stamp, state.tombstones[key])) continue;
+    const node = normalizeOccurrenceIds(raw);
     const occurrences: Occurrence[] = Object.values(node.occurrences)
       .filter((o) => !isSuppressed(o.stamp, node.occurrenceTombstones[o.id]))
       .sort((a, b) => a.capturedAt - b.capturedAt || a.id.localeCompare(b.id))

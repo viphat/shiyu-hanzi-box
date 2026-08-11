@@ -223,7 +223,7 @@ describe('computeReviewStats', () => {
     expect(stats.totalReviews).toBe(2);
     expect(stats.reviewedToday).toBe(1);
     expect(stats.heatmap).toHaveLength(HEATMAP_DAYS);
-    expect(stats.heatmap[stats.heatmap.length - 1]).toEqual({ date: '2026-07-03', count: 1 });
+    expect(stats.heatmap[stats.heatmap.length - 1]).toEqual({ date: '2026-07-03', count: 1, driftCount: 0 });
     expect(stats.forecast).toHaveLength(FORECAST_DAYS);
     expect(stats.forecast[2].count).toBe(1); // due 07-05 == today+2
     expect(stats.currentStreak).toBe(2);
@@ -256,5 +256,66 @@ describe('computeReviewStats', () => {
     const q = quote([{ id: 'c1', start: 0, end: 1, review: review({ reviewLog: [log(at('2026-07-02T10:00:00'))] }) }]);
     const stats = computeReviewStats(inbox([w], [q]), now);
     expect(stats.totalReviews).toBe(3);
+  });
+});
+
+describe('drift days in review stats', () => {
+  const now = new Date('2026-08-11T10:00:00').getTime();
+  const empty = { words: [], quotes: [] };
+
+  it('defaults driftDays so existing callers are unaffected', () => {
+    const stats = computeReviewStats(empty, now);
+    expect(stats.driftedToday).toBe(0);
+    expect(stats.totalDrifted).toBe(0);
+  });
+
+  it('counts a drift-only day as an active day for the streak', () => {
+    const stats = computeReviewStats(empty, now, {
+      '2026-08-09': 4,
+      '2026-08-10': 2,
+      '2026-08-11': 7,
+    });
+    expect(stats.currentStreak).toBe(3);
+  });
+
+  it('lets a drift day bridge the one-day grace gap between review days', () => {
+    // No reviews at all; days 08-07 and 08-09 drifted, 08-08 skipped.
+    const stats = computeReviewStats(empty, now, {
+      '2026-08-07': 1,
+      '2026-08-09': 1,
+      '2026-08-11': 1,
+    });
+    expect(stats.currentStreak).toBe(3);
+  });
+
+  it('reports today drift count separately from reviews', () => {
+    const stats = computeReviewStats(empty, now, { '2026-08-11': 5 });
+    expect(stats.driftedToday).toBe(5);
+    expect(stats.reviewedToday).toBe(0);
+  });
+
+  it('never inflates lifetime reviews with drift', () => {
+    const stats = computeReviewStats(empty, now, { '2026-08-11': 40 });
+    expect(stats.totalReviews).toBe(0);
+    expect(stats.totalDrifted).toBe(40);
+  });
+
+  it('keeps heatmap count review-only and exposes drift separately', () => {
+    const stats = computeReviewStats(empty, now, { '2026-08-11': 6 });
+    const today = stats.heatmap[stats.heatmap.length - 1];
+    expect(today.date).toBe('2026-08-11');
+    expect(today.count).toBe(0);
+    expect(today.driftCount).toBe(6);
+  });
+
+  it('ignores drift days outside the heatmap window without throwing', () => {
+    const stats = computeReviewStats(empty, now, { '2020-01-01': 3 });
+    expect(stats.heatmap.every((cell) => (cell.driftCount ?? 0) === 0)).toBe(true);
+    expect(stats.totalDrifted).toBe(3);
+  });
+
+  it('leaves the forecast untouched', () => {
+    const stats = computeReviewStats(empty, now, { '2026-08-11': 9 });
+    expect(stats.forecast.every((cell) => cell.count === 0)).toBe(true);
   });
 });

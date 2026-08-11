@@ -82,8 +82,6 @@ export function clampTtsRate(rate: number): number {
 
 export function scoreVoice(candidate: VoiceCandidate): number {
   let score = 0;
-  // The user's own OS System Voice outranks every heuristic below it.
-  if (candidate.isDefault) score += 100;
   const lower = candidate.name.toLowerCase();
   if (lower.includes('premium')) score += 40;
   if (lower.includes('enhanced') || lower.includes('neural')) score += 30;
@@ -91,8 +89,18 @@ export function scoreVoice(candidate: VoiceCandidate): number {
   // Only reachable when the user has opted into network voices; rankVoices
   // filters remote voices out otherwise.
   if (candidate.isRemote) score += 25;
-  if (candidate.lang === 'zh-CN') score += 10;
+  if (candidate.lang.toLowerCase() === 'zh-cn') score += 10;
   return score;
+}
+
+/**
+ * The OS System Voice wins by construction rather than by out-scoring the
+ * heuristics: name-based bonuses can stack past any fixed bonus, so tier on
+ * isDefault first and only then fall back to score and source order.
+ */
+function compareVoices(a: VoiceCandidate, b: VoiceCandidate): number {
+  if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
+  return scoreVoice(b) - scoreVoice(a) || a.index - b.index;
 }
 
 /** Chinese voices eligible for automatic selection, best first. */
@@ -105,7 +113,7 @@ export function rankVoices(
     .filter((candidate) => !isEloquenceVoice(candidate.name))
     .filter((candidate) => allowNetworkVoices || !candidate.isRemote)
     .slice()
-    .sort((a, b) => scoreVoice(b) - scoreVoice(a) || a.index - b.index);
+    .sort(compareVoices);
 }
 
 /** Every Chinese voice for the picker, best first — including ones never auto-selected. */
@@ -113,7 +121,7 @@ export function listChineseVoices(candidates: VoiceCandidate[]): VoiceCandidate[
   return candidates
     .filter((candidate) => isChineseVoice(candidate.lang))
     .slice()
-    .sort((a, b) => scoreVoice(b) - scoreVoice(a) || a.index - b.index);
+    .sort(compareVoices);
 }
 
 export function selectVoice(

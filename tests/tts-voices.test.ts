@@ -78,6 +78,29 @@ describe('rankVoices', () => {
     expect(rankVoices(voices, false)[0].name).toBe('Meijia');
   });
 
+  it('keeps the OS default ahead of a voice stacking every other bonus', () => {
+    const voices = [
+      candidate({
+        name: 'Xiaoxiao Premium Neural',
+        lang: 'zh-CN',
+        isRemote: true,
+        index: 0,
+      }),
+      candidate({ name: 'Meijia', lang: 'zh-TW', isDefault: true, index: 1 }),
+    ];
+
+    expect(rankVoices(voices, true)[0].name).toBe('Meijia');
+  });
+
+  it('scores the zh-CN bonus regardless of tag casing', () => {
+    const voices = [
+      candidate({ name: 'Lowercase Tag', lang: 'zh-cn', index: 0 }),
+      candidate({ name: 'Other Region', lang: 'zh-TW', index: 1 }),
+    ];
+
+    expect(rankVoices(voices, false)[0].name).toBe('Lowercase Tag');
+  });
+
   it('never auto-selects an Eloquence voice even when it is the OS default', () => {
     const voices = [
       candidate({ name: 'Eddy (Chinese (China mainland))', isDefault: true, index: 0 }),

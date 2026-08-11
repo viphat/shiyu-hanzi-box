@@ -14,7 +14,7 @@
 
 - Drift **never** writes FSRS state. No task may touch `lib/srs.ts` scheduling, `ReviewState`, or `Cloze.review`.
 - Drift weights key on `normalized` for words and `quote:${id}` for quotes — **never** on `WordEntry.id`, which `pickWordId` (`lib/sync/project.ts:400`) can change when two replicas merge.
-- Drift state lives in the `local:drift` storage item. It is **not** added to the inbox, to `SyncState`, or to `materialize`'s `portableSettings`.
+- Drift state lives in the `local:drift` storage item. It is **not** added to the inbox, to `SyncState`, or to `materialize`'s `portableSettings`. The reason is `lib/sync/coordinator.ts:70`, which calls `setInbox(materialize(merged).inbox)` — a blind full replace, so any entry field not projected into `SyncState` is deleted on every sync pass. (Clozes used to be such a field; that was fixed separately in `9218ffa`..`837b831`, which does not change the rule.)
 - `AppSettings.reviewMode` defaults to `'srs'`. Existing users see no change until they opt in.
 - Drift levels are clamped to the closed range `[-2, 2]`. Nothing is ever hidden, muted, or removed from the pool.
 - Every user-facing string goes in `lib/i18n.ts` under both `en` and `zh-CN`. `tests/i18n-source.test.ts` asserts full key parity and forbids `locale === 'en' ?` ternaries in `entrypoints/`.
@@ -2155,7 +2155,7 @@ git add entrypoints/settings/SettingsApp.tsx tests/settings-review-mode.test.tsx
 Renders Drift in the Review tab when selected, wires the thumb/skip/back handlers to the drift store, feeds drift days into the stats, and carries drift through backup and restore.
 
 **Files:**
-- Modify: `entrypoints/dashboard/App.tsx` (imports, `useDrift`, review-tab branch, stats call, `onRestore`, tab label)
+- Modify: `entrypoints/dashboard/App.tsx` (imports, `useDrift`, review-tab branch, stats call, `onRestore`, tab label). Anchors as of `f9375b1`: `getTabLabel` call at line 431, the review-chip condition at line 439, the `<ReviewQueue>` branch at lines 465-466, `onRestore` at lines 405-409.
 - Modify: `entrypoints/dashboard/components/Toolbar.tsx` (backup serialization, restore type)
 - Test: `tests/drift-dashboard.test.tsx`
 
@@ -2350,7 +2350,7 @@ Pass drift days into the stats — find the `computeReviewStats(...)` call that 
 
 (Keep whatever memo shape the file already uses; only the third argument and the `driftStore.days` dependency are new.)
 
-Replace the review branch of the tab render (around line 441):
+Replace the review branch of the tab render (line 465):
 
 ```tsx
           ) : tab === 'review' ? (
@@ -2400,7 +2400,7 @@ function getTabLabel(
 }
 ```
 
-and at the call site around line 407:
+and at the call site (line 431):
 
 ```tsx
                   {getTabLabel(nextTab, {
@@ -2410,7 +2410,7 @@ and at the call site around line 407:
                   }, locale, driftMode)}
 ```
 
-Also hide the "Review today" chip in Drift mode — change the condition around line 415 from `tab === 'stats' ? null : tab === 'review' ? (` to:
+Also hide the "Review today" chip in Drift mode — change the condition at line 439 from `tab === 'stats' ? null : tab === 'review' ? (` to:
 
 ```tsx
             {tab === 'stats' || (tab === 'review' && driftMode) ? null : tab === 'review' ? (

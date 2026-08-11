@@ -55,9 +55,12 @@ computes `materialize(merged)` and calls `setInbox(out.inbox)`, and
 field that `materialize` does not emit is destroyed on every sync pass. Storing
 Drift weights on the entry would make them evaporate for every sync user.
 
-(The same mechanism currently destroys quote `clozes`, which `materialize` also
-does not emit. That is a pre-existing v0.4.x data-loss bug, tracked separately.
-Drift's design does not depend on its resolution either way.)
+(The same mechanism was destroying quote `clozes`, which `materialize` did not
+emit either — a v0.4.x data-loss bug found while writing this design and fixed
+separately in `9218ffa`..`837b831` by projecting clozes into `SyncState`. The
+fix removes that particular casualty but not the rule: `setInbox` is still a
+blind replace, so an unprojected field is still deleted. Drift's design does not
+depend on that work either way.)
 
 The rejected alternatives, for the record:
 

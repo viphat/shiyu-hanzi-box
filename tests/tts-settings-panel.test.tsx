@@ -62,6 +62,16 @@ function RateInputHarness({ onSave }: { onSave: (next: TtsSettings) => void }) {
       >
         external rate write
       </button>
+      <button
+        type="button"
+        data-testid="external-voice-write"
+        // A genuinely different write that does NOT touch rate. A drag in
+        // flight must survive it, and the drag must not later overwrite the
+        // voice this landed.
+        onClick={() => setSettings((prev) => ({ ...prev, voiceName: 'Meijia' }))}
+      >
+        external voice write
+      </button>
       <TtsSettingsPanel settings={settings} locale="en" onSave={onSave} />
     </div>
   );
@@ -415,6 +425,59 @@ describe('TtsSettingsPanel', () => {
       await act(async () => root.unmount());
 
       expect(onSave).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps an in-flight drag when an unrelated field is written externally', async () => {
+      // The resync effect used to reset the whole draft — and clear the
+      // pending drag — whenever ANY of the three fields changed. So an
+      // external voice write landing mid-drag snapped the slider back and
+      // made the subsequent release save nothing, silently losing the edit.
+      const onSave = vi.fn();
+      await act(async () => {
+        root.render(<RateInputHarness onSave={onSave} />);
+      });
+
+      const rateInput = () => container.querySelector<HTMLInputElement>('#tts-rate')!;
+
+      await setRangeValue(rateInput(), '1.3');
+      expect(rateInput().value).toBe('1.3');
+
+      await act(async () => {
+        container.querySelector<HTMLButtonElement>('[data-testid="external-voice-write"]')!.click();
+      });
+
+      // The drag survives a write that did not touch rate.
+      expect(rateInput().value).toBe('1.3');
+
+      await fireOnRange(rateInput(), 'pointerup');
+
+      // And committing it carries the externally-written voice rather than
+      // rewriting the pre-drag one over the top of it.
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(onSave).toHaveBeenLastCalledWith(
+        expect.objectContaining({ rate: 1.3, voiceName: 'Meijia' }),
+      );
+    });
+
+    it('flushes a drag on unmount without clobbering an unrelated external write', async () => {
+      const onSave = vi.fn();
+      await act(async () => {
+        root.render(<RateInputHarness onSave={onSave} />);
+      });
+
+      const rateInput = () => container.querySelector<HTMLInputElement>('#tts-rate')!;
+
+      await setRangeValue(rateInput(), '1.4');
+      await act(async () => {
+        container.querySelector<HTMLButtonElement>('[data-testid="external-voice-write"]')!.click();
+      });
+
+      await act(async () => root.unmount());
+
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(onSave).toHaveBeenLastCalledWith(
+        expect.objectContaining({ rate: 1.4, voiceName: 'Meijia' }),
+      );
     });
 
     it('drops a stale uncommitted drag instead of flushing it over a fresher external write on unmount', async () => {

@@ -26,6 +26,11 @@ export const EMPTY_DRIFT_STORE: DriftStore = { weights: {}, days: {} };
  * Weights key on the sync key space, not on `entry.id`. `pickWordId` in
  * lib/sync/project.ts chooses a canonical id when two replicas merge the same
  * word, so a word's id can change under the user; `normalized` cannot.
+ *
+ * Both kinds carry a prefix (`word:` / `quote:`), not just words, so the two
+ * key spaces can never collide: without it, a word whose `normalized` text
+ * happened to be the literal string `quote:q1` would produce the same key as
+ * the quote with id `q1`. Vanishingly unlikely, but free to rule out.
  */
 export function driftKey(entry: Entry): string {
   return entry.kind === 'word' ? `word:${entry.normalized}` : `quote:${entry.id}`;

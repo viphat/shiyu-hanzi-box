@@ -176,6 +176,7 @@ export function Toolbar({
         <input
           ref={fileInputRef}
           type="file"
+          data-testid="backup-restore-input"
           accept="application/json,.json"
           className="hidden"
           onChange={restoreBackup}

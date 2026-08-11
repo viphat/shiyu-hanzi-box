@@ -130,7 +130,7 @@ async function restoreBackupFile(container: HTMLDivElement, backupJson: string) 
   if (!window.confirm) window.confirm = () => false;
   const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
-  const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]');
+  const fileInput = container.querySelector<HTMLInputElement>('[data-testid="backup-restore-input"]');
   expect(fileInput).not.toBeNull();
   const file = new File([backupJson], 'backup.json', { type: 'application/json' });
   Object.defineProperty(fileInput, 'files', {
@@ -182,7 +182,7 @@ describe('drift through a full backup restore (dashboard wiring)', () => {
     // Drive the *actual* file input Toolbar renders, rather than calling
     // onRestore directly — that's the only way to exercise the wiring in
     // entrypoints/dashboard/App.tsx that persists the restored drift store.
-    const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]');
+    const fileInput = container.querySelector<HTMLInputElement>('[data-testid="backup-restore-input"]');
     expect(fileInput).not.toBeNull();
     const file = new File([backupJson], 'backup.json', { type: 'application/json' });
     Object.defineProperty(fileInput, 'files', {

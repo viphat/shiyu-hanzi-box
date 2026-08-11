@@ -227,10 +227,22 @@ describe('pickDriftCard', () => {
   it('ignores orphaned weight keys for entries no longer in the pool', () => {
     // 'gone' is not a pool entry, so its heavy weight (level 2 => 4x) must
     // never enter the candidate set or the weight total. Both real entries
-    // are neutral, so total weight is 2 ('a' at [0,1), 'b' at [1,2)); a low
-    // roll landing on 'a' pins that the total wasn't inflated by 'gone'.
+    // are neutral, so the correct total is 2 ('a' at [0,1), 'b' at [1,2)).
+    //
+    // A hypothetical bug that summed 2 ** level over every key in
+    // store.weights — including the orphan — instead of only over `usable`,
+    // would compute total = 4 (gone, level 2) + 1 (a) + 1 (b) = 6.
+    //
+    // At roll = 0.3 the two implementations genuinely disagree:
+    //   correct: roll = 0.3 * 2 = 0.6, which falls in a's [0,1) band -> 'a'.
+    //   buggy:   roll = 0.3 * 6 = 1.8, which overshoots a's [0,1) band,
+    //            leaving 1.8 - 1 = 0.8, which then falls in b's [1,2)
+    //            (i.e. remaining [0,1)) band -> 'b'.
+    // So asserting 'a' actually pins that the total wasn't inflated by the
+    // orphan — a test that only ever exercises roll < 1 (e.g. seed 0.1)
+    // would pass under both implementations and prove nothing.
     const store: DriftStore = { weights: { gone: 2, 'word:a': 0, 'word:b': 0 }, days: {} };
-    expect(driftKey(pickDriftCard(pool, store, [], seeded([0.1]))!)).toBe('word:a');
+    expect(driftKey(pickDriftCard(pool, store, [], seeded([0.3]))!)).toBe('word:a');
   });
 
   it('never returns null for a non-empty pool even at roll 1', () => {

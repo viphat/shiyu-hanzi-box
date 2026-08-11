@@ -54,7 +54,14 @@ export function TtsSettingsPanel({
   const savedVoiceNotInUse =
     draft.voiceName !== null && effectiveVoiceName !== draft.voiceName;
 
-  function update(next: TtsSettings) {
+  // The range input persists on release (see below), not per drag step, so
+  // its onChange only updates local state. The voice select and the network
+  // checkbox are discrete controls where saving on every change is correct.
+  function updateDraft(next: TtsSettings) {
+    setDraft(next);
+  }
+
+  function commit(next: TtsSettings) {
     setDraft(next);
     onSave(next);
   }
@@ -81,7 +88,7 @@ export function TtsSettingsPanel({
               id="tts-voice"
               value={draft.voiceName ?? ''}
               onChange={(event) =>
-                update({ ...draft, voiceName: event.target.value || null })
+                commit({ ...draft, voiceName: event.target.value || null })
               }
               className="w-full rounded-sm border border-border bg-paper-input px-2 py-1.5 text-xs text-ink outline-none focus:border-accent-fade"
             >
@@ -120,8 +127,18 @@ export function TtsSettingsPanel({
               step={0.1}
               value={draft.rate}
               onChange={(event) =>
-                update({ ...draft, rate: Number(event.target.value) })
+                updateDraft({ ...draft, rate: Number(event.target.value) })
               }
+              // Persist on release, not per drag step: dragging fires many
+              // onChange events, and saving each one races independent
+              // read-modify-write settings updates against each other with
+              // no guarantee the last write reflects the last value dragged.
+              // All three release signals are needed — pointer for
+              // mouse/touch, key for arrow-key adjustment, and blur as a
+              // backstop if a pointer release is missed.
+              onPointerUp={() => onSave(draft)}
+              onKeyUp={() => onSave(draft)}
+              onBlur={() => onSave(draft)}
               className="w-full"
             />
           </div>
@@ -132,7 +149,7 @@ export function TtsSettingsPanel({
                 type="checkbox"
                 checked={draft.allowNetworkVoices}
                 onChange={(event) =>
-                  update({ ...draft, allowNetworkVoices: event.target.checked })
+                  commit({ ...draft, allowNetworkVoices: event.target.checked })
                 }
                 className="rounded-sm"
               />

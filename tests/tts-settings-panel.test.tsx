@@ -66,6 +66,29 @@ async function setRangeValue(el: HTMLInputElement, value: string) {
   });
 }
 
+async function fireOnRange(el: HTMLInputElement, type: string) {
+  await act(async () => {
+    el.dispatchEvent(new Event(type, { bubbles: true }));
+  });
+}
+
+async function setSelectValue(el: HTMLSelectElement, value: string) {
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!;
+    setter.call(el, value);
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+
+async function toggleCheckbox(el: HTMLInputElement) {
+  // React tracks checkbox/radio changes via the native 'click' event rather
+  // than 'change' (ChangeEventPlugin), so a real click — which also flips
+  // `checked` itself — is what a manual event dispatch must reproduce.
+  await act(async () => {
+    el.click();
+  });
+}
+
 describe('TtsSettingsPanel', () => {
   beforeEach(() => {
     listVoiceCandidates.mockReturnValue([voice('Tingting')]);
@@ -211,6 +234,134 @@ describe('TtsSettingsPanel', () => {
       });
 
       expect(rateInput().value).toBe('1.5');
+    });
+  });
+
+  describe('commit-on-release for the rate slider', () => {
+    let container: HTMLDivElement;
+    let root: Root;
+
+    beforeEach(() => {
+      (
+        globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+      ).IS_REACT_ACT_ENVIRONMENT = true;
+      container = document.createElement('div');
+      document.body.append(container);
+      root = createRoot(container);
+      listVoiceCandidates.mockReturnValue([
+        voice('Tingting'),
+        voice('Meijia', { lang: 'zh-TW', index: 1 }),
+      ]);
+    });
+
+    afterEach(async () => {
+      await act(async () => root.unmount());
+      container.remove();
+    });
+
+    it('does not persist intermediate values while dragging, but keeps the displayed value live', async () => {
+      const onSave = vi.fn();
+      await act(async () => {
+        root.render(<RateInputHarness onSave={onSave} />);
+      });
+
+      const rateInput = () => container.querySelector<HTMLInputElement>('#tts-rate')!;
+
+      await setRangeValue(rateInput(), '1.1');
+      await setRangeValue(rateInput(), '1.2');
+      await setRangeValue(rateInput(), '1.3');
+
+      expect(rateInput().value).toBe('1.3');
+      expect(onSave).not.toHaveBeenCalled();
+    });
+
+    it('persists exactly once, with the final rate, when the pointer is released', async () => {
+      const onSave = vi.fn();
+      await act(async () => {
+        root.render(<RateInputHarness onSave={onSave} />);
+      });
+
+      const rateInput = () => container.querySelector<HTMLInputElement>('#tts-rate')!;
+
+      await setRangeValue(rateInput(), '1.1');
+      await setRangeValue(rateInput(), '1.2');
+      await setRangeValue(rateInput(), '1.3');
+      await fireOnRange(rateInput(), 'pointerup');
+
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(onSave).toHaveBeenLastCalledWith(
+        expect.objectContaining({ rate: 1.3 }),
+      );
+    });
+
+    it('persists on keyup after an arrow-key adjustment', async () => {
+      const onSave = vi.fn();
+      await act(async () => {
+        root.render(<RateInputHarness onSave={onSave} />);
+      });
+
+      const rateInput = () => container.querySelector<HTMLInputElement>('#tts-rate')!;
+
+      await setRangeValue(rateInput(), '1.1');
+      expect(onSave).not.toHaveBeenCalled();
+
+      await fireOnRange(rateInput(), 'keyup');
+
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(onSave).toHaveBeenLastCalledWith(
+        expect.objectContaining({ rate: 1.1 }),
+      );
+    });
+
+    it('persists on blur as a backstop when a pointer release is missed', async () => {
+      const onSave = vi.fn();
+      await act(async () => {
+        root.render(<RateInputHarness onSave={onSave} />);
+      });
+
+      const rateInput = () => container.querySelector<HTMLInputElement>('#tts-rate')!;
+
+      await setRangeValue(rateInput(), '1.4');
+      expect(onSave).not.toHaveBeenCalled();
+
+      // React delegates onBlur through the native 'focusout' event, since
+      // 'blur' itself does not bubble.
+      await fireOnRange(rateInput(), 'focusout');
+
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(onSave).toHaveBeenLastCalledWith(
+        expect.objectContaining({ rate: 1.4 }),
+      );
+    });
+
+    it('still persists the voice selection immediately, on every change', async () => {
+      const onSave = vi.fn();
+      await act(async () => {
+        root.render(<RateInputHarness onSave={onSave} />);
+      });
+
+      const voiceSelect = container.querySelector<HTMLSelectElement>('#tts-voice')!;
+      await setSelectValue(voiceSelect, 'Meijia');
+
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(onSave).toHaveBeenLastCalledWith(
+        expect.objectContaining({ voiceName: 'Meijia' }),
+      );
+    });
+
+    it('still persists the network-voices checkbox immediately, on every change', async () => {
+      const onSave = vi.fn();
+      await act(async () => {
+        root.render(<RateInputHarness onSave={onSave} />);
+      });
+
+      const checkbox = container.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+      await toggleCheckbox(checkbox);
+
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(onSave).toHaveBeenLastCalledWith(
+        expect.objectContaining({ allowNetworkVoices: true }),
+      );
     });
   });
 });

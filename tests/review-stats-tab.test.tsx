@@ -14,6 +14,8 @@ function makeStats(overrides: Partial<ReviewStats> = {}): ReviewStats {
     longestStreak: 9,
     streakState: 'safe',
     reviewedToday: 3,
+    driftedToday: 0,
+    totalDrifted: 0,
     heatmap: Array.from({ length: 84 }, (_, i) => ({
       date: `d${i}`,
       count: i % 4,

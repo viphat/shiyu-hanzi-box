@@ -15,6 +15,7 @@ import {
   resetKaikki,
   settingsStorage,
   setCvdictEnabled,
+  setReviewMode,
   setSrsSettings,
   setUiLocale,
   watchSettings,
@@ -184,6 +185,7 @@ describe('SRS settings', () => {
   it('preserves user-customized srs settings during normalization', () => {
     const customized: AppSettings = {
       uiLocale: 'zh-CN',
+      reviewMode: 'srs',
       kaikki: DEFAULT_SETTINGS.kaikki,
       cvdict: DEFAULT_SETTINGS.cvdict,
       srs: {
@@ -259,5 +261,27 @@ describe('normalized settings access', () => {
       uiLocale: 'en',
       srs: DEFAULT_SRS_SETTINGS,
     });
+  });
+});
+
+describe('review mode', () => {
+  it('defaults to spaced repetition so existing users see no change', () => {
+    expect(DEFAULT_SETTINGS.reviewMode).toBe('srs');
+    expect(normalizeSettings(undefined).reviewMode).toBe('srs');
+  });
+
+  it('round-trips a drift selection', () => {
+    expect(setReviewMode(DEFAULT_SETTINGS, 'drift').reviewMode).toBe('drift');
+    expect(normalizeSettings({ reviewMode: 'drift' }).reviewMode).toBe('drift');
+  });
+
+  it('falls back to srs for an unrecognized stored value', () => {
+    expect(normalizeSettings({ reviewMode: 'nonsense' } as never).reviewMode).toBe('srs');
+  });
+
+  it('leaves the other settings blocks untouched', () => {
+    const next = setReviewMode(DEFAULT_SETTINGS, 'drift');
+    expect(next.srs).toEqual(DEFAULT_SETTINGS.srs);
+    expect(next.uiLocale).toBe(DEFAULT_SETTINGS.uiLocale);
   });
 });

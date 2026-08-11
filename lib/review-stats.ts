@@ -15,6 +15,8 @@ export interface DayCount {
   /** Local calendar day, 'YYYY-MM-DD'. */
   date: string;
   count: number;
+  /** Heatmap only: cards drifted that day. Absent on forecast buckets. */
+  driftCount?: number;
 }
 
 export type StreakState = 'safe' | 'at-risk' | 'broken';
@@ -29,6 +31,10 @@ export interface ReviewStats {
   streakState: StreakState;
   /** Reviews logged today (local). Equals heatmap's final cell by construction. */
   reviewedToday: number;
+  /** Cards drifted today (local). Never folded into reviewedToday. */
+  driftedToday: number;
+  /** Lifetime cards drifted. Never folded into totalReviews. */
+  totalDrifted: number;
   /** Last 84 days (12 weeks), oldest->newest, zero-filled, ending today. */
   heatmap: DayCount[];
   /** Next 7 days incl. today, due-card counts; overdue folds into today. */
@@ -193,22 +199,45 @@ export function buildForecast(
   return buckets;
 }
 
-export function computeReviewStats(inbox: Inbox, now = Date.now()): ReviewStats {
+export function computeReviewStats(
+  inbox: Inbox,
+  now = Date.now(),
+  driftDays: Record<string, number> = {},
+): ReviewStats {
   const states = collectReviewStates(inbox);
   const dayCounts = reviewDayCounts(states);
   const today = localDayKey(now);
-  const { current, longest, state } = computeStreak(dayCounts, today);
+
+  // The streak treats a drift day as an active day: showing up at all keeps it
+  // alive. The counts are summed only so the map is honest; computeStreak reads
+  // keys, not values.
+  const activeDays = new Map(dayCounts);
+  let totalDrifted = 0;
+  for (const [day, count] of Object.entries(driftDays)) {
+    if (count <= 0) continue;
+    totalDrifted += count;
+    activeDays.set(day, (activeDays.get(day) ?? 0) + count);
+  }
+
+  const { current, longest, state } = computeStreak(activeDays, today);
 
   let totalReviews = 0;
   for (const s of states) totalReviews += s.reviewLog?.length ?? 0;
 
   return {
     totalReviews,
+    totalDrifted,
     currentStreak: current,
     longestStreak: longest,
     streakState: state,
     reviewedToday: dayCounts.get(today) ?? 0,
-    heatmap: buildHeatmap(dayCounts, now, HEATMAP_DAYS),
+    driftedToday: driftDays[today] ?? 0,
+    // `count` stays review-only; drift rides alongside so the heatmap can show
+    // both without buildHeatmap needing to know drift exists.
+    heatmap: buildHeatmap(dayCounts, now, HEATMAP_DAYS).map((cell) => ({
+      ...cell,
+      driftCount: driftDays[cell.date] ?? 0,
+    })),
     forecast: buildForecast(states, now, FORECAST_DAYS),
   };
 }

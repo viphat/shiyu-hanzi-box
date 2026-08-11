@@ -60,6 +60,7 @@ describe('SRS persisted types', () => {
   it('adds an srs block to AppSettings', () => {
     const settings: AppSettings = {
       uiLocale: 'zh-CN',
+      reviewMode: 'srs',
       kaikki: {
         enabled: false,
         sourceUrl: '',

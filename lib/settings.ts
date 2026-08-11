@@ -3,6 +3,7 @@ import type {
   AppSettings,
   CvdictSettings,
   KaikkiSettings,
+  ReviewMode,
   SrsSettings,
   UiLocale,
 } from './types';
@@ -37,6 +38,7 @@ export const DEFAULT_SRS_SETTINGS: SrsSettings = {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   uiLocale: 'zh-CN',
+  reviewMode: 'srs',
   kaikki: DEFAULT_KAIKKI_SETTINGS,
   cvdict: DEFAULT_CVDICT_SETTINGS,
   srs: DEFAULT_SRS_SETTINGS,
@@ -69,6 +71,13 @@ export async function replaceSettings(settings: AppSettings): Promise<void> {
 
 export function setUiLocale(settings: AppSettings, uiLocale: UiLocale): AppSettings {
   return { ...settings, uiLocale };
+}
+
+export function setReviewMode(
+  settings: AppSettings,
+  reviewMode: ReviewMode,
+): AppSettings {
+  return { ...settings, reviewMode };
 }
 
 export function enableKaikki(settings: AppSettings, enabled: boolean): AppSettings {
@@ -136,6 +145,7 @@ export function normalizeSettings(
 ): AppSettings {
   return {
     uiLocale: value?.uiLocale ?? DEFAULT_SETTINGS.uiLocale,
+    reviewMode: value?.reviewMode === 'drift' ? 'drift' : 'srs',
     kaikki: { ...DEFAULT_KAIKKI_SETTINGS, ...value?.kaikki },
     cvdict: { ...DEFAULT_CVDICT_SETTINGS, ...value?.cvdict },
     srs: { ...DEFAULT_SRS_SETTINGS, ...value?.srs },

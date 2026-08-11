@@ -50,3 +50,72 @@ describe('full backup envelope', () => {
     expect(() => restoreFullBackup(raw)).toThrow(BackupParseError);
   });
 });
+
+describe('drift in the full backup', () => {
+  const drift = { weights: { '你好': 2 as const }, days: { '2026-08-11': 5 } };
+
+  it('round-trips drift state at v4', () => {
+    const raw = serializeFullBackup(EMPTY_INBOX, DEFAULT_SETTINGS, DEFAULT_AI_SETTINGS, drift);
+    expect(JSON.parse(raw).formatVersion).toBe(4);
+    expect(restoreFullBackup(raw).drift).toEqual(drift);
+  });
+
+  it('still restores a v3 backup WITH its settings and API key', () => {
+    // The regression guard: a naive version bump sends v3 down the inbox-only
+    // fallback and silently drops settings + aiSettings.
+    const v3 = JSON.stringify({
+      app: 'shiyu-hanzi-box',
+      formatVersion: 3,
+      exportedAt: '2026-07-01T00:00:00.000Z',
+      inbox: EMPTY_INBOX,
+      settings: DEFAULT_SETTINGS,
+      aiSettings: { ...DEFAULT_AI_SETTINGS, apiKey: 'sk-secret' },
+    });
+    const out = restoreFullBackup(v3);
+    expect(out.settings).toBeDefined();
+    expect(out.aiSettings?.apiKey).toBe('sk-secret');
+    expect(out.drift).toEqual({ weights: {}, days: {} });
+  });
+
+  it('keeps the v3 error message wording for a malformed v3 inbox', () => {
+    const raw = JSON.stringify({ app: 'shiyu-hanzi-box', formatVersion: 3, inbox: 'nope' });
+    expect(() => restoreFullBackup(raw)).toThrow('Invalid v3 backup: inbox is malformed.');
+  });
+
+  it('reports v4 in the error message for a malformed v4 inbox', () => {
+    const raw = JSON.stringify({ app: 'shiyu-hanzi-box', formatVersion: 4, inbox: 'nope' });
+    expect(() => restoreFullBackup(raw)).toThrow('Invalid v4 backup: inbox is malformed.');
+  });
+
+  it('normalizes hostile drift values instead of trusting the file', () => {
+    const raw = JSON.stringify({
+      app: 'shiyu-hanzi-box',
+      formatVersion: 4,
+      inbox: EMPTY_INBOX,
+      drift: { weights: { a: 999 }, days: { nope: 3 } },
+    });
+    expect(restoreFullBackup(raw).drift).toEqual({ weights: { a: 2 }, days: {} });
+  });
+
+  it('defaults drift to empty when the key is absent from a v4 file', () => {
+    const raw = JSON.stringify({
+      app: 'shiyu-hanzi-box',
+      formatVersion: 4,
+      inbox: EMPTY_INBOX,
+    });
+    expect(restoreFullBackup(raw).drift).toEqual({ weights: {}, days: {} });
+  });
+
+  it('defaults drift to empty for an inbox-only v2 backup', () => {
+    // exportedAt included: parseBackup's readInboxPayload requires it for any
+    // envelope-shaped object (app/formatVersion/exportedAt + inbox present) —
+    // pre-existing, unrelated to drift, and out of scope for this task.
+    const raw = JSON.stringify({
+      app: 'shiyu-hanzi-box',
+      formatVersion: 2,
+      exportedAt: '2026-01-01T00:00:00.000Z',
+      inbox: EMPTY_INBOX,
+    });
+    expect(restoreFullBackup(raw).drift).toEqual({ weights: {}, days: {} });
+  });
+});

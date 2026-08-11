@@ -75,15 +75,20 @@ The rejected alternatives, for the record:
 
 ### Key space
 
-Drift weights are keyed to mirror the sync key space, **not** entry `id`:
+Drift weights are keyed on the word's `normalized` text, **not** entry `id`,
+with each kind namespaced:
 
-- Words: `normalized` (the word's sync key).
+- Words: `word:${normalized}`.
 - Quotes: `quote:${id}`.
 
 Word `id` is not stable. `pickWordId` in `lib/sync/project.ts` picks a canonical
 id when two replicas merge the same word, so a word's `id` can change under the
 user. Keying weights by `id` would silently orphan them on merge. `normalized`
 survives.
+
+Both kinds carry a prefix so the two key spaces cannot overlap. Without one, a
+word whose normalized text happened to be the literal string `quote:q1` would
+share a key with quote `q1` — vanishingly unlikely, but free to rule out.
 
 ### Data model
 

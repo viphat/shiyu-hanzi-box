@@ -48,6 +48,10 @@ export function TtsSettingsPanel({
   );
 
   useEffect(() => {
+    // An external write is fresher than an uncommitted drag and is already
+    // what the slider shows, so drop the pending value rather than flushing
+    // it over the newer one at unmount.
+    pendingRef.current = null;
     setDraft({
       voiceName: settings.voiceName,
       rate: settings.rate,
@@ -90,11 +94,15 @@ export function TtsSettingsPanel({
     onSave(next);
   }
 
-  // Fired by the three release signals below. Clears the pending ref so a
-  // subsequent unmount does not re-flush an already-saved value.
+  // Fired by the three release signals below. Reads pendingRef rather than
+  // draft so this and the unmount flush always agree on what "uncommitted"
+  // means, and bails out entirely when nothing is pending — a bare
+  // focus/blur with no drag must not re-save the current draft.
   function commitRate() {
+    const pending = pendingRef.current;
+    if (!pending) return;
     pendingRef.current = null;
-    onSave(draft);
+    onSave(pending);
   }
 
   return (

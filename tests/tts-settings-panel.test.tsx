@@ -51,6 +51,17 @@ function RateInputHarness({ onSave }: { onSave: (next: TtsSettings) => void }) {
       >
         unrelated write
       </button>
+      <button
+        type="button"
+        data-testid="external-rate-write"
+        // Simulates a genuinely different write landing from elsewhere —
+        // e.g. storage.local firing a cross-tab change event because a
+        // second open Settings page saved its own rate — rather than the
+        // same values being rebuilt into a new object reference.
+        onClick={() => setSettings((prev) => ({ ...prev, rate: 0.6 }))}
+      >
+        external rate write
+      </button>
       <TtsSettingsPanel settings={settings} locale="en" onSave={onSave} />
     </div>
   );
@@ -404,6 +415,51 @@ describe('TtsSettingsPanel', () => {
       await act(async () => root.unmount());
 
       expect(onSave).toHaveBeenCalledTimes(1);
+    });
+
+    it('drops a stale uncommitted drag instead of flushing it over a fresher external write on unmount', async () => {
+      // Reproduces: user drags to 1.3 (uncommitted) -> an external write
+      // lands with rate 0.6 (e.g. storage.local firing cross-tab because a
+      // second open Settings page saved its own change) -> the resync
+      // effect updates the visible slider to 0.6 -> the panel unmounts
+      // before any release event. The unmount flush must not resurrect the
+      // stale 1.3 over the newer value already on screen.
+      const onSave = vi.fn();
+      await act(async () => {
+        root.render(<RateInputHarness onSave={onSave} />);
+      });
+
+      const rateInput = () => container.querySelector<HTMLInputElement>('#tts-rate')!;
+
+      await setRangeValue(rateInput(), '1.1');
+      await setRangeValue(rateInput(), '1.3');
+      expect(rateInput().value).toBe('1.3');
+      expect(onSave).not.toHaveBeenCalled();
+
+      await act(async () => {
+        container.querySelector<HTMLButtonElement>('[data-testid="external-rate-write"]')!.click();
+      });
+      expect(rateInput().value).toBe('0.6');
+
+      await act(async () => root.unmount());
+
+      expect(onSave).not.toHaveBeenCalled();
+    });
+
+    it('does not save on blur when nothing was dragged', async () => {
+      // A bare focus/blur with no intervening drag must not write to
+      // storage: commitRate() should only flush an actually-pending value,
+      // not re-save whatever draft happens to be in state.
+      const onSave = vi.fn();
+      await act(async () => {
+        root.render(<RateInputHarness onSave={onSave} />);
+      });
+
+      const rateInput = () => container.querySelector<HTMLInputElement>('#tts-rate')!;
+
+      await fireOnRange(rateInput(), 'focusout');
+
+      expect(onSave).not.toHaveBeenCalled();
     });
   });
 });

@@ -134,8 +134,12 @@ export interface SrsSettings {
   enableFuzz: boolean;
 }
 
+/** Which review experience the dashboard's Review tab renders. */
+export type ReviewMode = 'srs' | 'drift';
+
 export interface AppSettings {
   uiLocale: UiLocale;
+  reviewMode: ReviewMode;
   kaikki: KaikkiSettings;
   cvdict: CvdictSettings;
   srs: SrsSettings;

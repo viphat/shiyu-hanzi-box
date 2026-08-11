@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Pronunciation picked whichever Chinese voice the browser happened to list
+  first, which on macOS is a novelty voice rather than a real Mandarin one.
+  Voices are now ranked, and the operating system's own Chinese voice setting is
+  respected.
+
+### Added
+
+- Settings → Pronunciation: choose the speech voice and playback speed, preview
+  them, and optionally allow network voices (off by default).
+
 ## [0.5.0] - 2026-08-11
 
 ### Added

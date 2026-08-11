@@ -15,6 +15,7 @@ import {
   type SrsStats,
 } from '@/lib/srs';
 import { greetingPeriod, t, type MessageKey } from '@/lib/i18n';
+import { configureTts } from '@/lib/tts';
 import { AutumnBranch, SageBranch } from '@/components/Foliage';
 import type {
   AiSettings,
@@ -53,6 +54,11 @@ type StatusFilter = 'all' | Status;
 export function App() {
   const { inbox, loading, mutate, mutateWithRemovals, replace } = useInbox();
   const { settings, loading: settingsLoading } = useSettings();
+
+  useEffect(() => {
+    configureTts(settings.tts);
+  }, [settings.tts]);
+
   const onboarding = useOnboarding();
   const locale = settings.uiLocale;
   const dictionaryCacheKey = useMemo(

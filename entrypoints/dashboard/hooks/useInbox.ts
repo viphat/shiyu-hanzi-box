@@ -3,7 +3,6 @@ import { inboxStorage } from '@/lib/storage';
 import type { Inbox } from '@/lib/types';
 import { EMPTY_INBOX } from '@/lib/types';
 import { requestSyncMutation } from '@/entrypoints/background/sync-mutation-handler';
-import { planRestoreRemovals } from '@/lib/sync/restore';
 
 export function useInbox() {
   const [inbox, setInbox] = useState<Inbox>(EMPTY_INBOX);
@@ -42,7 +41,6 @@ export function useInbox() {
       plan: (current: Inbox) => {
         removals?: Array<{ quoteId: string; tags: string[] }>;
         clozeRemovals?: Array<{ quoteId: string; clozeIds: string[] }>;
-        occurrenceRemovals?: Array<{ normalized: string; occurrenceId: string }>;
         inbox: Inbox;
       } | null,
     ) => {
@@ -56,34 +54,19 @@ export function useInbox() {
       if (clozeRemovals.length > 0) {
         await requestSyncMutation('removeClozes', { removals: clozeRemovals });
       }
-      if (result.occurrenceRemovals?.length) {
-        await requestSyncMutation('removeOccurrence', { removals: result.occurrenceRemovals });
-      }
       await requestSyncMutation('inbox', result.inbox);
     },
     [],
   );
 
-  // Wholesale replacement (backup restore). Tags, blanks and occurrences the
-  // incoming inbox does not carry are removals, not absences, so they need
-  // tombstones planned off the same snapshot — otherwise the next sync pass
-  // materializes them back and the restore silently fails to stick. An entry
-  // the restore drops entirely still needs an entity tombstone, which this
-  // does NOT write.
-  const replace = useCallback(
-    async (next: Inbox) => {
-      await mutateWithRemovals((current) => {
-        const removals = planRestoreRemovals(current, next);
-        return {
-          removals: removals.tags,
-          clozeRemovals: removals.clozes,
-          occurrenceRemovals: removals.occurrences,
-          inbox: next,
-        };
-      });
-    },
-    [mutateWithRemovals],
-  );
+  // Wholesale replacement (backup restore). Handled by a single `restore`
+  // mutation rather than composed here: it has to plan tombstones for every
+  // dropped tag, blank, occurrence and entry, AND re-stamp what it restores so
+  // the incoming content beats the state being rolled back. That needs the
+  // persisted SyncState, and all of it must land under one revision bump.
+  const replace = useCallback(async (next: Inbox) => {
+    await requestSyncMutation('restore', next);
+  }, []);
 
   return { inbox, loading, mutate, mutateWithRemovals, replace };
 }

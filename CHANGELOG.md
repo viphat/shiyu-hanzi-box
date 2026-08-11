@@ -15,10 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   silently deleted every blank and its per-cloze FSRS scheduling, emptying the
   quote review queue.
 - **Restoring a backup now sticks on a synced profile.** A restore replaces the
-  whole inbox, but a tag, cloze blank or source occurrence missing from the
-  backup was only absent, not removed — so the next sync pass brought all of
-  them back from another device. Restoring an entry-level deletion still
-  requires deleting the entry.
+  whole inbox, but anything missing from the backup — a word, a quote, a tag, a
+  cloze blank, a source occurrence — was only absent, not removed, so the next
+  sync pass brought it all back from another device. Restores are also
+  authoritative in the other direction now: content the backup carries is
+  applied even when the current data is newer, so a restore can undo a deletion
+  or an edit (and undo a restore). The restore is applied as a single
+  all-or-nothing operation.
 
 ### Added
 

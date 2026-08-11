@@ -7,17 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-11
+
 ### Fixed
 
-- Pronunciation picked whichever Chinese voice the browser happened to list
-  first, which on macOS is a novelty voice rather than a real Mandarin one.
-  Voices are now ranked, and the operating system's own Chinese voice setting is
-  respected.
+- **Pronunciation used the wrong voice.** The speak button asked for the first
+  `zh-CN` voice the browser reported. On macOS that is one of Apple's Eloquence
+  voices — a formant synthesizer bundled for accessibility, cartoonish by design
+  — while the real Mandarin voice sorts last. Voices are now ranked: Eloquence
+  voices are never chosen automatically, and if you have set a Chinese System
+  Voice in your operating system, that choice wins over every built-in guess.
+  Expect the speak button to sound different, because it was previously wrong.
+- Playback now routes to whichever speech engine actually owns the chosen voice.
+  A voice available only through the browser's Web Speech API could previously be
+  overridden by Chrome's TTS engine, so selecting it had no effect.
+- Changing voices while a word was still being spoken could leave both speech
+  engines talking at once. Speech is now stopped on whichever engine holds it.
 
 ### Added
 
-- Settings → Pronunciation: choose the speech voice and playback speed, preview
-  them, and optionally allow network voices (off by default).
+- **Settings → Pronunciation.** Choose the speech voice and the playback speed,
+  and press **Test** to hear the pending choice before saving it. Voices are
+  labelled **System** when they match your operating system's own Chinese voice.
+- **Network voices, off by default.** Some platforms offer voices synthesized on
+  a remote server rather than on your machine. They stay unselectable unless you
+  enable them, the panel states plainly that enabling one sends the spoken text
+  to that voice's provider, and turning the setting back off stops any remote
+  speech already playing.
+
+### Known limitation
+
+- On macOS, correct selection lands on `Tingting`, which Apple ships only in its
+  lowest `super-compact` quality tier — a large improvement over a novelty voice,
+  but still flat. Apple offers no downloadable Enhanced or Premium Mandarin
+  voice, so this is the ceiling for on-device speech there. Cloud neural TTS is
+  documented as deferred, not rejected.
 
 ## [0.5.0] - 2026-08-11
 

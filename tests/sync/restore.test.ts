@@ -107,8 +107,9 @@ describe('planRestoreRemovals', () => {
     expect(out.occurrences).toEqual([]);
   });
 
-  it('plans nothing for an entry the restore drops entirely', () => {
-    // Dropping the whole entry is an entity-level deletion, a separate concern.
+  it('plans no member removals for an entry the restore drops entirely', () => {
+    // The whole entry is tombstoned instead; tombstoning its members too would
+    // only make it come back empty if something later restores it.
     const out = planRestoreRemovals(
       inbox(
         [word({ occurrences: [occ(100)] })],
@@ -116,7 +117,12 @@ describe('planRestoreRemovals', () => {
       ),
       inbox([], []),
     );
-    expect(out).toEqual({ tags: [], clozes: [], occurrences: [] });
+    expect({ ...out, entities: out.entities.sort() }).toEqual({
+      tags: [],
+      clozes: [],
+      occurrences: [],
+      entities: ['quote:q1', 'word:你好'],
+    });
   });
 
   it('plans nothing when the restore only adds', () => {
@@ -127,6 +133,32 @@ describe('planRestoreRemovals', () => {
         [quote({ tags: ['a'], clozes: [{ id: 'c', start: 0, end: 1 }] })],
       ),
     );
-    expect(out).toEqual({ tags: [], clozes: [], occurrences: [] });
+    expect(out).toEqual({ tags: [], clozes: [], occurrences: [], entities: [] });
+  });
+});
+
+describe('planRestoreRemovals entity deletions', () => {
+  it('names the sync key of every entry the restore drops', () => {
+    const out = planRestoreRemovals(
+      inbox([word()], [quote(), quote({ id: 'q2' })]),
+      inbox([], [quote()]),
+    );
+    expect(out.entities.sort()).toEqual(['quote:q2', 'word:你好']);
+  });
+
+  it('names nothing when the restore carries every entry', () => {
+    const out = planRestoreRemovals(
+      inbox([word()], [quote()]),
+      inbox([word({ note: 'edited' })], [quote({ note: 'edited' })]),
+    );
+    expect(out.entities).toEqual([]);
+  });
+
+  it('keys a dropped word by normalized text, not its id', () => {
+    const out = planRestoreRemovals(
+      inbox([word({ id: 'whatever' })], []),
+      inbox([], []),
+    );
+    expect(out.entities).toEqual(['word:你好']);
   });
 });

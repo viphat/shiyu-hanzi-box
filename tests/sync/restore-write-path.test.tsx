@@ -102,7 +102,7 @@ afterEach(async () => {
 });
 
 describe('useInbox.replace (backup restore)', () => {
-  it('tombstones the tags, blanks and occurrences the backup dropped', async () => {
+  it('tombstones the tags, blanks, occurrences and entries the backup dropped', async () => {
     await restore({
       words: [word([occ(100)])],
       quotes: [quote({ tags: ['keep'], clozes: [BLANKS[0]] })],
@@ -126,6 +126,17 @@ describe('useInbox.replace (backup restore)', () => {
     expect(state?.words[wordKey('你好')].occurrenceTombstones?.[kept]).toBeUndefined();
   });
 
+  it('tombstones an entry the backup drops whole, without member tombstones', async () => {
+    await restore({ words: [], quotes: [quote({ tags: ['keep', 'drop'], clozes: BLANKS })] });
+
+    const state = (await syncMetadataStorage.getValue()).state;
+    expect(state?.tombstones[wordKey('你好')]).toBeDefined();
+    expect(state?.tombstones['quote:q1']).toBeUndefined();
+    // The dropped word is gone as an entity; tombstoning its occurrences too
+    // would only make it come back empty if something later restores it.
+    expect(state?.words[wordKey('你好')]?.occurrenceTombstones ?? {}).toEqual({});
+  });
+
   it('records nothing when the restore keeps everything', async () => {
     await restore({
       words: [word([occ(100), occ(200)])],
@@ -133,6 +144,7 @@ describe('useInbox.replace (backup restore)', () => {
     });
 
     const state = (await syncMetadataStorage.getValue()).state;
+    expect(state?.tombstones ?? {}).toEqual({});
     expect(state?.quotes.q1?.tagTombstones ?? {}).toEqual({});
     expect(state?.quotes.q1?.clozeTombstones ?? {}).toEqual({});
     expect(state?.words[wordKey('你好')]?.occurrenceTombstones ?? {}).toEqual({});

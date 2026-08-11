@@ -17,9 +17,16 @@ import type {
   WordAiInsightPatch,
 } from '../types';
 import { projectInbox, wordKey } from './project';
+import { planRestoreRemovals } from './restore';
 import { deleteEntity } from './merge';
 import { mergeStampMap } from './registers';
-import { EMPTY_SYNC_STATE, type SyncState } from './types';
+import {
+  EMPTY_SYNC_STATE,
+  type HybridTimestamp,
+  type QuoteNode,
+  type SyncState,
+  type WordNode,
+} from './types';
 import { normalizeTags } from '../tags';
 
 export interface SyncMetadata {
@@ -237,6 +244,35 @@ export async function applyDeletion(keys: string[]): Promise<void> {
   return run;
 }
 
+/**
+ * A node holding nothing but tombstones, for the case where a removal lands
+ * before the entity has ever been projected. It carries no fields, so it loses
+ * every register on merge and only contributes its tombstones.
+ */
+function emptyQuoteNode(id: string, stamp: HybridTimestamp): QuoteNode {
+  return {
+    id,
+    fields: {},
+    createdAt: { value: stamp.wallTime, stamp },
+    tags: {},
+    tagTombstones: {},
+    clozes: {},
+    clozeTombstones: {},
+    reviewEvents: {},
+  };
+}
+
+function emptyWordNode(normalized: string, stamp: HybridTimestamp): WordNode {
+  return {
+    normalized,
+    fields: {},
+    createdAt: { value: stamp.wallTime, stamp },
+    occurrences: {},
+    occurrenceTombstones: {},
+    reviewEvents: {},
+  };
+}
+
 export async function applyTagRemoval(
   removals: Array<{ quoteId: string; tags: string[] }>,
 ): Promise<void> {
@@ -246,18 +282,11 @@ export async function applyTagRemoval(
     const state: SyncState = meta.state ?? (JSON.parse(JSON.stringify(EMPTY_SYNC_STATE)) as SyncState);
     const now = Date.now();
     for (const { quoteId, tags } of removals) {
-      let node = state.quotes[quoteId];
-      if (!node) {
-        node = {
-          id: quoteId,
-          fields: {},
-          createdAt: { value: now, stamp: { wallTime: now, counter: 0, replicaId } },
-          tags: {},
-          tagTombstones: {},
-          reviewEvents: {},
-        };
-        state.quotes[quoteId] = node;
-      }
+      const node = (state.quotes[quoteId] ??= emptyQuoteNode(quoteId, {
+        wallTime: now,
+        counter: 0,
+        replicaId,
+      }));
       if (!node.tagTombstones) node.tagTombstones = {};
       // Normalize so the tombstone keyspace always matches the add-stamp
       // keyspace — a non-normalized key would silently no-op at materialize.
@@ -302,20 +331,11 @@ export async function applyClozeRemoval(
     const state: SyncState = meta.state ?? (JSON.parse(JSON.stringify(EMPTY_SYNC_STATE)) as SyncState);
     const now = Date.now();
     for (const { quoteId, clozeIds } of removals) {
-      let node = state.quotes[quoteId];
-      if (!node) {
-        node = {
-          id: quoteId,
-          fields: {},
-          createdAt: { value: now, stamp: { wallTime: now, counter: 0, replicaId } },
-          tags: {},
-          tagTombstones: {},
-          clozes: {},
-          clozeTombstones: {},
-          reviewEvents: {},
-        };
-        state.quotes[quoteId] = node;
-      }
+      const node = (state.quotes[quoteId] ??= emptyQuoteNode(quoteId, {
+        wallTime: now,
+        counter: 0,
+        replicaId,
+      }));
       if (!node.clozeTombstones) node.clozeTombstones = {};
       for (const clozeId of clozeIds) {
         node.clozeTombstones[clozeId] = { wallTime: now, counter: 0, replicaId };
@@ -349,22 +369,104 @@ export async function applyOccurrenceRemoval(
     const state: SyncState = meta.state ?? (JSON.parse(JSON.stringify(EMPTY_SYNC_STATE)) as SyncState);
     const now = Date.now();
     for (const { normalized, occurrenceId } of removals) {
-      const key = wordKey(normalized);
-      let node = state.words[key];
-      if (!node) {
-        node = {
-          normalized,
-          fields: {},
-          createdAt: { value: now, stamp: { wallTime: now, counter: 0, replicaId } },
-          occurrences: {},
-          occurrenceTombstones: {},
-          reviewEvents: {},
-        };
-        state.words[key] = node;
-      }
+      const node = (state.words[wordKey(normalized)] ??= emptyWordNode(normalized, {
+        wallTime: now,
+        counter: 0,
+        replicaId,
+      }));
       if (!node.occurrenceTombstones) node.occurrenceTombstones = {};
       node.occurrenceTombstones[occurrenceId] = { wallTime: now, counter: 0, replicaId };
     }
+    const nextRevision = meta.revision + 1;
+    await syncMetadataStorage.setValue({
+      revision: nextRevision,
+      state,
+      lastDigest: meta.lastDigest,
+      appSettingsUpdatedAt: meta.appSettingsUpdatedAt,
+      aiSettingsUpdatedAt: meta.aiSettingsUpdatedAt,
+    });
+    await mutateSyncConfig((cfg) => ({
+      ...cfg,
+      localRevision: nextRevision,
+      pending: true,
+      status: cfg.vaultId ? 'pending' : cfg.status,
+    }));
+  });
+  chain = run;
+  return run;
+}
+
+/**
+ * Apply a whole-inbox backup restore as ONE synchronized mutation.
+ *
+ * A restore replaces everything, so it is the only write path that can drop
+ * members and entries in bulk. Both directions need handling, or the restore
+ * does not stick:
+ *
+ *  - Dropped tags / blanks / occurrences / entries are only ABSENT from the
+ *    incoming inbox, and absence merges as "no opinion" — each needs its
+ *    tombstone, or the next pass pulls it back from a peer.
+ *  - An entry the backup CARRIES may sit under an entity tombstone from an
+ *    earlier deletion. Its own `updatedAt` predates that tombstone, so
+ *    materialize would suppress it and the restore would silently fail to
+ *    bring it back. The sync design's restoration rule is an intentional
+ *    mutation stamped after the tombstone, so those entries — and only those —
+ *    are stamped just above it. Every other entry keeps the backup's own
+ *    timestamps.
+ *
+ * Runs inside the shared chain so the tombstones and the inbox write land
+ * together under a single revision bump; a split would let the inbox write
+ * race ahead of the tombstones it depends on.
+ */
+export async function applyRestore(next: Inbox): Promise<void> {
+  const run = chain.then(async () => {
+    const replicaId = await ensureReplicaId();
+    const meta = await syncMetadataStorage.getValue();
+    let state: SyncState = meta.state ?? (JSON.parse(JSON.stringify(EMPTY_SYNC_STATE)) as SyncState);
+    const now = Date.now();
+    const at = (wallTime: number) => ({ wallTime, counter: 0, replicaId });
+
+    const removals = planRestoreRemovals(await getInbox(), next);
+
+    for (const key of removals.entities) state = deleteEntity(state, key, at(now));
+
+    for (const { quoteId, tags } of removals.tags) {
+      const node = (state.quotes[quoteId] ??= emptyQuoteNode(quoteId, at(now)));
+      node.tagTombstones = { ...node.tagTombstones };
+      for (const tag of normalizeTags(tags)) node.tagTombstones[tag] = at(now);
+    }
+    for (const { quoteId, clozeIds } of removals.clozes) {
+      const node = (state.quotes[quoteId] ??= emptyQuoteNode(quoteId, at(now)));
+      node.clozeTombstones = { ...node.clozeTombstones };
+      for (const clozeId of clozeIds) node.clozeTombstones[clozeId] = at(now);
+    }
+    for (const { normalized, occurrenceId } of removals.occurrences) {
+      const node = (state.words[wordKey(normalized)] ??= emptyWordNode(normalized, at(now)));
+      node.occurrenceTombstones = { ...node.occurrenceTombstones };
+      node.occurrenceTombstones[occurrenceId] = at(now);
+    }
+
+    // Every restored entry is re-stamped as of now. Conflicts resolve by
+    // recency, so a backup's own (older) timestamps lose to the very state the
+    // user is rolling back — the restored content would be silently reverted on
+    // the next merge, and an entity tombstone would swallow the entry outright.
+    // Re-stamping is what makes the restore authoritative, and is exactly the
+    // design's "a restore receives new local versions and propagates".
+    // `updatedAt` is a sync recency key only: nothing in the UI, Markdown
+    // export, or scheduler reads it, so this costs nothing user-visible.
+    const restoredAt = (key: string) =>
+      Math.max(now, (state.tombstones[key]?.wallTime ?? 0) + 1);
+    await setInbox({
+      words: next.words.map((word) => ({
+        ...word,
+        updatedAt: restoredAt(wordKey(word.normalized)),
+      })),
+      quotes: next.quotes.map((quote) => ({
+        ...quote,
+        updatedAt: restoredAt(`quote:${quote.id}`),
+      })),
+    });
+
     const nextRevision = meta.revision + 1;
     await syncMetadataStorage.setValue({
       revision: nextRevision,

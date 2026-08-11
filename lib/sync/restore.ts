@@ -1,4 +1,4 @@
-import { legacyOccurrenceId } from './project';
+import { legacyOccurrenceId, wordKey } from './project';
 import { planClozeWrite } from '../cloze';
 import { normalizeTags } from '../tags';
 import type { Inbox } from '../types';
@@ -10,6 +10,8 @@ export interface RestoreRemovals {
   clozes: Array<{ quoteId: string; clozeIds: string[] }>;
   /** removeOccurrence payload: one entry per dropped occurrence. */
   occurrences: Array<{ normalized: string; occurrenceId: string }>;
+  /** Entity tombstone keys for entries the restore dropped whole. */
+  entities: string[];
 }
 
 /**
@@ -22,13 +24,23 @@ export interface RestoreRemovals {
  * restore silently fails to stick — while the sync design specifies that a
  * restore is a local synchronized mutation that propagates.
  *
- * Only entries the restore actually carries are planned, matched on their sync
- * logical key (words by `normalized`, quotes by id). An entry the backup drops
- * entirely is an ENTITY deletion — a separate concern needing an entity
- * tombstone — and tombstoning its members would only make it come back empty.
+ * Member removals are planned only for entries the restore actually carries,
+ * matched on their sync logical key (words by `normalized`, quotes by id). An
+ * entry the backup drops whole is an ENTITY deletion instead: it gets a
+ * tombstone at its entity key and no member tombstones, which would only make
+ * it come back empty if something later restores it.
  */
 export function planRestoreRemovals(current: Inbox, restored: Inbox): RestoreRemovals {
-  const out: RestoreRemovals = { tags: [], clozes: [], occurrences: [] };
+  const out: RestoreRemovals = { tags: [], clozes: [], occurrences: [], entities: [] };
+
+  const keptQuotes = new Set(restored.quotes.map((quote) => quote.id));
+  for (const quote of current.quotes) {
+    if (!keptQuotes.has(quote.id)) out.entities.push(`quote:${quote.id}`);
+  }
+  const keptWords = new Set(restored.words.map((word) => word.normalized));
+  for (const word of current.words) {
+    if (!keptWords.has(word.normalized)) out.entities.push(wordKey(word.normalized));
+  }
 
   const quotesBefore = new Map(current.quotes.map((quote) => [quote.id, quote]));
   for (const quote of restored.quotes) {

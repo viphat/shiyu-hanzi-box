@@ -4,6 +4,7 @@ import {
   DEFAULT_TTS_SETTINGS,
   listChineseVoices,
   selectVoice,
+  voiceMergeKey,
   type VoiceCandidate,
 } from './tts-voices';
 import type { TtsSettings } from './types';
@@ -76,20 +77,27 @@ function setState(next: TtsState): void {
 }
 
 /**
- * Merge both engines' voice lists by name. Neither list is a superset:
- * `speechSynthesis` reports which voice is the OS default, and `chrome.tts`
- * reports voices supplied by TTS-engine extensions along with their remoteness.
+ * Merge both engines' voice lists by physical voice, not by exact name.
+ * Neither list is a superset: `speechSynthesis` reports which voice is the OS
+ * default, and `chrome.tts` reports voices supplied by TTS-engine extensions
+ * along with their remoteness. The two engines also spell some voices
+ * differently — Web Speech disambiguates a name that exists in more than one
+ * locale by appending the language, chrome.tts reports the bare name — so the
+ * merge key pairs them by `voiceMergeKey`, not by `name` itself. See
+ * `VoiceCandidate.engineNames` for why each engine still needs its own
+ * spelling preserved for `speak()`.
  */
 function collectCandidates(): VoiceCandidate[] {
-  const byName = new Map<string, VoiceCandidate>();
+  const byKey = new Map<string, VoiceCandidate>();
 
   webVoices.forEach((voice, index) => {
-    byName.set(voice.name, {
+    byKey.set(voiceMergeKey(voice.name, voice.lang), {
       name: voice.name,
       lang: voice.lang,
       isRemote: !voice.localService,
       isDefault: voice.default === true,
       engines: ['web'],
+      engineNames: { web: voice.name },
       index,
     });
   });
@@ -97,23 +105,27 @@ function collectCandidates(): VoiceCandidate[] {
   chromeVoices.forEach((voice, index) => {
     const name = voice.voiceName;
     if (!name) return;
-    const existing = byName.get(name);
+    const lang = voice.lang ?? '';
+    const key = voiceMergeKey(name, lang);
+    const existing = byKey.get(key);
     if (existing) {
       if (!existing.engines.includes('chrome')) existing.engines.push('chrome');
       existing.isRemote = existing.isRemote || voice.remote === true;
+      existing.engineNames.chrome = name;
       return;
     }
-    byName.set(name, {
+    byKey.set(key, {
       name,
-      lang: voice.lang ?? '',
+      lang,
       isRemote: voice.remote === true,
       isDefault: false,
       engines: ['chrome'],
+      engineNames: { chrome: name },
       index: webVoices.length + index,
     });
   });
 
-  return [...byName.values()];
+  return [...byKey.values()];
 }
 
 function resolveSelection(): void {
@@ -310,7 +322,7 @@ function speakWithChromeTts(chromeTts: NonNullable<ChromeLike['tts']>, text: str
   try {
     chromeTts.speak(text, {
       lang,
-      voiceName: selected?.name,
+      voiceName: selected?.engineNames.chrome,
       enqueue: false,
       volume: 1,
       rate: settings.rate,
@@ -338,7 +350,7 @@ function speakWithChromeTts(chromeTts: NonNullable<ChromeLike['tts']>, text: str
 
 function speakWithWebSpeech(text: string): void {
   const synth = getSynth();
-  const voice = findWebVoice(selected?.name);
+  const voice = findWebVoice(selected?.engineNames.web);
   if (!synth || !voice || typeof SpeechSynthesisUtterance === 'undefined') {
     activeUtterance = null;
     setState({ status: 'unavailable' });

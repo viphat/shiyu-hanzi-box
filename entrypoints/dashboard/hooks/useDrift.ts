@@ -10,26 +10,16 @@ export function useDrift() {
   const [driftStore, setDriftStore] = useState<DriftStore>(EMPTY_DRIFT_STORE);
   const [loading, setLoading] = useState(true);
   const mountedRef = useRef(true);
-  // Bumped on every applied update, from either path. watchDriftStore is
-  // driven by the storage layer's own change timeline, so it always reflects
-  // the true write order -- including for writes this hook itself made via
-  // mutateDrift below. That lets mutateDrift tell whether a watcher event
-  // (its own write's, or someone else's) already landed a newer store while
-  // its write was in flight, so its own echo of `next` never clobbers
-  // something newer with something stale.
-  const generationRef = useRef(0);
 
   useEffect(() => {
     mountedRef.current = true;
     void getDriftStore().then((value) => {
       if (!mountedRef.current) return;
-      generationRef.current += 1;
       setDriftStore(value);
       setLoading(false);
     });
     const unwatch = watchDriftStore((next) => {
       if (!mountedRef.current) return;
-      generationRef.current += 1;
       setDriftStore(next);
     });
     return () => {
@@ -39,13 +29,13 @@ export function useDrift() {
   }, []);
 
   const mutateDrift = useCallback(async (fn: (store: DriftStore) => DriftStore) => {
-    const generationBeforeWrite = generationRef.current;
-    const next = await mutateDriftStore(fn);
-    // A watcher event landing while this write was in flight is at least as
-    // new as `next` -- skip our own echo so it can't stomp that newer state.
-    if (!mountedRef.current || generationRef.current !== generationBeforeWrite) return;
-    generationRef.current += 1;
-    setDriftStore(next);
+    // Don't echo `next` into state here: watchDriftStore above is the sole
+    // writer of `driftStore`, mirroring useSettings. storage.onChanged fires
+    // for the writer's own writes too, so the watcher already delivers this
+    // update -- a second local setDriftStore would just be a redundant writer
+    // racing the watcher for no benefit. Still await the write so callers can
+    // observe completion/rejection.
+    await mutateDriftStore(fn);
   }, []);
 
   return { driftStore, loading, mutateDrift };

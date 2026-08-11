@@ -4,10 +4,11 @@ import {
   countParkedQuotes,
   isParkedQuote,
   parseClozeMarkup,
+  planClozeRestore,
   planClozeWrite,
   seedMarkup,
 } from '../lib/cloze';
-import type { Cloze, QuoteEntry } from '../lib/types';
+import type { Cloze, Inbox, QuoteEntry } from '../lib/types';
 
 function makeQuote(overrides: Partial<QuoteEntry> = {}): QuoteEntry {
   return {
@@ -229,5 +230,39 @@ describe('planClozeWrite', () => {
 
   it('treats an absent old set as nothing to remove', () => {
     expect(planClozeWrite(undefined, [{ id: 'a', start: 0, end: 1 }])).toEqual([]);
+  });
+});
+
+describe('planClozeRestore', () => {
+  function inboxOf(quotes: Array<{ id: string; clozes?: Cloze[] }>): Inbox {
+    return {
+      words: [],
+      quotes: quotes.map((q) => makeQuote({ id: q.id, clozes: q.clozes })),
+    };
+  }
+
+  it('tombstones blanks the restored backup no longer has', () => {
+    const current = inboxOf([{ id: 'q1', clozes: [{ id: 'a', start: 0, end: 1 }, { id: 'b', start: 1, end: 2 }] }]);
+    const restored = inboxOf([{ id: 'q1', clozes: [{ id: 'a', start: 0, end: 1 }] }]);
+    expect(planClozeRestore(current, restored)).toEqual([{ quoteId: 'q1', clozeIds: ['b'] }]);
+  });
+
+  it('tombstones every blank when the backup has the quote parked', () => {
+    const current = inboxOf([{ id: 'q1', clozes: [{ id: 'a', start: 0, end: 1 }] }]);
+    const restored = inboxOf([{ id: 'q1' }]);
+    expect(planClozeRestore(current, restored)).toEqual([{ quoteId: 'q1', clozeIds: ['a'] }]);
+  });
+
+  it('plans nothing for a quote the restore does not carry at all', () => {
+    // Dropping the whole quote is an entity-level deletion, not a blank
+    // removal — tombstoning its blanks would only make it come back parked.
+    const current = inboxOf([{ id: 'q1', clozes: [{ id: 'a', start: 0, end: 1 }] }]);
+    expect(planClozeRestore(current, inboxOf([]))).toEqual([]);
+  });
+
+  it('plans nothing when the backup adds blanks', () => {
+    const current = inboxOf([{ id: 'q1' }]);
+    const restored = inboxOf([{ id: 'q1', clozes: [{ id: 'a', start: 0, end: 1 }] }]);
+    expect(planClozeRestore(current, restored)).toEqual([]);
   });
 });

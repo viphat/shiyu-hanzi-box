@@ -14,6 +14,7 @@ import {
   syncMetadataStorage,
 } from '../../lib/sync/mutations';
 import { getSyncConfig, setSyncConfig } from '../../lib/sync/local';
+import { planClozeRestore } from '../../lib/cloze';
 import { getInbox, setInbox } from '../../lib/storage';
 import { EMPTY_SYNC_STATE } from '../../lib/sync/types';
 import type { Cloze, Inbox, QuoteEntry } from '../../lib/types';
@@ -243,6 +244,28 @@ describe('cloze removal', () => {
 
     const meta = await syncMetadataStorage.getValue();
     expect(meta.state?.quotes.q1.clozeTombstones?.drop).toBeDefined();
+  });
+
+  it('keeps a restore that drops a blank from being undone by a peer', async () => {
+    const d = await deps();
+    const keep: Cloze = { id: 'keep', start: 0, end: 2 };
+    const drop: Cloze = { id: 'drop', start: 5, end: 7 };
+    const current = { words: [], quotes: [quoteWithClozes([keep, drop])] };
+    await setInbox(current);
+    await runSyncPass(d);
+    await seedRemote(d.fs, d.key, current);
+
+    // Restoring a backup taken before `drop` existed: replace the whole inbox,
+    // with the removals planned off the pre-restore snapshot.
+    const restored = { words: [], quotes: [{ ...quoteWithClozes([keep]), updatedAt: 300 }] };
+    await applyClozeRemoval(planClozeRestore(current, restored));
+    await applyLocalMutation('inbox', async () => {
+      await setInbox(restored);
+    });
+
+    await runSyncPass(d);
+
+    expect((await getInbox()).quotes[0].clozes?.map((c) => c.id)).toEqual(['keep']);
   });
 
   it('lets a blank re-added after removal survive', async () => {

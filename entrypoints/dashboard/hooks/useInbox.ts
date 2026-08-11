@@ -3,6 +3,7 @@ import { inboxStorage } from '@/lib/storage';
 import type { Inbox } from '@/lib/types';
 import { EMPTY_INBOX } from '@/lib/types';
 import { requestSyncMutation } from '@/entrypoints/background/sync-mutation-handler';
+import { planClozeRestore } from '@/lib/cloze';
 
 export function useInbox() {
   const [inbox, setInbox] = useState<Inbox>(EMPTY_INBOX);
@@ -59,9 +60,20 @@ export function useInbox() {
     [],
   );
 
-  const replace = useCallback(async (next: Inbox) => {
-    await requestSyncMutation('inbox', next);
-  }, []);
+  // Wholesale replacement (backup restore). Blanks the incoming inbox does not
+  // carry are removals, not absences, so they need tombstones planned off the
+  // same snapshot — otherwise the next sync pass materializes them back and the
+  // restore silently fails to stick. Tags, occurrences and whole entries the
+  // restore drops have the same exposure and are NOT handled here.
+  const replace = useCallback(
+    async (next: Inbox) => {
+      await mutateWithRemovals((current) => ({
+        clozeRemovals: planClozeRestore(current, next),
+        inbox: next,
+      }));
+    },
+    [mutateWithRemovals],
+  );
 
   return { inbox, loading, mutate, mutateWithRemovals, replace };
 }

@@ -134,6 +134,15 @@ export interface SrsSettings {
   enableFuzz: boolean;
 }
 
+export interface TtsSettings {
+  /** Voice name to use, or null to auto-select the best available. */
+  voiceName: string | null;
+  /** Playback rate, clamped to [MIN_TTS_RATE, MAX_TTS_RATE]. */
+  rate: number;
+  /** Allow voices synthesized off-device. Off by default: they send text to the provider. */
+  allowNetworkVoices: boolean;
+}
+
 /** Which review experience the dashboard's Review tab renders. */
 export type ReviewMode = 'srs' | 'drift';
 

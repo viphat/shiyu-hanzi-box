@@ -84,6 +84,11 @@ Implemented:
   card limits. Quotes are reviewed via cloze deletion: each blanked span is an
   independent FSRS card. Quotes save parked (no blanks); add blanks manually or
   via AI suggestions before they enter the review queue.
+- A second **Drift (漫读)** review mode, selectable in Settings: words and
+  quotes surface one at a time in weighted random order with nothing hidden,
+  and thumbs up / down shape how often each one comes back. Drift never writes
+  FSRS state; drift days keep the review streak alive without counting as
+  reviews.
 - Dashboard **Stats** tab: a review streak with a one-grace-day freeze as the
   hero, a 12-week activity heatmap, a 7-day due forecast, and lifetime total
   reviews — all derived from existing local review history and fully localized.

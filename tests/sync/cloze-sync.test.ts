@@ -14,7 +14,7 @@ import {
   syncMetadataStorage,
 } from '../../lib/sync/mutations';
 import { getSyncConfig, setSyncConfig } from '../../lib/sync/local';
-import { planClozeRestore } from '../../lib/cloze';
+import { planRestoreRemovals } from '../../lib/sync/restore';
 import { getInbox, setInbox } from '../../lib/storage';
 import { EMPTY_SYNC_STATE } from '../../lib/sync/types';
 import type { Cloze, Inbox, QuoteEntry } from '../../lib/types';
@@ -258,7 +258,7 @@ describe('cloze removal', () => {
     // Restoring a backup taken before `drop` existed: replace the whole inbox,
     // with the removals planned off the pre-restore snapshot.
     const restored = { words: [], quotes: [{ ...quoteWithClozes([keep]), updatedAt: 300 }] };
-    await applyClozeRemoval(planClozeRestore(current, restored));
+    await applyClozeRemoval(planRestoreRemovals(current, restored).clozes);
     await applyLocalMutation('inbox', async () => {
       await setInbox(restored);
     });

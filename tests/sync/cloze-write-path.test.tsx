@@ -91,35 +91,3 @@ describe('useInbox.mutateWithRemovals (clozes)', () => {
     expect(meta.state?.quotes.q1.clozeTombstones?.b).toBeUndefined();
   });
 });
-
-// Restoring a JSON backup replaces the whole inbox. Blanks the backup does not
-// carry are gone from the domain, but absence is not removal in the synced
-// OR-Set — without tombstones the next pass materializes them straight back and
-// the restore silently fails to stick.
-describe('useInbox.replace (backup restore)', () => {
-  it('tombstones blanks the restored backup dropped', async () => {
-    await act(async () => {
-      await captured.replace({
-        words: [],
-        quotes: [quote([{ id: 'a', start: 0, end: 1 }])],
-      });
-    });
-
-    expect((await getInbox()).quotes[0].clozes?.map((c) => c.id)).toEqual(['a']);
-    const meta = await syncMetadataStorage.getValue();
-    expect(meta.state?.quotes.q1.clozeTombstones?.b).toBeDefined();
-    expect(meta.state?.quotes.q1.clozeTombstones?.a).toBeUndefined();
-  });
-
-  it('records nothing when the restore keeps every blank', async () => {
-    await act(async () => {
-      await captured.replace({
-        words: [],
-        quotes: [quote([{ id: 'a', start: 0, end: 1 }, { id: 'b', start: 1, end: 2 }])],
-      });
-    });
-
-    const meta = await syncMetadataStorage.getValue();
-    expect(meta.state?.quotes.q1?.clozeTombstones ?? {}).toEqual({});
-  });
-});

@@ -26,9 +26,10 @@ novelty voice.
 Measured on macOS 26.5.2, Chrome, via `speechSynthesis.getVoices()` and
 `AVSpeechSynthesisVoice.speechVoices()`.
 
-1. **18 `zh-*` voices exist; 17 are unsuitable.** Nine are Eloquence formant
-   voices (`com.apple.eloquence.zh-CN.{Eddy,Flo,Grandma,Grandpa,Reed,Rocko,Sandy,Shelley}`),
-   duplicated across `zh-CN` and `zh-TW`. Eloquence is a 1980s-era synthesizer
+1. **18 `zh-*` voices exist; 17 are unsuitable.** 16 are Eloquence formant
+   voices — 8 distinct names
+   (`com.apple.eloquence.zh-CN.{Eddy,Flo,Grandma,Grandpa,Reed,Rocko,Sandy,Shelley}`),
+   each duplicated across `zh-CN` and `zh-TW`. Eloquence is a 1980s-era synthesizer
    bundled for accessibility; it is intelligible but robotic by design.
 2. **The only real Mandarin voice is `super-compact`.**
    `com.apple.voice.super-compact.zh-CN.Tingting` is Apple's lowest quality
@@ -253,11 +254,11 @@ New keys in both `en` and `zh-CN`:
 | --- | --- | --- |
 | `tts.settingsTitle` | Pronunciation | 发音 |
 | `tts.voice` | Voice | 语音 |
-| `tts.voiceAuto` | Auto | 自动 |
+| `tts.voiceAuto` | Auto (best available) | 自动（最佳可用） |
 | `tts.rate` | Speed | 语速 |
 | `tts.test` | Test | 试听 |
 | `tts.allowNetwork` | Allow network voices | 允许网络语音 |
-| `tts.allowNetworkHint` | Network voices send the text to the voice provider. | 网络语音会将文本发送给语音提供方。 |
+| `tts.allowNetworkHint` | Network voices send the spoken text to the voice provider. | 网络语音会将朗读文本发送给语音提供方。 |
 | `tts.badgeNetwork` | Network | 网络 |
 | `tts.badgeSystem` | System | 系统 |
 | `tts.noVoices` | No Chinese voice is installed on this system. | 系统未安装中文语音。 |
@@ -267,7 +268,7 @@ New keys in both `en` and `zh-CN`:
 
 ## Testing
 
-### `tests/tts.test.ts` (extend)
+### `tests/tts-voices.test.ts` (new)
 
 Ranking is pure, so most cases need no DOM mock:
 
@@ -281,6 +282,8 @@ Ranking is pure, so most cases need no DOM mock:
 - Equal scores break toward the lower source index (determinism).
 - An explicit `voiceName` is honoured over the ranking.
 - An unmatched `voiceName` falls back to ranking and leaves the setting intact.
+
+### `tests/tts.test.ts` (extend)
 
 Behavioural cases against the existing mocks:
 

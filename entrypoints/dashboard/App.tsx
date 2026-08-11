@@ -41,6 +41,7 @@ import { requestSyncMutation } from '../background/sync-mutation-handler';
 import { wordKey } from '@/lib/sync/project';
 import { addTag, planTagWrite, planTagRemovalAcrossQuotes, removeTag, normalizeTag, tagCounts, quoteMatchesTags } from '@/lib/tags';
 import { computeReviewStats } from '@/lib/review-stats';
+import { planClozeWrite } from '@/lib/cloze';
 
 type Tab = 'review' | 'words' | 'quotes' | 'stats';
 type StatusFilter = 'all' | Status;
@@ -210,6 +211,29 @@ export function App() {
   }
 
   function updateQuote(id: string, patch: Partial<QuoteEntry>) {
+    // A patch that rewrites `clozes` may drop blanks (chip delete, or the
+    // markup editor replacing the whole set with freshly-minted ids). Absence
+    // is not a removal in the synced OR-Set, so those ids need `removeClozes`
+    // tombstones planned off the same snapshot the write is built from —
+    // exactly like setQuoteTags below.
+    if (patch.clozes) {
+      void mutateWithRemovals((current) => {
+        const target = current.quotes.find((quote) => quote.id === id);
+        if (!target) return null;
+        return {
+          clozeRemovals: [
+            { quoteId: id, clozeIds: planClozeWrite(target.clozes, patch.clozes!) },
+          ],
+          inbox: {
+            ...current,
+            quotes: current.quotes.map((quote) =>
+              quote.id === id ? { ...quote, ...patch, updatedAt: Date.now() } : quote,
+            ),
+          },
+        };
+      });
+      return;
+    }
     mutate((current) => ({
       ...current,
       quotes: current.quotes.map((quote) =>

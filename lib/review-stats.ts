@@ -5,11 +5,10 @@ import { localDayKey, startOfDay } from './srs';
  * Pure, deterministic habit metrics derived on-read from the loaded Inbox.
  * No I/O, no React, no storage, no sync.
  *
- * Cross-device note: word review history is synced (see lib/sync/project.ts
- * reviewEvents/rebuildReview), but clozes are NOT projected into sync state, so
- * cloze review history is this-device-only. The streak/heatmap therefore reflect
- * all synced word reviews plus this device's cloze reviews. This is intentional
- * for this release; the sync layer is unchanged.
+ * Cross-device note: word AND cloze review history are synced (see
+ * lib/sync/project.ts reviewEvents/rebuildReview — each cloze is its own node
+ * with its own review events), so the streak/heatmap reflect reviews from every
+ * synced device.
  */
 
 export interface DayCount {

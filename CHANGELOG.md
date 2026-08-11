@@ -5,6 +5,25 @@ All notable changes to 拾语汉字box are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Folder sync no longer wipes quote cloze blanks.** Clozes were never
+  projected into sync state, while every sync pass overwrote the local inbox
+  with the state it materialized — so on a synced profile the first pass
+  silently deleted every blank and its per-cloze FSRS scheduling, emptying the
+  quote review queue.
+
+### Added
+
+- **Cloze blanks sync between profiles.** Each blank is now a synced node with
+  its own span, hint, linked word and review history (one blank = one FSRS
+  card), unioned across devices like quote tags and word occurrences. Removing
+  a blank writes a tombstone so it stays removed instead of being resurrected
+  by a peer. Cloze review history now counts toward the streak and heatmap on
+  every device, not just the one it was reviewed on.
+
 ## [0.4.5] - 2026-07-26
 
 ### Added

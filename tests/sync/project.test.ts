@@ -11,6 +11,7 @@ import { DEFAULT_AI_SETTINGS } from '../../lib/ai/settings';
 import { mergeSyncState } from '../../lib/sync/merge';
 import type {
   AiInsight,
+  Cloze,
   Inbox,
   QuoteEntry,
   VietnameseAiInsight,
@@ -410,5 +411,137 @@ describe('quote translation sync', () => {
     const out = materialize(state).inbox.quotes[0];
     expect(out.translations?.google).toBeUndefined();
     expect(out.translations?.ai).toEqual(AI_SLOT);
+  });
+});
+
+describe('quote cloze OR-Set projection', () => {
+  const blank: Cloze = { id: 'c1', start: 0, end: 2, hint: 'pinyin', wordId: 'w1' };
+
+  it('projects local blanks into nodes with empty tombstones', () => {
+    const state = project({ quotes: [quoteFixture({ clozes: [blank] })] });
+    expect(Object.keys(state.quotes.q1.clozes ?? {})).toEqual(['c1']);
+    expect(state.quotes.q1.clozeTombstones).toEqual({});
+  });
+
+  it('round-trips blanks through materialize, sorted by span', () => {
+    const state = project({
+      quotes: [
+        quoteFixture({
+          clozes: [
+            { id: 'later', start: 5, end: 7 },
+            { id: 'earlier', start: 0, end: 2 },
+          ],
+        }),
+      ],
+    });
+    expect(materialize(state).inbox.quotes[0].clozes?.map((c) => c.id)).toEqual([
+      'earlier',
+      'later',
+    ]);
+  });
+
+  it('omits clozes entirely for a parked quote', () => {
+    const state = project({ quotes: [quoteFixture({ clozes: [] })] });
+    expect(materialize(state).inbox.quotes[0].clozes).toBeUndefined();
+  });
+
+  it('carries forward an existing add stamp (unrelated edit does not move it)', () => {
+    const first = project({ quotes: [quoteFixture({ clozes: [blank], updatedAt: 20 })] });
+    const before = first.quotes.q1.clozes!.c1.addedAt;
+    const second = project({ quotes: [quoteFixture({ clozes: [blank], updatedAt: 999 })] }, first);
+    expect(second.quotes.q1.clozes!.c1.addedAt).toEqual(before);
+  });
+
+  it('mints a re-add stamp strictly above a prior tombstone', () => {
+    const first = project({ quotes: [quoteFixture({ clozes: [blank], updatedAt: 20 })] });
+    first.quotes.q1.clozeTombstones = { c1: { wallTime: 500, counter: 0, replicaId: 'B' } };
+    const second = project({ quotes: [quoteFixture({ clozes: [blank], updatedAt: 20 })] }, first);
+    expect(second.quotes.q1.clozes!.c1.addedAt.wallTime).toBe(501);
+    expect(materialize(mergeSyncState(first, second)).inbox.quotes[0].clozes).toHaveLength(1);
+  });
+
+  it('suppresses a blank whose tombstone is newer than its add stamp', () => {
+    const state = project({ quotes: [quoteFixture({ clozes: [blank], updatedAt: 20 })] });
+    state.quotes.q1.clozeTombstones = { c1: { wallTime: 50, counter: 0, replicaId: 'B' } };
+    expect(materialize(state).inbox.quotes[0].clozes).toBeUndefined();
+  });
+
+  it('materialize reads a node with no clozes/clozeTombstones without throwing', () => {
+    const state = project({ quotes: [quoteFixture()] });
+    delete state.quotes.q1.clozes;
+    delete state.quotes.q1.clozeTombstones;
+    expect(materialize(state).inbox.quotes[0].clozes).toBeUndefined();
+  });
+
+  it('drops a structurally invalid span from a hostile replica', () => {
+    const state = project({ quotes: [quoteFixture({ clozes: [blank, { id: 'bad', start: 3, end: 5 }] })] });
+    state.quotes.q1.clozes!.bad.fields.end.value = Number.NaN;
+    expect(materialize(state).inbox.quotes[0].clozes?.map((c) => c.id)).toEqual(['c1']);
+  });
+
+  it('ignores an unknown hint value rather than materializing it', () => {
+    const state = project({ quotes: [quoteFixture({ clozes: [blank] })] });
+    state.quotes.q1.clozes!.c1.fields.hint.value = 'exploding';
+    expect(materialize(state).inbox.quotes[0].clozes?.[0].hint).toBeUndefined();
+  });
+});
+
+// The bug this guards: `materialize` rebuilds each entry as a fresh object
+// literal and the coordinator writes that literal over the local inbox, so any
+// field the projector forgets is DELETED on the first sync pass — not merely
+// left unsynced. A new QuoteEntry/WordEntry field must round-trip here.
+describe('full-entry round-trip (no field silently dropped)', () => {
+  it('round-trips a fully-populated quote', () => {
+    const quote = quoteFixture({
+      text: '天行健',
+      note: 'n',
+      status: 'reviewed',
+      tags: ['a', 'b'],
+      sourceTitle: 't',
+      sourceUrl: 'https://example.com',
+      sourceDomain: 'example.com',
+      surrounding: 's',
+      pinyin: 'tiān xíng jiàn',
+      traditionalText: '天行健',
+      translations: { google: { text: 'g', generatedAt: 200 }, ai: AI_SLOT },
+      clozes: [
+        {
+          id: 'c1',
+          start: 0,
+          end: 1,
+          hint: 'length',
+          wordId: 'w1',
+          review: {
+            scheduler: 'fsrs-v1',
+            dueAt: 5000,
+            intervalDays: 3,
+            repetitions: 2,
+            lapses: 1,
+            lastReviewedAt: 900,
+            cardState: 'review',
+            stability: 4.2,
+            difficulty: 6.1,
+            elapsedDays: 1,
+            scheduledDays: 3,
+            learningSteps: 0,
+            retrievability: 0.9,
+            reviewLog: [
+              {
+                reviewedAt: 900,
+                rating: 'good',
+                elapsedDays: 1,
+                scheduledDays: 3,
+                stateBefore: 'learning',
+                stateAfter: 'review',
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    const out = materialize(project({ quotes: [quote] })).inbox.quotes[0];
+
+    expect(out).toEqual(quote);
   });
 });

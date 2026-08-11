@@ -284,6 +284,62 @@ export async function applyTagRemoval(
   return run;
 }
 
+/**
+ * Record a tombstone per removed cloze blank.
+ *
+ * Cloze presence is an add-wins OR-Set, so a blank that merely disappears from
+ * the local inbox is resurrected by any replica (or persisted state) that still
+ * holds it. Exactly like applyTagRemoval, the removal must be written into the
+ * persisted SyncState at edit time — before the inbox write — so it survives a
+ * reconcile rebuild and reaches peers on the next pass.
+ */
+export async function applyClozeRemoval(
+  removals: Array<{ quoteId: string; clozeIds: string[] }>,
+): Promise<void> {
+  const run = chain.then(async () => {
+    const replicaId = await ensureReplicaId();
+    const meta = await syncMetadataStorage.getValue();
+    const state: SyncState = meta.state ?? (JSON.parse(JSON.stringify(EMPTY_SYNC_STATE)) as SyncState);
+    const now = Date.now();
+    for (const { quoteId, clozeIds } of removals) {
+      let node = state.quotes[quoteId];
+      if (!node) {
+        node = {
+          id: quoteId,
+          fields: {},
+          createdAt: { value: now, stamp: { wallTime: now, counter: 0, replicaId } },
+          tags: {},
+          tagTombstones: {},
+          clozes: {},
+          clozeTombstones: {},
+          reviewEvents: {},
+        };
+        state.quotes[quoteId] = node;
+      }
+      if (!node.clozeTombstones) node.clozeTombstones = {};
+      for (const clozeId of clozeIds) {
+        node.clozeTombstones[clozeId] = { wallTime: now, counter: 0, replicaId };
+      }
+    }
+    const nextRevision = meta.revision + 1;
+    await syncMetadataStorage.setValue({
+      revision: nextRevision,
+      state,
+      lastDigest: meta.lastDigest,
+      appSettingsUpdatedAt: meta.appSettingsUpdatedAt,
+      aiSettingsUpdatedAt: meta.aiSettingsUpdatedAt,
+    });
+    await mutateSyncConfig((cfg) => ({
+      ...cfg,
+      localRevision: nextRevision,
+      pending: true,
+      status: cfg.vaultId ? 'pending' : cfg.status,
+    }));
+  });
+  chain = run;
+  return run;
+}
+
 export async function applyOccurrenceRemoval(
   removals: Array<{ normalized: string; occurrenceId: string }>,
 ): Promise<void> {
@@ -349,11 +405,16 @@ export async function reconcileOnStartup(): Promise<void> {
   // top-level `tombstones`), so they need the same carry-forward — otherwise a
   // `removeTags` written just before an interrupted inbox edit is lost on
   // rebuild and a remote replica still holding the tag resurrects it.
+  // Per-cloze removals live in `clozeTombstones` and need the same
+  // carry-forward for the same reason.
   if (meta.state?.quotes) {
     for (const [id, node] of Object.entries(state.quotes)) {
-      const prevTombstones = meta.state.quotes[id]?.tagTombstones;
-      if (prevTombstones) {
-        node.tagTombstones = mergeStampMap(prevTombstones, node.tagTombstones ?? {});
+      const prev = meta.state.quotes[id];
+      if (prev?.tagTombstones) {
+        node.tagTombstones = mergeStampMap(prev.tagTombstones, node.tagTombstones ?? {});
+      }
+      if (prev?.clozeTombstones) {
+        node.clozeTombstones = mergeStampMap(prev.clozeTombstones, node.clozeTombstones ?? {});
       }
     }
   }

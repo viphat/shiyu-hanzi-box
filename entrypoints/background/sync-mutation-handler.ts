@@ -3,6 +3,7 @@ import {
   applyCvdictSettingsMutation,
   applyLocalMutation,
   applyTagRemoval,
+  applyClozeRemoval,
   applyOccurrenceRemoval,
   applyQuoteTranslation,
   applyWordAiInsight,
@@ -28,7 +29,7 @@ export const SYNC_MUTATION_MESSAGE = 'shiyu:sync-mutation';
 
 export interface SyncMutationRequestMessage {
   type: typeof SYNC_MUTATION_MESSAGE;
-  kind: 'inbox' | 'settings' | 'cvdictSettings' | 'ai' | 'delete' | 'removeTags' | 'removeOccurrence' | 'quoteTranslation' | 'wordAiInsight';
+  kind: 'inbox' | 'settings' | 'cvdictSettings' | 'ai' | 'delete' | 'removeTags' | 'removeClozes' | 'removeOccurrence' | 'quoteTranslation' | 'wordAiInsight';
   payload: unknown;
 }
 
@@ -38,6 +39,9 @@ async function writeKind(kind: SyncMutationRequestMessage['kind'], payload: unkn
   } else if (kind === 'removeTags') {
     const { removals } = payload as { removals: Array<{ quoteId: string; tags: string[] }> };
     await applyTagRemoval(removals);
+  } else if (kind === 'removeClozes') {
+    const { removals } = payload as { removals: Array<{ quoteId: string; clozeIds: string[] }> };
+    await applyClozeRemoval(removals);
   } else if (kind === 'removeOccurrence') {
     const { removals } = payload as { removals: Array<{ normalized: string; occurrenceId: string }> };
     await applyOccurrenceRemoval(removals);

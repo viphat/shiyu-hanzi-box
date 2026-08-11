@@ -61,6 +61,23 @@ export interface WordNode {
   snapshot?: SchedulerSnapshotNode;
 }
 
+/**
+ * One cloze blank, keyed by its domain `Cloze.id`. Add-wins OR-Set member:
+ * `addedAt` is the stable add stamp (suppressed by a matching entry in the
+ * owning quote's `clozeTombstones`), `fields` hold the span/presentation as
+ * LWW registers, and each cloze carries its own review log + scheduler
+ * snapshot because one cloze is one FSRS card.
+ */
+export interface ClozeNode {
+  id: string;
+  /** OR-Set add stamp; carried forward across unrelated quote edits. */
+  addedAt: HybridTimestamp;
+  /** start, end, hint, wordId. */
+  fields: Record<string, Register<unknown>>;
+  reviewEvents: Record<string, ReviewEventNode>;
+  snapshot?: SchedulerSnapshotNode;
+}
+
 export interface QuoteNode {
   id: string;
   fields: Record<string, Register<unknown>>;   // no longer holds `tags`
@@ -69,6 +86,10 @@ export interface QuoteNode {
   tags?: Record<string, HybridTimestamp>;
   /** tag -> remove stamp. */
   tagTombstones?: Record<string, HybridTimestamp>;
+  /** cloze id -> node. Optional so older replicas read back safely. */
+  clozes?: Record<string, ClozeNode>;
+  /** cloze id -> remove stamp. */
+  clozeTombstones?: Record<string, HybridTimestamp>;
   reviewEvents: Record<string, ReviewEventNode>;
   snapshot?: SchedulerSnapshotNode;
 }

@@ -1,6 +1,7 @@
 import type {
   AiSettings,
   AppSettings,
+  Cloze,
   Inbox,
   Occurrence,
   QuoteEntry,
@@ -10,6 +11,7 @@ import type {
   WordEntry,
 } from '../types';
 import type {
+  ClozeNode,
   HybridTimestamp,
   OccurrenceNode,
   QuoteNode,
@@ -205,6 +207,50 @@ function projectWord(word: WordEntry, ctx: BootstrapContext): WordNode {
   };
 }
 
+export function clozeKey(quoteId: string, clozeId: string): string {
+  return `cloze:${quoteId}:${clozeId}`;
+}
+
+/**
+ * Project one cloze blank. Mirrors the tag OR-Set for presence (carry-forward
+ * add stamp, fresh stamp minted above any prior tombstone on re-add) and the
+ * word/quote scheduler projection for its review history — one cloze is one
+ * FSRS card, so it owns its review events and snapshot.
+ *
+ * Field stamps use the owning quote's `updatedAt`: every write path that edits
+ * a cloze (dashboard edits, answerReviewCloze, postponeReviewCloze) bumps it,
+ * so it is the correct recency key for the span and its presentation.
+ */
+function projectCloze(
+  quoteId: string,
+  cloze: Cloze,
+  quoteUpdatedAt: number,
+  ctx: BootstrapContext,
+  prev?: QuoteNode,
+): ClozeNode {
+  const s = stamp(quoteUpdatedAt, ctx.replicaId);
+  const prevNode = prev?.clozes?.[cloze.id];
+  const prevTomb = prev?.clozeTombstones?.[cloze.id];
+  const stillPresent = prevNode && !isSuppressed(prevNode.addedAt, prevTomb);
+  const addedAt = stillPresent
+    ? prevNode.addedAt
+    : stamp(Math.max(quoteUpdatedAt, (prevTomb?.wallTime ?? 0) + 1), ctx.replicaId);
+  return {
+    id: cloze.id,
+    addedAt,
+    fields: {
+      start: reg(cloze.start, s),
+      end: reg(cloze.end, s),
+      // Optional domain fields are stamped as explicit nulls, not omitted: a
+      // cleared hint or an unlinked word must beat a peer's older value, and
+      // both are cheap scalars owned by the same edit as start/end.
+      hint: reg(cloze.hint ?? null, s),
+      wordId: reg(cloze.wordId ?? null, s),
+    },
+    ...projectScheduler(clozeKey(quoteId, cloze.id), cloze.review, ctx.replicaId),
+  };
+}
+
 function projectQuote(quote: QuoteEntry, ctx: BootstrapContext, prev?: QuoteNode): QuoteNode {
   const s = stamp(quote.updatedAt, ctx.replicaId);
   const { reviewEvents, snapshot } = projectScheduler(`quote:${quote.id}`, quote.review, ctx.replicaId);
@@ -221,6 +267,11 @@ function projectQuote(quote: QuoteEntry, ctx: BootstrapContext, prev?: QuoteNode
     tags[tag] = stillPresent
       ? prevAdd
       : stamp(Math.max(quote.updatedAt, (prevTomb?.wallTime ?? 0) + 1), ctx.replicaId);
+  }
+
+  const clozes: Record<string, ClozeNode> = {};
+  for (const cloze of quote.clozes ?? []) {
+    clozes[cloze.id] = projectCloze(quote.id, cloze, quote.updatedAt, ctx, prev);
   }
 
   return {
@@ -274,6 +325,11 @@ function projectQuote(quote: QuoteEntry, ctx: BootstrapContext, prev?: QuoteNode
     },
     tags,
     tagTombstones: {},
+    clozes,
+    // Like tagTombstones: removals are recorded by applyClozeRemoval straight
+    // into the persisted state, and the coordinator's merge with that state
+    // carries them forward. Projection alone never sees a removal.
+    clozeTombstones: {},
     reviewEvents,
     snapshot,
   };
@@ -349,9 +405,11 @@ function isSchedulerPayload(payload: unknown): payload is ReviewState {
   );
 }
 
-function rebuildReview(node: WordNode | QuoteNode): ReviewState | undefined {
-  if (!node.snapshot && Object.keys(node.reviewEvents).length === 0) return undefined;
-  const log = Object.values(node.reviewEvents)
+function rebuildReview(node: WordNode | QuoteNode | ClozeNode): ReviewState | undefined {
+  // `?? {}` tolerates a node authored without the map (older or corrupt replica).
+  const events = node.reviewEvents ?? {};
+  if (!node.snapshot && Object.keys(events).length === 0) return undefined;
+  const log = Object.values(events)
     .sort(
       (a, b) =>
         a.reviewedAt - b.reviewedAt ||
@@ -365,6 +423,45 @@ function rebuildReview(node: WordNode | QuoteNode): ReviewState | undefined {
   // worse than returning undefined, which the caller treats as "no review yet".
   if (!isSchedulerPayload(payload)) return undefined;
   return { ...payload, reviewLog: log };
+}
+
+const CLOZE_HINTS: ReadonlyArray<NonNullable<Cloze['hint']>> = ['none', 'pinyin', 'length'];
+
+/**
+ * Rebuild the domain `Cloze[]` from a quote node's OR-Set.
+ *
+ * Registers hold raw peer-supplied values, so the span is structurally
+ * validated (finite numbers, non-empty, non-negative) and a cloze that fails
+ * is dropped — a NaN span would break slicing in the review UI and Markdown
+ * export. Spans are deliberately NOT range-checked against the merged text:
+ * concurrent "edit text here / add blank there" would then silently delete a
+ * peer's blank, and an over-long span merely renders clamped.
+ */
+function rebuildClozes(node: QuoteNode): Cloze[] {
+  const out: Cloze[] = [];
+  for (const [id, cloze] of Object.entries(node.clozes ?? {})) {
+    if (isSuppressed(cloze?.addedAt, node.clozeTombstones?.[id])) continue;
+    const start = cloze?.fields?.start?.value;
+    const end = cloze?.fields?.end?.value;
+    if (typeof start !== 'number' || typeof end !== 'number') continue;
+    if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+    if (start < 0 || end <= start) continue;
+    const hint = cloze.fields.hint?.value;
+    const wordId = cloze.fields.wordId?.value;
+    const review = rebuildReview(cloze);
+    out.push({
+      // The map key is authoritative — it is what tombstones are keyed by.
+      id,
+      start,
+      end,
+      ...(CLOZE_HINTS.includes(hint as NonNullable<Cloze['hint']>)
+        ? { hint: hint as Cloze['hint'] }
+        : {}),
+      ...(typeof wordId === 'string' && wordId ? { wordId } : {}),
+      ...(review ? { review } : {}),
+    });
+  }
+  return out.sort((a, b) => a.start - b.start || a.id.localeCompare(b.id));
 }
 
 // ---------------------------------------------------------------------------
@@ -443,6 +540,7 @@ export function materialize(state: SyncState): {
     if (isSuppressed(raw.fields.updatedAt?.stamp, state.tombstones[`quote:${id}`])) continue;
     const node = liftLegacyTags(raw);
     const review = rebuildReview(node);
+    const clozes = rebuildClozes(node);
     const tags = Object.entries(node.tags ?? {})
       .filter(([tag, addStamp]) => !isSuppressed(addStamp, node.tagTombstones?.[tag]))
       .map(([tag]) => tag)
@@ -473,6 +571,9 @@ export function materialize(state: SyncState): {
       pinyin: (node.fields.pinyin?.value as string | null) ?? undefined,
       traditionalText: (node.fields.traditionalText?.value as string | null) ?? undefined,
       ...(Object.keys(translations).length > 0 ? { translations } : {}),
+      // An empty set is emitted as absent, matching the domain's "absent or []
+      // => parked" rule and the style of `translations` / `review` above.
+      ...(clozes.length > 0 ? { clozes } : {}),
       ...(review ? { review } : {}),
     });
   }

@@ -30,23 +30,29 @@ export function useInbox() {
     await requestSyncMutation('inbox', fn(current));
   }, []);
 
-  // Like `mutate`, but plans tag tombstones off the SAME freshly-read snapshot
-  // it builds the next inbox from, then fires the batched `removeTags` mutation
-  // before the inbox write. Single-snapshot planning prevents the planner and
-  // the mutator from disagreeing (which could resurrect a concurrently-synced
-  // tag). Returning null from the planner is a no-op.
+  // Like `mutate`, but plans OR-Set tombstones (tags, cloze blanks) off the
+  // SAME freshly-read snapshot it builds the next inbox from, then fires the
+  // batched removal mutations before the inbox write. Single-snapshot planning
+  // prevents the planner and the mutator from disagreeing (which could
+  // resurrect a concurrently-synced tag or blank). Returning null from the
+  // planner is a no-op.
   const mutateWithRemovals = useCallback(
     async (
       plan: (current: Inbox) => {
-        removals: Array<{ quoteId: string; tags: string[] }>;
+        removals?: Array<{ quoteId: string; tags: string[] }>;
+        clozeRemovals?: Array<{ quoteId: string; clozeIds: string[] }>;
         inbox: Inbox;
       } | null,
     ) => {
       const current = await inboxStorage.getValue();
       const result = plan(current);
       if (!result) return;
-      if (result.removals.length > 0) {
+      if (result.removals?.length) {
         await requestSyncMutation('removeTags', { removals: result.removals });
+      }
+      const clozeRemovals = (result.clozeRemovals ?? []).filter((r) => r.clozeIds.length > 0);
+      if (clozeRemovals.length > 0) {
+        await requestSyncMutation('removeClozes', { removals: clozeRemovals });
       }
       await requestSyncMutation('inbox', result.inbox);
     },

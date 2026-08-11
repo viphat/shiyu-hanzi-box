@@ -4,6 +4,7 @@ import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ReviewStatsTab } from '../entrypoints/dashboard/components/ReviewStatsTab';
+import { messages } from '../lib/i18n';
 import type { ReviewStats } from '../lib/review-stats';
 import type { SrsStats } from '../lib/srs';
 
@@ -79,5 +80,68 @@ describe('ReviewStatsTab', () => {
     const flat = makeStats({ forecast: Array.from({ length: 7 }, (_, i) => ({ date: `2026-07-0${i + 1}`, count: 0 })) });
     await render(<ReviewStatsTab stats={flat} srsStats={makeSrs()} locale="en" />);
     expect(container.textContent).toContain('Nothing scheduled');
+  });
+});
+
+describe('drift in the stats tab', () => {
+  it('outlines a drift-only day in the heatmap', async () => {
+    await render(
+      <ReviewStatsTab
+        stats={makeStats({ heatmap: [{ date: '2026-08-11', count: 0, driftCount: 4 }] })}
+        srsStats={makeSrs()}
+        locale="en"
+      />,
+    );
+    expect(container.querySelector('[data-testid="heat-cell"]')!.className).toContain('border');
+  });
+
+  it('titles a drift day with both figures', async () => {
+    await render(
+      <ReviewStatsTab
+        stats={makeStats({ heatmap: [{ date: '2026-08-11', count: 2, driftCount: 4 }] })}
+        srsStats={makeSrs()}
+        locale="en"
+      />,
+    );
+    const title = container.querySelector('[data-testid="heat-cell"]')!.getAttribute('title');
+    expect(title).toContain('4');
+    expect(title).toContain('2');
+  });
+
+  it('leaves a review-only day on the plain tooltip', async () => {
+    await render(
+      <ReviewStatsTab
+        stats={makeStats({ heatmap: [{ date: '2026-08-11', count: 2, driftCount: 0 }] })}
+        srsStats={makeSrs()}
+        locale="en"
+      />,
+    );
+    expect(container.querySelector('[data-testid="heat-cell"]')!.getAttribute('title'))
+      .toBe('2026-08-11: 2 reviews');
+  });
+
+  it('shows the lifetime drift figure', async () => {
+    await render(
+      <ReviewStatsTab stats={makeStats({ totalDrifted: 42 })} srsStats={makeSrs()} locale="en" />,
+    );
+    expect(container.textContent).toContain('42');
+  });
+
+  it('hides the drift legend when nothing has been drifted', async () => {
+    await render(
+      <ReviewStatsTab stats={makeStats({ totalDrifted: 0 })} srsStats={makeSrs()} locale="en" />,
+    );
+    expect(container.textContent).not.toContain(messages.en['stats.legendDrift']);
+  });
+
+  it('treats a drift-only day as keeping the streak safe', async () => {
+    await render(
+      <ReviewStatsTab
+        stats={makeStats({ streakState: 'safe', currentStreak: 3, reviewedToday: 0, driftedToday: 5 })}
+        srsStats={makeSrs({ reviewedToday: 0 })}
+        locale="en"
+      />,
+    );
+    expect(container.textContent).toContain(messages.en['stats.safeReviewed']);
   });
 });

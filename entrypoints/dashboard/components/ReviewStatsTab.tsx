@@ -22,7 +22,7 @@ function streakLine(stats: ReviewStats, locale: UiLocale): string {
     return formatMessage(locale, 'stats.atRisk', { n: stats.currentStreak });
   }
   // safe
-  if (stats.reviewedToday > 0) return t(locale, 'stats.safeReviewed');
+  if (stats.reviewedToday > 0 || stats.driftedToday > 0) return t(locale, 'stats.safeReviewed');
   return formatMessage(locale, 'stats.safeReviewToday', { n: stats.currentStreak });
 }
 
@@ -80,16 +80,33 @@ export function ReviewStatsTab({
           className="grid grid-flow-col gap-1"
           style={{ gridTemplateRows: `repeat(${HEATMAP_ROWS}, minmax(0, 1fr))` }}
         >
-          {stats.heatmap.map((cell: DayCount) => (
-            <div
-              key={cell.date}
-              data-testid="heat-cell"
-              title={formatMessage(locale, 'stats.heatmapCell', { date: cell.date, n: cell.count })}
-              aria-label={formatMessage(locale, 'stats.heatmapCell', { date: cell.date, n: cell.count })}
-              className={`h-3 w-3 rounded-[3px] ${heatClass(cell.count)}`}
-            />
-          ))}
+          {stats.heatmap.map((cell: DayCount) => {
+            const drifted = cell.driftCount ?? 0;
+            const label = drifted > 0
+              ? formatMessage(locale, 'stats.heatmapCellDrift', {
+                  date: cell.date,
+                  n: cell.count,
+                  d: drifted,
+                })
+              : formatMessage(locale, 'stats.heatmapCell', { date: cell.date, n: cell.count });
+            return (
+              <div
+                key={cell.date}
+                data-testid="heat-cell"
+                title={label}
+                aria-label={label}
+                // A drift-only day is outlined rather than filled: it kept the
+                // streak alive, but it was not retrieval practice.
+                className={`h-3 w-3 rounded-[3px] ${heatClass(cell.count)} ${
+                  drifted > 0 && cell.count === 0 ? 'border border-accent-fade' : ''
+                }`}
+              />
+            );
+          })}
         </div>
+        {stats.totalDrifted > 0 && (
+          <p className="mt-2 text-[11px] text-muted">{t(locale, 'stats.legendDrift')}</p>
+        )}
       </section>
 
       {/* 7-day forecast */}
@@ -114,9 +131,17 @@ export function ReviewStatsTab({
         )}
       </section>
 
-      {/* Total reviews */}
+      {/* Lifetime totals — reviews and drift stay separate on purpose. */}
       <p className="text-center text-xs text-muted">
         {formatMessage(locale, 'stats.totalReviews', { n: stats.totalReviews.toLocaleString(locale) })}
+        {stats.totalDrifted > 0 && (
+          <>
+            {' · '}
+            {formatMessage(locale, 'stats.totalDrifted', {
+              n: stats.totalDrifted.toLocaleString(locale),
+            })}
+          </>
+        )}
       </p>
     </div>
   );

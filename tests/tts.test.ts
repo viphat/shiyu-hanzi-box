@@ -465,6 +465,35 @@ describe('tts', () => {
     expect(speakCalls[0].text).toBe('世界');
   });
 
+  it('notifies subscribers with a fresh state object when voices resolve later while idle', async () => {
+    // Regression test: chrome.tts resolves voices asynchronously, often after
+    // speechSynthesis has already settled the module into 'idle'. If
+    // updateAvailableState() re-notifies with the *same* state reference,
+    // React subscribers (setTtsState(state)) bail out under Object.is and the
+    // picker never learns about the newly-arrived voice.
+    mockVoices = [createMockVoice('zh-CN', 'Tingting')];
+    const { getTtsState, initTts, subscribeTts } = await importTts();
+
+    initTts();
+    const initialState = getTtsState();
+    expect(initialState).toEqual({ status: 'idle' });
+
+    const listener = vi.fn();
+    subscribeTts(listener);
+
+    // A second voice arrives late (e.g. a network voice resolved by chrome.tts).
+    mockVoices = [
+      createMockVoice('zh-CN', 'Tingting'),
+      createMockVoice('zh-CN', 'Meijia'),
+    ];
+    emitVoicesChanged();
+
+    expect(listener).toHaveBeenCalled();
+    const receivedState = listener.mock.calls[listener.mock.calls.length - 1][0];
+    expect(receivedState).toEqual({ status: 'idle' });
+    expect(receivedState).not.toBe(initialState);
+  });
+
   it('cancels web speech when allowNetworkVoices is turned off mid-speech', async () => {
     const { configureTts, speak } = await initWithVoices([
       createMockVoice('zh-CN', 'Google 普通话', { localService: false }),

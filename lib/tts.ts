@@ -127,10 +127,14 @@ function updateAvailableState(): TtsState {
   resolveSelection();
 
   if (selected) {
-    if (state.status === 'unavailable') {
-      setState({ status: 'idle' });
-    } else {
+    if (state.status === 'speaking') {
+      // Don't clobber an in-flight utterance just because the voice list moved.
       notify();
+    } else {
+      // Emit a fresh object rather than reusing the current one: React
+      // subscribers bail out on reference equality, and the voice list can
+      // change after the first resolution when chrome.tts resolves late.
+      setState({ status: 'idle' });
     }
     return state;
   }

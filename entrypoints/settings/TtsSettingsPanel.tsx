@@ -29,8 +29,12 @@ export function TtsSettingsPanel({
   const [, setTtsState] = useState<TtsState>(getTtsState);
 
   useEffect(() => {
-    setDraft({ ...settings });
-  }, [settings]);
+    setDraft({
+      voiceName: settings.voiceName,
+      rate: settings.rate,
+      allowNetworkVoices: settings.allowNetworkVoices,
+    });
+  }, [settings.voiceName, settings.rate, settings.allowNetworkVoices]);
 
   useEffect(() => {
     const unsubscribe = subscribeTts(setTtsState);
@@ -46,8 +50,9 @@ export function TtsSettingsPanel({
 
   const voices = listVoiceCandidates();
   const hasNetworkVoice = voices.some((voice) => voice.isRemote);
-  const savedVoiceMissing =
-    draft.voiceName !== null && !voices.some((voice) => voice.name === draft.voiceName);
+  const effectiveVoiceName = getSelectedVoiceName();
+  const savedVoiceNotInUse =
+    draft.voiceName !== null && effectiveVoiceName !== draft.voiceName;
 
   function update(next: TtsSettings) {
     setDraft(next);
@@ -93,7 +98,7 @@ export function TtsSettingsPanel({
                 </option>
               ))}
             </select>
-            {savedVoiceMissing ? (
+            {savedVoiceNotInUse ? (
               <p className="mt-0.5 text-[10px] text-accent-deep">
                 {t(locale, 'tts.voiceMissing')}
               </p>

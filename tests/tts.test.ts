@@ -15,11 +15,15 @@ class MockSpeechSynthesisUtterance {
   }
 }
 
-function createMockVoice(lang: string, name: string): SpeechSynthesisVoice {
+function createMockVoice(
+  lang: string,
+  name: string,
+  options: { isDefault?: boolean; localService?: boolean } = {},
+): SpeechSynthesisVoice {
   return {
-    default: false,
+    default: options.isDefault ?? false,
     lang,
-    localService: true,
+    localService: options.localService ?? true,
     name,
     voiceURI: name,
   };
@@ -36,6 +40,7 @@ type MockSpeechSynthesis = {
 type MockChromeTtsVoice = {
   lang?: string;
   voiceName?: string;
+  remote?: boolean;
 };
 
 type MockChromeTts = {
@@ -309,5 +314,246 @@ describe('tts', () => {
     stop();
 
     expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('picks Tingting over the novelty voice Chrome lists first', async () => {
+    const { speak } = await initWithVoices([
+      createMockVoice('zh-CN', 'Eddy (Chinese (China mainland))'),
+      createMockVoice('zh-CN', 'Tingting'),
+    ]);
+
+    speak('你好');
+
+    expect(speakCalls[0].voice?.name).toBe('Tingting');
+  });
+
+  it('reports unavailable when only novelty voices exist', async () => {
+    const { isChineseVoiceAvailable } = await initWithVoices([
+      createMockVoice('zh-CN', 'Eddy (Chinese (China mainland))'),
+    ]);
+
+    expect(isChineseVoiceAvailable()).toBe(false);
+  });
+
+  it('uses the configured voice name', async () => {
+    const { configureTts, speak } = await initWithVoices([
+      createMockVoice('zh-CN', 'Tingting'),
+      createMockVoice('zh-TW', 'Meijia'),
+    ]);
+
+    configureTts({ voiceName: 'Meijia', rate: 1, allowNetworkVoices: false });
+    speak('你好');
+
+    expect(speakCalls[0].voice?.name).toBe('Meijia');
+  });
+
+  it('keeps a saved voice name that is not installed and falls back', async () => {
+    const { configureTts, getSelectedVoiceName, speak } = await initWithVoices([
+      createMockVoice('zh-CN', 'Tingting'),
+    ]);
+
+    configureTts({ voiceName: 'Removed Voice', rate: 1, allowNetworkVoices: false });
+    speak('你好');
+
+    expect(speakCalls[0].voice?.name).toBe('Tingting');
+    expect(getSelectedVoiceName()).toBe('Tingting');
+  });
+
+  it('clamps an out-of-range rate before it reaches the utterance', async () => {
+    // configureTts is the module's only settings entry point; the [0.5, 1.5]
+    // clamp is a binding constraint that must hold here too, not only in
+    // normalizeSettings before storage.
+    const { configureTts, speak } = await initWithVoices([
+      createMockVoice('zh-CN', 'Tingting'),
+    ]);
+
+    configureTts({ voiceName: null, rate: 9, allowNetworkVoices: false });
+    speak('你好');
+
+    expect(speakCalls[0].rate).toBe(1.5);
+  });
+
+  it('applies the configured rate to Web Speech', async () => {
+    const { configureTts, speak } = await initWithVoices([
+      createMockVoice('zh-CN', 'Tingting'),
+    ]);
+
+    configureTts({ voiceName: null, rate: 0.7, allowNetworkVoices: false });
+    speak('你好');
+
+    expect(speakCalls[0].rate).toBe(0.7);
+  });
+
+  it('applies the configured rate to chrome tts', async () => {
+    const chromeTts = createMockChromeTts([{ lang: 'zh-CN', voiceName: 'Tingting' }]);
+    vi.stubGlobal('chrome', { tts: chromeTts });
+    const { configureTts, initTts, speak } = await importTts();
+
+    initTts();
+    configureTts({ voiceName: null, rate: 0.6, allowNetworkVoices: false });
+    speak('你好');
+
+    expect(chromeTts.speak).toHaveBeenCalledWith(
+      '你好',
+      expect.objectContaining({ rate: 0.6 }),
+    );
+  });
+
+  it('routes to Web Speech for a voice chrome tts does not have', async () => {
+    const chromeTts = createMockChromeTts([{ lang: 'zh-CN', voiceName: 'Tingting' }]);
+    vi.stubGlobal('chrome', { tts: chromeTts });
+    const { configureTts, initTts, speak } = await importTts();
+
+    mockVoices = [
+      createMockVoice('zh-CN', 'Tingting'),
+      createMockVoice('zh-CN', 'Web Only Voice'),
+    ];
+    initTts();
+    speakCalls = [];
+
+    configureTts({ voiceName: 'Web Only Voice', rate: 1, allowNetworkVoices: false });
+    speak('你好');
+
+    expect(chromeTts.speak).not.toHaveBeenCalled();
+    expect(speakCalls[0].voice?.name).toBe('Web Only Voice');
+  });
+
+  it('ignores remote voices until network voices are allowed', async () => {
+    const { configureTts, isChineseVoiceAvailable } = await initWithVoices([
+      createMockVoice('zh-CN', 'Google 普通话', { localService: false }),
+    ]);
+
+    expect(isChineseVoiceAvailable()).toBe(false);
+
+    configureTts({ voiceName: null, rate: 1, allowNetworkVoices: true });
+
+    expect(isChineseVoiceAvailable()).toBe(true);
+  });
+
+  it('lists Chinese voices for the picker, including ones never auto-selected', async () => {
+    const { listVoiceCandidates } = await initWithVoices([
+      createMockVoice('zh-CN', 'Eddy (Chinese (China mainland))'),
+      createMockVoice('zh-CN', 'Tingting'),
+      createMockVoice('en-US', 'Samantha'),
+    ]);
+
+    expect(listVoiceCandidates().map((voice) => voice.name)).toEqual([
+      'Tingting',
+      'Eddy (Chinese (China mainland))',
+    ]);
+  });
+
+  it('merges a voice present in both engines into one candidate', async () => {
+    const chromeTts = createMockChromeTts([{ lang: 'zh-CN', voiceName: 'Tingting' }]);
+    vi.stubGlobal('chrome', { tts: chromeTts });
+    const { initTts, listVoiceCandidates } = await importTts();
+
+    mockVoices = [createMockVoice('zh-CN', 'Tingting', { isDefault: true })];
+    initTts();
+
+    const candidates = listVoiceCandidates();
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].engines).toEqual(expect.arrayContaining(['web', 'chrome']));
+    expect(candidates[0].isDefault).toBe(true);
+  });
+
+  it('stops chrome tts when the resolved voice moves to a web-only engine', async () => {
+    const chromeTts = createMockChromeTts([{ lang: 'zh-CN', voiceName: 'Tingting' }]);
+    vi.stubGlobal('chrome', { tts: chromeTts });
+    const { configureTts, initTts, speak } = await importTts();
+
+    mockVoices = [
+      createMockVoice('zh-CN', 'Tingting'),
+      createMockVoice('zh-CN', 'Web Only Voice'),
+    ];
+    initTts();
+    speak('你好');
+    expect(chromeTts.speak).toHaveBeenCalledTimes(1);
+    chromeTts.stop.mockClear();
+
+    configureTts({ voiceName: 'Web Only Voice', rate: 1, allowNetworkVoices: false });
+    speak('世界');
+
+    expect(chromeTts.stop).toHaveBeenCalledTimes(1);
+    expect(speakCalls[0].text).toBe('世界');
+  });
+
+  it('notifies subscribers with a fresh state object when voices resolve later while idle', async () => {
+    // Regression test: chrome.tts resolves voices asynchronously, often after
+    // speechSynthesis has already settled the module into 'idle'. If
+    // updateAvailableState() re-notifies with the *same* state reference,
+    // React subscribers (setTtsState(state)) bail out under Object.is and the
+    // picker never learns about the newly-arrived voice.
+    mockVoices = [createMockVoice('zh-CN', 'Tingting')];
+    const { getTtsState, initTts, subscribeTts } = await importTts();
+
+    initTts();
+    const initialState = getTtsState();
+    expect(initialState).toEqual({ status: 'idle' });
+
+    const listener = vi.fn();
+    subscribeTts(listener);
+
+    // A second voice arrives late (e.g. a network voice resolved by chrome.tts).
+    mockVoices = [
+      createMockVoice('zh-CN', 'Tingting'),
+      createMockVoice('zh-CN', 'Meijia'),
+    ];
+    emitVoicesChanged();
+
+    expect(listener).toHaveBeenCalled();
+    const receivedState = listener.mock.calls[listener.mock.calls.length - 1][0];
+    expect(receivedState).toEqual({ status: 'idle' });
+    expect(receivedState).not.toBe(initialState);
+  });
+
+  it('cancels web speech when allowNetworkVoices is turned off mid-speech', async () => {
+    // A local voice must also exist here, so `selected` falls back to it
+    // instead of becoming null — otherwise this test would pass by accident
+    // via the `!selected` unavailable path instead of exercising the
+    // eligibility check that actually guards a still-speaking remote voice.
+    const { configureTts, speak } = await initWithVoices([
+      createMockVoice('zh-CN', 'Google 普通话', { localService: false }),
+      createMockVoice('zh-CN', 'Tingting'),
+    ]);
+
+    configureTts({ voiceName: 'Google 普通话', rate: 1, allowNetworkVoices: true });
+    speak('你好');
+    expect(speechSynthesis.speak).toHaveBeenCalledTimes(1);
+    expect(speakCalls[0].voice?.name).toBe('Google 普通话');
+    speechSynthesis.cancel.mockClear();
+
+    configureTts({ voiceName: 'Google 普通话', rate: 1, allowNetworkVoices: false });
+
+    expect(speechSynthesis.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not cancel mid-utterance merely because a better voice arrived', async () => {
+    // Being out-ranked by a newly-arrived voice is not a reason to interrupt
+    // audio already playing — only losing eligibility (voice removed, or its
+    // network-voice consent revoked) should cancel.
+    const { configureTts, getTtsState, speak } = await initWithVoices([
+      createMockVoice('zh-CN', 'Tingting'),
+    ]);
+
+    // Auto-select, so `selected` is free to move to a better-ranked voice.
+    configureTts({ voiceName: null, rate: 1, allowNetworkVoices: false });
+    speak('你好');
+    expect(getTtsState()).toEqual({ status: 'speaking', text: '你好' });
+    expect(speakCalls[0].voice?.name).toBe('Tingting');
+    speechSynthesis.cancel.mockClear();
+
+    // A higher-ranked local voice (Premium) shows up mid-utterance via a late
+    // voiceschanged event. Tingting is still installed and still eligible —
+    // it is merely no longer the top pick.
+    mockVoices = [
+      createMockVoice('zh-CN', 'Tingting'),
+      createMockVoice('zh-CN', 'Premium Voice'),
+    ];
+    emitVoicesChanged();
+
+    expect(speechSynthesis.cancel).not.toHaveBeenCalled();
+    expect(getTtsState()).toEqual({ status: 'speaking', text: '你好' });
   });
 });

@@ -99,8 +99,9 @@ Implemented:
 - Offline Word Insight Panel with CC-CEDICT definitions, optional locally
   installed CVDICT Vietnamese definitions, tone chips, source examples,
   external dictionary links, and review reveal mode.
-- One-click Mandarin pronunciation for saved words through Chrome/OS Chinese
-  text-to-speech voices, with browser Web Speech fallback.
+- One-click Mandarin pronunciation for saved words, with voices ranked to skip
+  novelty synthesizers, a Settings → Pronunciation panel for voice/speed, and
+  an opt-in (off by default) for off-device network voices.
 - Opt-in AI Insight layer with BYO API key, provider picker, independent AI · EN
   and AI · VI outputs persisted on words, and Markdown/backup/review integration.
 - Settings page with English / zh-CN UI locale selection, full AI provider
@@ -142,16 +143,25 @@ path on individual quote cards also remains available.
 ### Pronunciation (TTS)
 
 Word cards, expanded word insight, and review reveal include a speaker button.
-Clicking it reads the saved Simplified Chinese word aloud using a `zh-CN` voice
-when available, with another `zh-*` voice as fallback. Clicking the active
-speaker button stops playback; clicking another word replaces the current
-utterance.
+Clicking it reads the saved Simplified Chinese word aloud using the
+best-ranked available `zh-*` voice. Clicking the active speaker button stops
+playback; clicking another word replaces the current utterance.
 
-Pronunciation requires no API key and stores no audio or playback state. The
-extension prefers Chrome's `tts` API and falls back to the browser Web Speech
-API. Speech is handled by the operating system or a speech engine installed in
-Chrome. Depending on the user's configured voice, that engine may use a remote
-speech service.
+Voices are ranked rather than picked by list order: Apple's Eloquence novelty
+voices (`Eddy`, `Flo`, `Grandma`, `Grandpa`, `Reed`, `Rocko`, `Sandy`,
+`Shelley`) are never auto-selected, and the OS System Voice wins over any
+score-based heuristic if the user has set one. Playback then routes to
+whichever engine — Chrome's `tts` API or the browser Web Speech API — actually
+owns the resolved voice, rather than always preferring one engine.
+
+Settings → Pronunciation offers a voice picker (ranked, with Network/System
+badges), a speed slider, a Test button to preview the pending selection, and
+an "Allow network voices" toggle. That toggle is off by default; enabling it
+opts into off-device voices, which send the spoken text to a remote provider.
+
+Pronunciation requires no API key and stores no audio or playback state.
+Speech is handled by the operating system or a speech engine installed in
+Chrome.
 
 ### Traditional Chinese Conversion
 
@@ -468,7 +478,8 @@ entrypoints/
   settings/
     index.html
     main.tsx
-    SettingsApp.tsx      # locale + SRS + AI + optional CVDICT/Kaikki settings
+    SettingsApp.tsx      # locale + SRS + AI + pronunciation + optional CVDICT/Kaikki settings
+    TtsSettingsPanel.tsx # pronunciation: voice picker, speed, Test button, network-voice opt-in
     cvdict-install.worker.ts # explicit CVDICT download, parse, and local cache
     FolderSync.tsx       # Folder Sync settings section (create/join/sync/forget)
   dashboard/
@@ -589,9 +600,9 @@ npm run zip
 
 ## To Do
 
-No tracked pending items. The most recent release (0.5.0) added the Drift (漫读)
-review mode alongside spaced repetition, and made cloze blanks sync between
-profiles.
+No tracked pending items. The most recent release (0.5.1) corrected Mandarin
+pronunciation — voices are ranked instead of taking whichever the browser listed
+first — and added Settings → Pronunciation for choosing the voice and speed.
 
 ## Useful Notes
 

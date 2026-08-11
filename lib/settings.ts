@@ -5,8 +5,12 @@ import type {
   KaikkiSettings,
   ReviewMode,
   SrsSettings,
+  TtsSettings,
   UiLocale,
 } from './types';
+import { DEFAULT_TTS_SETTINGS, clampTtsRate } from './tts-voices';
+
+export { DEFAULT_TTS_SETTINGS } from './tts-voices';
 
 export const DEFAULT_KAIKKI_SOURCE_URL =
   'https://kaikki.org/dictionary/Chinese/kaikki.org-dictionary-Chinese.jsonl';
@@ -42,6 +46,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   kaikki: DEFAULT_KAIKKI_SETTINGS,
   cvdict: DEFAULT_CVDICT_SETTINGS,
   srs: DEFAULT_SRS_SETTINGS,
+  tts: DEFAULT_TTS_SETTINGS,
 };
 
 export const settingsStorage = storage.defineItem<AppSettings>('local:settings', {
@@ -134,10 +139,11 @@ export function resetCvdict(settings: AppSettings): AppSettings {
   };
 }
 
-type StoredAppSettings = Partial<Omit<AppSettings, 'kaikki' | 'cvdict' | 'srs'>> & {
+type StoredAppSettings = Partial<Omit<AppSettings, 'kaikki' | 'cvdict' | 'srs' | 'tts'>> & {
   kaikki?: Partial<KaikkiSettings>;
   cvdict?: Partial<CvdictSettings>;
   srs?: Partial<SrsSettings>;
+  tts?: Partial<TtsSettings>;
 };
 
 export function normalizeSettings(
@@ -149,6 +155,23 @@ export function normalizeSettings(
     kaikki: { ...DEFAULT_KAIKKI_SETTINGS, ...value?.kaikki },
     cvdict: { ...DEFAULT_CVDICT_SETTINGS, ...value?.cvdict },
     srs: { ...DEFAULT_SRS_SETTINGS, ...value?.srs },
+    tts: normalizeTtsSettings(value?.tts),
+  };
+}
+
+/**
+ * Unlike the other blocks this cannot be a plain spread: `rate` reaches storage
+ * from a slider and from synced settings, so it is clamped rather than trusted.
+ */
+function normalizeTtsSettings(value: Partial<TtsSettings> | undefined): TtsSettings {
+  const merged = { ...DEFAULT_TTS_SETTINGS, ...value };
+  return {
+    voiceName:
+      typeof merged.voiceName === 'string' && merged.voiceName !== ''
+        ? merged.voiceName
+        : null,
+    rate: clampTtsRate(merged.rate),
+    allowNetworkVoices: merged.allowNetworkVoices === true,
   };
 }
 
@@ -157,4 +180,11 @@ export function setSrsSettings(
   srs: SrsSettings,
 ): AppSettings {
   return { ...settings, srs };
+}
+
+export function setTtsSettings(
+  settings: AppSettings,
+  tts: TtsSettings,
+): AppSettings {
+  return { ...settings, tts };
 }

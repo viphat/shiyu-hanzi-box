@@ -17,6 +17,7 @@ import {
   setCvdictEnabled,
   setReviewMode,
   setSrsSettings,
+  setTtsSettings,
   setUiLocale,
   watchSettings,
 } from '../lib/settings';
@@ -154,6 +155,51 @@ describe('settings helpers', () => {
     expect(reset.kaikki).toEqual(DEFAULT_SETTINGS.kaikki);
     expect(reset.srs).toEqual(DEFAULT_SETTINGS.srs);
   });
+
+  it('defaults TTS to auto voice, normal rate, and local voices only', () => {
+    expect(DEFAULT_SETTINGS.tts).toEqual({
+      voiceName: null,
+      rate: 1,
+      allowNetworkVoices: false,
+    });
+  });
+
+  it('applies TTS defaults when stored settings predate the field', () => {
+    const normalized = normalizeSettings({ uiLocale: 'en' });
+
+    expect(normalized.tts).toEqual({
+      voiceName: null,
+      rate: 1,
+      allowNetworkVoices: false,
+    });
+  });
+
+  it('clamps a stored rate at both bounds', () => {
+    expect(normalizeSettings({ tts: { rate: 0.1 } }).tts.rate).toBe(0.5);
+    expect(normalizeSettings({ tts: { rate: 9 } }).tts.rate).toBe(1.5);
+    expect(normalizeSettings({ tts: { rate: 1.2 } }).tts.rate).toBe(1.2);
+  });
+
+  it('coerces a blank stored voice name to auto', () => {
+    expect(normalizeSettings({ tts: { voiceName: '' } }).tts.voiceName).toBeNull();
+  });
+
+  it('updates TTS settings immutably', () => {
+    const next = setTtsSettings(DEFAULT_SETTINGS, {
+      voiceName: 'Tingting',
+      rate: 0.8,
+      allowNetworkVoices: true,
+    });
+
+    expect(next.tts).toEqual({
+      voiceName: 'Tingting',
+      rate: 0.8,
+      allowNetworkVoices: true,
+    });
+    expect(next.uiLocale).toBe(DEFAULT_SETTINGS.uiLocale);
+    expect(next.srs).toEqual(DEFAULT_SETTINGS.srs);
+    expect(DEFAULT_SETTINGS.tts.voiceName).toBeNull();
+  });
 });
 
 describe('SRS settings', () => {
@@ -194,6 +240,7 @@ describe('SRS settings', () => {
         newCardsPerDay: 10,
         enableFuzz: true,
       },
+      tts: DEFAULT_SETTINGS.tts,
     };
 
     expect(normalizeSettings(customized).srs).toEqual({

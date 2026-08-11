@@ -130,6 +130,35 @@ describe('i18n messages', () => {
     expect(t('zh-CN', 'cloze.aiSuggest')).toBe('建议填空');
     expect(t('zh-CN', 'cloze.aiNoSuggestions')).toBe('没有可用的填空建议。');
   });
+
+  it('defines every pronunciation settings key in both locales', () => {
+    const keys = [
+      'tts.speak',
+      'tts.settingsTitle',
+      'tts.voice',
+      'tts.voiceAuto',
+      'tts.rate',
+      'tts.test',
+      'tts.testSample',
+      'tts.allowNetwork',
+      'tts.allowNetworkHint',
+      'tts.noNetworkVoices',
+      'tts.badgeNetwork',
+      'tts.badgeSystem',
+      'tts.noVoices',
+      'tts.voiceMissing',
+    ] as const;
+
+    for (const key of keys) {
+      expect(messages.en[key], `missing en: ${key}`).toBeTruthy();
+      expect(messages['zh-CN'][key], `missing zh-CN: ${key}`).toBeTruthy();
+    }
+  });
+
+  it('names the pronunciation panel in both locales', () => {
+    expect(t('en', 'tts.settingsTitle')).toBe('Pronunciation');
+    expect(t('zh-CN', 'tts.settingsTitle')).toBe('发音');
+  });
 });
 
 describe('drift strings', () => {

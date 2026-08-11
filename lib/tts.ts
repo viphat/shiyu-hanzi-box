@@ -135,8 +135,7 @@ function updateAvailableState(): TtsState {
     return state;
   }
 
-  activeUtterance = null;
-  activeChromeSpeech = false;
+  cancelActiveSpeech();
   setState({ status: 'unavailable' });
   return state;
 }
@@ -236,6 +235,24 @@ export function subscribeTts(listener: TtsListener): () => void {
   };
 }
 
+/**
+ * Stop whatever is currently speaking, on either engine. Both speak paths and
+ * the transition to unavailable need this: the resolved voice can move between
+ * engines, so the engine that started an utterance is not necessarily the one
+ * about to start the next.
+ */
+function cancelActiveSpeech(): void {
+  if (activeChromeSpeech) {
+    activeSpeechToken += 1;
+    activeChromeSpeech = false;
+    getChromeTts()?.stop?.();
+  }
+  if (activeUtterance) {
+    activeUtterance = null;
+    getSynth()?.cancel();
+  }
+}
+
 export function speak(text: string): void {
   if (!selected) {
     setState({ status: 'unavailable' });
@@ -254,12 +271,7 @@ export function speak(text: string): void {
 function speakWithChromeTts(chromeTts: NonNullable<ChromeLike['tts']>, text: string): void {
   if (!chromeTts.speak) return;
 
-  if (activeChromeSpeech) {
-    chromeTts.stop?.();
-  } else if (activeUtterance) {
-    activeUtterance = null;
-    getSynth()?.cancel();
-  }
+  cancelActiveSpeech();
 
   activeSpeechToken += 1;
   const token = activeSpeechToken;
@@ -304,10 +316,7 @@ function speakWithWebSpeech(text: string): void {
     return;
   }
 
-  if (activeUtterance) {
-    activeUtterance = null;
-    synth.cancel();
-  }
+  cancelActiveSpeech();
 
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.voice = voice;

@@ -443,4 +443,40 @@ describe('tts', () => {
     expect(candidates[0].engines).toEqual(expect.arrayContaining(['web', 'chrome']));
     expect(candidates[0].isDefault).toBe(true);
   });
+
+  it('stops chrome tts when the resolved voice moves to a web-only engine', async () => {
+    const chromeTts = createMockChromeTts([{ lang: 'zh-CN', voiceName: 'Tingting' }]);
+    vi.stubGlobal('chrome', { tts: chromeTts });
+    const { configureTts, initTts, speak } = await importTts();
+
+    mockVoices = [
+      createMockVoice('zh-CN', 'Tingting'),
+      createMockVoice('zh-CN', 'Web Only Voice'),
+    ];
+    initTts();
+    speak('你好');
+    expect(chromeTts.speak).toHaveBeenCalledTimes(1);
+    chromeTts.stop.mockClear();
+
+    configureTts({ voiceName: 'Web Only Voice', rate: 1, allowNetworkVoices: false });
+    speak('世界');
+
+    expect(chromeTts.stop).toHaveBeenCalledTimes(1);
+    expect(speakCalls[0].text).toBe('世界');
+  });
+
+  it('cancels web speech when allowNetworkVoices is turned off mid-speech', async () => {
+    const { configureTts, speak } = await initWithVoices([
+      createMockVoice('zh-CN', 'Google 普通话', { localService: false }),
+    ]);
+
+    configureTts({ voiceName: null, rate: 1, allowNetworkVoices: true });
+    speak('你好');
+    expect(speechSynthesis.speak).toHaveBeenCalledTimes(1);
+    speechSynthesis.cancel.mockClear();
+
+    configureTts({ voiceName: null, rate: 1, allowNetworkVoices: false });
+
+    expect(speechSynthesis.cancel).toHaveBeenCalledTimes(1);
+  });
 });

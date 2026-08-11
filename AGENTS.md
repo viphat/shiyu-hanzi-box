@@ -236,6 +236,12 @@ provider API is ever called.
   under a passphrase whose derived key is remembered locally. `files.ts`: folder
   I/O. `local.ts`: `local:syncConfig`. `mutations.ts`: `local:syncMetadata` and
   queued mutations.
+- OR-Set members (tags, cloze blanks, occurrences) are removed by an explicit
+  tombstone mutation, never by dropping them from the inbox — absence merges as
+  "no opinion", so a peer resurrects them. Any write path that can drop a member
+  must plan its removals off the same snapshot it writes: the dashboard edits
+  via `useInbox.mutateWithRemovals`, a backup restore via
+  `lib/sync/restore.ts` `planRestoreRemovals`.
 - Sync triggers: on change, on UI startup, on a background `alarms` wakeup
   (`entrypoints/background/sync-mutation-handler.ts`), and on demand.
 - `entrypoints/dashboard/SyncStatusBadge.tsx` shows state;

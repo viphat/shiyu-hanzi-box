@@ -1,5 +1,5 @@
 import { Volume2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { t } from '@/lib/i18n';
 import {
   configureTts,
@@ -28,6 +28,25 @@ export function TtsSettingsPanel({
   // the picker would render once, before any voice exists, and never update.
   const [, setTtsState] = useState<TtsState>(getTtsState);
 
+  // The rate slider commits on release (pointerup/keyup/blur), not per drag
+  // step. But unmounting mid-drag fires none of those — removing a focused
+  // element from the DOM does not emit blur/focusout, so `document.
+  // activeElement` silently moves to `<body>` instead. Track whatever the
+  // drag has left uncommitted and flush it from the unmount cleanup below,
+  // rather than silently dropping the change.
+  const pendingRef = useRef<TtsSettings | null>(null);
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+
+  useEffect(
+    () => () => {
+      const pending = pendingRef.current;
+      pendingRef.current = null;
+      if (pending) onSaveRef.current(pending);
+    },
+    [],
+  );
+
   useEffect(() => {
     setDraft({
       voiceName: settings.voiceName,
@@ -55,15 +74,27 @@ export function TtsSettingsPanel({
     draft.voiceName !== null && effectiveVoiceName !== draft.voiceName;
 
   // The range input persists on release (see below), not per drag step, so
-  // its onChange only updates local state. The voice select and the network
-  // checkbox are discrete controls where saving on every change is correct.
+  // its onChange only updates local state — but records the value as
+  // "pending" so an unmount before release still flushes it. The voice
+  // select and the network checkbox are discrete controls where saving on
+  // every change is correct, so they go through `commit` and never leave
+  // anything pending.
   function updateDraft(next: TtsSettings) {
+    pendingRef.current = next;
     setDraft(next);
   }
 
   function commit(next: TtsSettings) {
+    pendingRef.current = null;
     setDraft(next);
     onSave(next);
+  }
+
+  // Fired by the three release signals below. Clears the pending ref so a
+  // subsequent unmount does not re-flush an already-saved value.
+  function commitRate() {
+    pendingRef.current = null;
+    onSave(draft);
   }
 
   return (
@@ -135,10 +166,12 @@ export function TtsSettingsPanel({
               // no guarantee the last write reflects the last value dragged.
               // All three release signals are needed — pointer for
               // mouse/touch, key for arrow-key adjustment, and blur as a
-              // backstop if a pointer release is missed.
-              onPointerUp={() => onSave(draft)}
-              onKeyUp={() => onSave(draft)}
-              onBlur={() => onSave(draft)}
+              // backstop if a pointer release is missed. None of these fire
+              // on unmount, though — that path is covered by the pending-ref
+              // flush above.
+              onPointerUp={commitRate}
+              onKeyUp={commitRate}
+              onBlur={commitRate}
               className="w-full"
             />
           </div>

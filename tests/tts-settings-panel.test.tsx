@@ -363,5 +363,47 @@ describe('TtsSettingsPanel', () => {
         expect.objectContaining({ allowNetworkVoices: true }),
       );
     });
+
+    it('flushes an uncommitted drag on unmount instead of dropping it', async () => {
+      // Removing a focused element from the DOM does not fire blur/focusout
+      // in real browsers (document.activeElement silently moves to <body>),
+      // so blur cannot be relied on to save a drag that is still in flight
+      // when the panel unmounts — e.g. the user drags the slider and then
+      // navigates away without releasing over the input.
+      const onSave = vi.fn();
+      await act(async () => {
+        root.render(<RateInputHarness onSave={onSave} />);
+      });
+
+      const rateInput = () => container.querySelector<HTMLInputElement>('#tts-rate')!;
+
+      await setRangeValue(rateInput(), '1.1');
+      await setRangeValue(rateInput(), '1.3');
+      expect(onSave).not.toHaveBeenCalled();
+
+      await act(async () => root.unmount());
+
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(onSave).toHaveBeenLastCalledWith(
+        expect.objectContaining({ rate: 1.3 }),
+      );
+    });
+
+    it('does not fire a duplicate save on unmount after a normal commit', async () => {
+      const onSave = vi.fn();
+      await act(async () => {
+        root.render(<RateInputHarness onSave={onSave} />);
+      });
+
+      const rateInput = () => container.querySelector<HTMLInputElement>('#tts-rate')!;
+
+      await setRangeValue(rateInput(), '1.2');
+      await fireOnRange(rateInput(), 'pointerup');
+      expect(onSave).toHaveBeenCalledTimes(1);
+
+      await act(async () => root.unmount());
+
+      expect(onSave).toHaveBeenCalledTimes(1);
+    });
   });
 });

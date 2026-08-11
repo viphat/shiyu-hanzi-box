@@ -84,12 +84,21 @@ export function isEloquenceVoice(name: string): boolean {
 }
 
 /**
- * Merge key pairing the same physical voice across the two engines. Web Speech
- * disambiguates a name that exists in more than one locale by appending the
- * language — `Eddy (Chinese (China mainland))` — where chrome.tts reports the
- * bare `Eddy`. Keying on the leading token alone would collapse the zh-CN and
- * zh-TW variants of one name into a single candidate, so the language is part
- * of the key.
+ * A pairing HINT for matching a chrome.tts voice onto a Web Speech one — NOT
+ * an identity, and not safe to use as one. Web Speech disambiguates a name
+ * that exists in more than one locale by appending the language — `Eddy
+ * (Chinese (China mainland))` — where chrome.tts reports the bare `Eddy`.
+ * Keying on the leading token alone would collapse the zh-CN and zh-TW
+ * variants of one name into a single candidate, so the language is part of
+ * the key.
+ *
+ * This is still lossy: quality/gender variants of one voice family —
+ * `Foo (Male)` / `Foo (Female)` — strip down to the same key despite being
+ * distinct voices. Two real, distinct web voices can share a key. Callers
+ * must therefore only pair on this key when it is unambiguous (exactly one
+ * candidate has it) and must never use it to collapse two web voices into
+ * each other — `name` is the identity there. See `collectCandidates` in
+ * `lib/tts.ts` for how the ambiguous case is handled.
  */
 export function voiceMergeKey(name: string, lang: string): string {
   return `${name.split(' (')[0].trim()} ${lang.toLowerCase()}`;

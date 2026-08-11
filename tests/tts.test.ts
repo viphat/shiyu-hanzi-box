@@ -612,6 +612,50 @@ describe('tts', () => {
     expect(speechSynthesis.cancel).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps two web voices sharing a merge key but with different full names as separate candidates', async () => {
+    // "Foo (Male)" and "Foo (Female)" share a stripped-suffix merge key
+    // ("Foo zh-cn") but are genuinely distinct voices. voiceMergeKey is only
+    // ever a pairing hint, not an identity — the exact `name` must remain
+    // the identity for web voices, so both must survive.
+    const { listVoiceCandidates } = await initWithVoices([
+      createMockVoice('zh-CN', 'Foo (Male)'),
+      createMockVoice('zh-CN', 'Foo (Female)'),
+    ]);
+
+    const names = listVoiceCandidates()
+      .map((voice) => voice.name)
+      .sort();
+    expect(names).toEqual(['Foo (Female)', 'Foo (Male)']);
+  });
+
+  it('does not pair a chrome voice when its merge key is ambiguous across two web voices', async () => {
+    // The chrome voice "Foo" collapses to the same key as both "Foo (Male)"
+    // and "Foo (Female)". Since the hint cannot tell which one it physically
+    // is, it must not silently merge into either — it becomes its own
+    // candidate instead, and the two web voices must stay untouched.
+    const chromeTts = createMockChromeTts([{ lang: 'zh-CN', voiceName: 'Foo' }]);
+    vi.stubGlobal('chrome', { tts: chromeTts });
+    const { initTts, listVoiceCandidates } = await importTts();
+
+    mockVoices = [
+      createMockVoice('zh-CN', 'Foo (Male)'),
+      createMockVoice('zh-CN', 'Foo (Female)'),
+    ];
+    initTts();
+
+    const candidates = listVoiceCandidates();
+    expect(candidates).toHaveLength(3);
+
+    const male = candidates.find((c) => c.name === 'Foo (Male)')!;
+    const female = candidates.find((c) => c.name === 'Foo (Female)')!;
+    const chromeOnly = candidates.find((c) => c.name === 'Foo')!;
+
+    expect(male.engines).toEqual(['web']);
+    expect(female.engines).toEqual(['web']);
+    expect(chromeOnly).toBeDefined();
+    expect(chromeOnly.engines).toEqual(['chrome']);
+  });
+
   it('does not cancel mid-utterance merely because a better voice arrived', async () => {
     // Being out-ranked by a newly-arrived voice is not a reason to interrupt
     // audio already playing — only losing eligibility (voice removed, or its

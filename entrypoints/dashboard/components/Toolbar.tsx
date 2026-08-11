@@ -26,7 +26,8 @@ export function Toolbar({
     inbox: Inbox;
     settings?: AppSettings;
     aiSettings?: AiSettings;
-    drift: DriftStore;
+    /** Absent when the restored file predates Drift (see restoreFullBackup). */
+    drift?: DriftStore;
   }) => Promise<void> | void;
   locale: UiLocale;
   settings: AppSettings;

@@ -82,7 +82,7 @@ export function App() {
       unwatch();
     };
   }, []);
-  const { driftStore, mutateDrift } = useDrift();
+  const { driftStore, loading: driftLoading, mutateDrift } = useDrift();
   const driftMode = settings.reviewMode === 'drift';
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<Tab>('review');
@@ -186,7 +186,7 @@ export function App() {
     };
   }, [inbox, reviewDueCount]);
 
-  if (loading || settingsLoading || onboarding.loading) {
+  if (loading || settingsLoading || driftLoading || onboarding.loading) {
     return (
       <div className="min-h-screen p-8 text-sm text-ink-secondary">
         {t(locale, 'app.loading')}
@@ -432,10 +432,21 @@ export function App() {
           onQuery={setQuery}
           onRestore={async (restored) => {
             await replace(restored.inbox);
-            if (restored.settings) await requestSyncMutation('settings', restored.settings);
+            if (restored.settings) {
+              // A v3 backup's settings blob predates reviewMode entirely — its
+              // absence means "not carried by this file", not "reset to srs".
+              // Preserve whatever the local device currently has instead of
+              // letting normalizeSettings silently kick the user out of Drift.
+              const reviewMode =
+                'reviewMode' in restored.settings ? restored.settings.reviewMode : settings.reviewMode;
+              await requestSyncMutation('settings', { ...restored.settings, reviewMode });
+            }
             if (restored.aiSettings) await requestSyncMutation('ai', restored.aiSettings);
-            // Drift lives outside the sync domain — write it directly.
-            await replaceDriftStore(restored.drift);
+            // Drift lives outside the sync domain — write it directly. Only
+            // when the file actually carried a drift key: a v3 backup (or any
+            // backup that predates Drift) must leave the local store alone
+            // rather than wiping it via an implied empty store.
+            if (restored.drift) await replaceDriftStore(restored.drift);
           }}
           locale={locale}
           settings={settings}

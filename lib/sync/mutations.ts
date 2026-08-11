@@ -6,6 +6,7 @@ import {
   replaceSettings,
   resetCvdict,
   setCvdictEnabled,
+  setReviewMode,
 } from '../settings';
 import { aiSettingsStorage } from '../ai/settings';
 import { ensureReplicaId, mutateSyncConfig } from './local';
@@ -14,6 +15,7 @@ import type {
   CvdictSettings,
   Inbox,
   QuoteTranslation,
+  ReviewMode,
   WordAiInsightPatch,
 } from '../types';
 import { projectInbox, wordKey } from './project';
@@ -165,6 +167,23 @@ export async function applyCvdictSettingsMutation(
         ? setCvdictEnabled(current, mutation.enabled)
         : resetCvdict(current);
     await replaceSettings(next);
+  });
+}
+
+/**
+ * Apply a device-local review-mode change in the shared mutation chain.
+ *
+ * reviewMode is per-device by design (matching the decision to keep CVDICT
+ * settings local): it must NOT bump appSettingsUpdatedAt, the LWW stamp for
+ * the genuinely synced uiLocale/srs.* registers, or flipping the Drift radio
+ * on one device would make that device's copy of those portable settings win
+ * the next merge and silently revert a change made elsewhere. Mirrors
+ * applyCvdictSettingsMutation exactly.
+ */
+export async function applyReviewModeMutation(reviewMode: ReviewMode): Promise<void> {
+  await applyLocalMutation('localSettings', async () => {
+    const current = await getSettings();
+    await replaceSettings(setReviewMode(current, reviewMode));
   });
 }
 

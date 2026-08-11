@@ -7,6 +7,7 @@ import {
   applyRestore,
   applyOccurrenceRemoval,
   applyQuoteTranslation,
+  applyReviewModeMutation,
   applyWordAiInsight,
   type QuoteTranslationPatch,
   type CvdictSettingsMutation,
@@ -15,7 +16,7 @@ import { setInbox } from '../../lib/storage';
 import { replaceSettings } from '../../lib/settings';
 import { aiSettingsStorage } from '../../lib/ai/settings';
 import { getSyncConfig } from '../../lib/sync/local';
-import type { AiSettings, AppSettings, Inbox, WordAiInsightPatch } from '../../lib/types';
+import type { AiSettings, AppSettings, Inbox, ReviewMode, WordAiInsightPatch } from '../../lib/types';
 
 export const SYNC_DEBOUNCE_ALARM = 'shiyu:sync-debounce';
 
@@ -30,7 +31,7 @@ export const SYNC_MUTATION_MESSAGE = 'shiyu:sync-mutation';
 
 export interface SyncMutationRequestMessage {
   type: typeof SYNC_MUTATION_MESSAGE;
-  kind: 'inbox' | 'settings' | 'cvdictSettings' | 'ai' | 'delete' | 'restore' | 'removeTags' | 'removeClozes' | 'removeOccurrence' | 'quoteTranslation' | 'wordAiInsight';
+  kind: 'inbox' | 'settings' | 'cvdictSettings' | 'reviewMode' | 'ai' | 'delete' | 'restore' | 'removeTags' | 'removeClozes' | 'removeOccurrence' | 'quoteTranslation' | 'wordAiInsight';
   payload: unknown;
 }
 
@@ -54,6 +55,8 @@ async function writeKind(kind: SyncMutationRequestMessage['kind'], payload: unkn
     await applyWordAiInsight(payload as WordAiInsightPatch);
   } else if (kind === 'cvdictSettings') {
     await applyCvdictSettingsMutation(payload as CvdictSettingsMutation);
+  } else if (kind === 'reviewMode') {
+    await applyReviewModeMutation(payload as ReviewMode);
   } else {
     await applyLocalMutation(kind, async () => {
       if (kind === 'inbox') await setInbox(payload as Inbox);

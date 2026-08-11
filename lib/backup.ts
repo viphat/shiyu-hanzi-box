@@ -339,7 +339,8 @@ function cloneInbox(inbox: Inbox): Inbox {
 }
 
 // ---------------------------------------------------------------------------
-// Full backup (format version 3): inbox + app settings + AI settings
+// Full backup (format version 4, with 3 as legacy): inbox + app settings + AI
+// settings (+ drift, added in v4)
 // ---------------------------------------------------------------------------
 
 export const FULL_BACKUP_FORMAT_VERSION = 4 as const;
@@ -418,7 +419,15 @@ export function restoreFullBackup(raw: string): {
   inbox: Inbox;
   settings?: AppSettings;
   aiSettings?: AiSettings;
-  drift: DriftStore;
+  /**
+   * Present only when the file actually carried a `drift` key. A v3 file (or
+   * any file that predates Drift) has no key at all and MUST come back as
+   * `undefined`, not `EMPTY_DRIFT_STORE` — the two are not interchangeable to
+   * the caller: an explicit empty store means "wipe", absence means "don't
+   * touch". Collapsing them here silently deletes the user's whole drift
+   * history on every pre-Drift restore.
+   */
+  drift?: DriftStore;
 } {
   let parsed: unknown;
   try {
@@ -443,12 +452,14 @@ export function restoreFullBackup(raw: string): {
       inbox: cloneInbox(value.inbox as Inbox),
       settings: value.settings as AppSettings | undefined,
       aiSettings: value.aiSettings as AiSettings | undefined,
-      // Peer-supplied and untrusted — normalize rather than cast.
+      // Peer-supplied and untrusted — normalize rather than cast. Only set the
+      // field when the key is actually present (v3 files have no `drift` key
+      // at all); a present-but-empty store still normalizes and is returned.
       drift: isRecord(value.drift)
         ? normalizeDriftStore(value.drift as Partial<DriftStore>)
-        : EMPTY_DRIFT_STORE,
+        : undefined,
     };
   }
-  // Fallback: inbox-only backup (formatVersion 2 or lower); settings/AI absent.
-  return { inbox: parseBackup(raw), drift: EMPTY_DRIFT_STORE };
+  // Fallback: inbox-only backup (formatVersion 2 or lower); settings/AI/drift absent.
+  return { inbox: parseBackup(raw) };
 }

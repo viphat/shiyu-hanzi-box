@@ -8,8 +8,8 @@ import { App } from '../entrypoints/dashboard/App';
 import { registerSyncMutationHandler } from '../entrypoints/background/sync-mutation-handler';
 import { serializeFullBackup } from '../lib/backup';
 import { getAiSettings } from '../lib/ai/settings';
-import type { DriftStore } from '../lib/drift';
-import { getDriftStore } from '../lib/drift-storage';
+import { EMPTY_DRIFT_STORE, type DriftStore } from '../lib/drift';
+import { getDriftStore, replaceDriftStore } from '../lib/drift-storage';
 import { messages } from '../lib/i18n';
 import { setInbox } from '../lib/storage';
 import { getSettings, replaceSettings } from '../lib/settings';
@@ -121,6 +121,36 @@ describe('drift mode in the dashboard', () => {
   });
 });
 
+/**
+ * Drives the actual file input Toolbar renders, mirroring the flow a user
+ * takes to restore a backup, so these tests exercise App.tsx's onRestore
+ * wiring rather than calling restoreFullBackup/replaceDriftStore directly.
+ */
+async function restoreBackupFile(container: HTMLDivElement, backupJson: string) {
+  if (!window.confirm) window.confirm = () => false;
+  const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+  const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]');
+  expect(fileInput).not.toBeNull();
+  const file = new File([backupJson], 'backup.json', { type: 'application/json' });
+  Object.defineProperty(fileInput, 'files', {
+    value: [file],
+    configurable: true,
+  });
+
+  await act(async () => {
+    fileInput!.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  // restoreBackup awaits file.text() and restoreFullBackup before calling
+  // onRestore, so give the microtask queue an extra couple of turns to
+  // settle before asserting on storage.
+  await act(async () => {});
+  await act(async () => {});
+
+  expect(confirmSpy).toHaveBeenCalled();
+  confirmSpy.mockRestore();
+}
+
 describe('drift through a full backup restore (dashboard wiring)', () => {
   it('writes the restored drift store to disk when a backup is restored via the Toolbar', async () => {
     // requestSyncMutation('settings', ...) is on this path too (App.onRestore
@@ -173,5 +203,109 @@ describe('drift through a full backup restore (dashboard wiring)', () => {
     expect(await getDriftStore()).toEqual(restoredDrift);
 
     confirmSpy.mockRestore();
+  });
+
+  it('clears an existing drift store when the restored v4 backup carries an explicit empty one', async () => {
+    registerSyncMutationHandler();
+
+    // Seed a month of drift history before restoring.
+    const existingDrift: DriftStore = {
+      weights: { 'word:你好': 2 },
+      days: { '2026-07-01': 4, '2026-07-15': 6 },
+    };
+    await replaceDriftStore(existingDrift);
+    await setInbox({ words: [word()], quotes: [] });
+    await replaceSettings({ ...(await getSettings()), uiLocale: 'en' });
+    await renderApp();
+    expect(await getDriftStore()).toEqual(existingDrift);
+
+    // A v4 backup whose drift key is present but empty — this must WIN over
+    // the existing store (it is a genuine "the user has no drift data").
+    const backupJson = serializeFullBackup(
+      { words: [word()], quotes: [] },
+      await getSettings(),
+      await getAiSettings(),
+      EMPTY_DRIFT_STORE,
+    );
+
+    await restoreBackupFile(container, backupJson);
+
+    expect(await getDriftStore()).toEqual(EMPTY_DRIFT_STORE);
+  });
+
+  it('leaves an existing drift store untouched when restoring a v3 backup (predates Drift)', async () => {
+    registerSyncMutationHandler();
+
+    const existingDrift: DriftStore = {
+      weights: { 'word:你好': -1 },
+      days: { '2026-07-01': 2 },
+    };
+    await replaceDriftStore(existingDrift);
+    await setInbox({ words: [word()], quotes: [] });
+    await replaceSettings({ ...(await getSettings()), uiLocale: 'en' });
+    await renderApp();
+    expect(await getDriftStore()).toEqual(existingDrift);
+
+    // A v3 backup has no `drift` key at all — restoring it must not touch the
+    // local drift store (it predates Drift entirely, it did not "carry" an
+    // empty one).
+    const v3Backup = JSON.stringify({
+      app: 'shiyu-hanzi-box',
+      formatVersion: 3,
+      exportedAt: '2026-06-01T00:00:00.000Z',
+      inbox: { words: [word()], quotes: [] },
+      settings: await getSettings(),
+      aiSettings: await getAiSettings(),
+    });
+
+    await restoreBackupFile(container, v3Backup);
+
+    expect(await getDriftStore()).toEqual(existingDrift);
+  });
+});
+
+describe('restoring settings preserves the local reviewMode when the backup predates it', () => {
+  it('keeps the local reviewMode when a v3 backup (no reviewMode key) is restored', async () => {
+    registerSyncMutationHandler();
+
+    await setInbox({ words: [word()], quotes: [] });
+    await replaceSettings({ ...(await getSettings()), uiLocale: 'en', reviewMode: 'drift' });
+    await renderApp();
+
+    // A v3 settings blob has no reviewMode key — JSON.stringify on a real
+    // AppSettings would still include it, so build the payload by hand to
+    // faithfully reproduce what a pre-Drift export actually looked like.
+    const settingsWithoutReviewMode = await getSettings();
+    const { reviewMode: _reviewMode, ...v3Settings } = settingsWithoutReviewMode;
+    const v3Backup = JSON.stringify({
+      app: 'shiyu-hanzi-box',
+      formatVersion: 3,
+      exportedAt: '2026-06-01T00:00:00.000Z',
+      inbox: { words: [word()], quotes: [] },
+      settings: v3Settings,
+      aiSettings: await getAiSettings(),
+    });
+
+    await restoreBackupFile(container, v3Backup);
+
+    expect((await getSettings()).reviewMode).toBe('drift');
+  });
+
+  it('applies the restored reviewMode when a v4 backup carries one', async () => {
+    registerSyncMutationHandler();
+
+    await setInbox({ words: [word()], quotes: [] });
+    await replaceSettings({ ...(await getSettings()), uiLocale: 'en', reviewMode: 'drift' });
+    await renderApp();
+
+    const backupJson = serializeFullBackup(
+      { words: [word()], quotes: [] },
+      { ...(await getSettings()), reviewMode: 'srs' },
+      await getAiSettings(),
+    );
+
+    await restoreBackupFile(container, backupJson);
+
+    expect((await getSettings()).reviewMode).toBe('srs');
   });
 });

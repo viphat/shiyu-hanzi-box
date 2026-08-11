@@ -24,7 +24,6 @@ import {
   enableKaikki,
   recordKaikkiImport,
   resetKaikki,
-  setReviewMode,
   setSrsSettings,
   setUiLocale,
 } from '@/lib/settings';
@@ -657,7 +656,13 @@ export function SettingsApp() {
                   data-testid={option.testId}
                   checked={settings.reviewMode === option.mode}
                   onChange={() => {
-                    void mutate((current) => setReviewMode(current, option.mode));
+                    // reviewMode is per-device (like CVDICT settings), so this
+                    // routes through its own mutation kind rather than
+                    // useSettings().mutate — going through 'settings' would
+                    // bump appSettingsUpdatedAt and let this device's copy of
+                    // the genuinely synced fields (uiLocale, srs.*) win the
+                    // next merge over a change made on another device.
+                    void requestSyncMutation('reviewMode', option.mode);
                   }}
                   className="mt-1 accent-[var(--color-accent)]"
                 />

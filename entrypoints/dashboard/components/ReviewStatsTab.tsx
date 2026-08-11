@@ -72,7 +72,7 @@ export function ReviewStatsTab({
         {stats.driftedToday > 0 && (
           <>
             {' · '}
-            {formatMessage(locale, 'stats.driftedToday', { n: stats.driftedToday })}
+            {formatMessage(locale, 'stats.driftedToday', { n: stats.driftedToday.toLocaleString(locale) })}
           </>
         )}
       </section>

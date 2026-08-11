@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SettingsApp } from '../entrypoints/settings/SettingsApp';
 import { registerSyncMutationHandler } from '../entrypoints/background/sync-mutation-handler';
 import { getSettings, replaceSettings } from '../lib/settings';
+import { syncMetadataStorage } from '../lib/sync/mutations';
 import { messages } from '../lib/i18n';
 
 let container: HTMLDivElement;
@@ -59,6 +60,34 @@ describe('review mode setting', () => {
         .click();
     });
     expect((await getSettings()).reviewMode).toBe('drift');
+  });
+
+  it('flipping to drift does not bump the portable-settings sync stamp', async () => {
+    // reviewMode is per-device (see lib/sync/mutations.ts applyReviewModeMutation):
+    // it must route through the 'reviewMode' mutation kind, which uses
+    // applyLocalMutation('localSettings', ...) rather than
+    // applyLocalMutation('settings', ...). The latter would bump
+    // appSettingsUpdatedAt, the last-writer-wins stamp for the genuinely synced
+    // uiLocale/srs.* registers, and let this device's copy of those win the next
+    // sync merge over a change made on another device.
+    const KNOWN_STAMP = 1_700_000_000_000;
+    await syncMetadataStorage.setValue({
+      revision: 0,
+      state: null,
+      lastDigest: null,
+      appSettingsUpdatedAt: KNOWN_STAMP,
+      aiSettingsUpdatedAt: 0,
+    });
+
+    await render();
+    await act(async () => {
+      container
+        .querySelector<HTMLInputElement>('[data-testid="review-mode-drift"]')!
+        .click();
+    });
+
+    expect((await getSettings()).reviewMode).toBe('drift');
+    expect((await syncMetadataStorage.getValue()).appSettingsUpdatedAt).toBe(KNOWN_STAMP);
   });
 
   it('switches back without touching the SRS knobs', async () => {

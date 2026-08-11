@@ -231,7 +231,7 @@ export function computeReviewStats(
     longestStreak: longest,
     streakState: state,
     reviewedToday: dayCounts.get(today) ?? 0,
-    driftedToday: driftDays[today] ?? 0,
+    driftedToday: Number.isFinite(driftDays[today]) ? driftDays[today] : 0,
     // `count` stays review-only; drift rides alongside so the heatmap can show
     // both without buildHeatmap needing to know drift exists.
     heatmap: buildHeatmap(dayCounts, now, HEATMAP_DAYS).map((cell) => ({

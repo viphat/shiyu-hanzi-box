@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-11
+
+### Added
+
+- **Drift (漫读), a second review mode.** Pick it in Settings under **Review
+  mode** and the Review tab changes character entirely: instead of a due queue,
+  saved words and quotes surface one at a time in weighted random order with
+  everything already visible — definitions, pinyin, translations, source
+  sentences. No blanks, no reveal, no grading. Two thumbs shape what comes back:
+  **see more** makes an entry up to four times as likely to reappear, **see
+  less** as little as a quarter as likely. Nothing is ever hidden — a word you
+  dismiss at HSK 4 can resurface when you are ready for it, and one thumb up
+  walks it straight back. **Skip** passes without recording an opinion, and
+  **Back** undoes a mistap exactly, restoring the previous weight rather than
+  guessing at it. The session has no end; leave whenever you like.
+- **Drift surfaces what spaced repetition cannot reach.** The pool includes
+  parked quotes — the ones with no cloze blanks — which the SRS queue can never
+  show you. It is the only way those come back into view.
+- **Drifting keeps your streak alive.** A day spent drifting counts as an active
+  day for the streak and the activity heatmap, shown outlined rather than filled
+  so it stays honest about what it was. It never counts toward lifetime reviews;
+  the Stats tab reports cards drifted as its own figure, beside reviews rather
+  than folded into them.
+- Switching between the two modes is non-destructive in both directions. While
+  you drift, the SRS queue keeps accruing normally, so switching back shows a
+  real backlog rather than a wiped or rescheduled one. Nothing about your FSRS
+  scheduling is written by Drift, ever.
+- **Cloze blanks sync between profiles.** Each blank is now a synced node with
+  its own span, hint, linked word and review history (one blank = one FSRS
+  card), unioned across devices like quote tags and word occurrences. Removing
+  a blank writes a tombstone so it stays removed instead of being resurrected
+  by a peer. Cloze review history now counts toward the streak and heatmap on
+  every device, not just the one it was reviewed on.
+
+### Changed
+
+- The full JSON backup is now **format version 4**, carrying your Drift weights
+  and daily activity alongside the inbox, settings, and AI key. Version 3
+  backups still restore exactly as before, with their settings and API key
+  intact. Restoring a backup taken before Drift existed leaves your current
+  Drift data alone rather than wiping it.
+- **Review mode is per-device and deliberately not synced**, like the CVDICT
+  setting — a laptop and a desktop can reasonably want different modes.
+
 ### Fixed
 
 - **Folder sync no longer wipes quote cloze blanks.** Clozes were never
@@ -28,15 +72,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or an edit (and undo a restore), and it now rolls back review history and
   scheduling as well — for words, quotes and each cloze blank. The restore is
   applied as a single all-or-nothing operation.
-
-### Added
-
-- **Cloze blanks sync between profiles.** Each blank is now a synced node with
-  its own span, hint, linked word and review history (one blank = one FSRS
-  card), unioned across devices like quote tags and word occurrences. Removing
-  a blank writes a tombstone so it stays removed instead of being resurrected
-  by a peer. Cloze review history now counts toward the streak and heatmap on
-  every device, not just the one it was reviewed on.
+- **One failed write no longer breaks every write after it.** Inbox updates are
+  serialized through a shared queue, and a single failure — a storage quota
+  error, or an extension context invalidated by a reload — left that queue in a
+  permanently failed state. Every later capture, edit, and review answer then
+  failed silently until the extension was reloaded. Failures are now contained
+  to the operation that caused them.
 
 ## [0.4.5] - 2026-07-26
 

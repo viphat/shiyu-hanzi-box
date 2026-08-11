@@ -1,9 +1,14 @@
 # Chrome Web Store Reviewer Notes
 
-Last updated: 2026-06-28
+Last updated: 2026-08-11 (v0.5.0)
 
 Use this file when filling the reviewer notes field during Chrome Web Store
 submission.
+
+**v0.5.0 note:** the Drift review mode added in this release introduces **no new
+permissions** and makes no network requests. It reads the same locally stored
+collection and writes a small local preference record. The permission audit in
+`chrome-web-store.md` is unchanged from v0.4.5.
 
 ## Suggested Reviewer Notes
 
@@ -17,6 +22,8 @@ The bundled CC-CEDICT dictionary is packaged with the extension and used offline
 The tts permission supports the user-triggered speaker button on saved words. Clicking the button passes only that saved word to Chrome's configured Chinese speech engine. No audio is stored, and no developer-operated speech server is used.
 
 The Review tab shows one due card at a time and schedules it locally from the user's Again, Hard, Good, or Easy rating. Word details are revealed on demand. Quotes are reviewed by cloze deletion: a newly saved quote starts "parked" with no blanks and does not enter the review queue until the user adds at least one blank. Blanks are added either manually (open "手动填空 / Mark blanks", wrap an answer span in braces, and click Apply) or via the optional "建议填空" AI suggestion. Each blank is an independent card; in review the active blank is hidden until the user clicks Reveal, which shows the full quote with the answer highlighted. When the user clicks "建议填空", the quote's sentence text is sent to the user-configured AI provider, the same opt-in path as other AI actions.
+
+The Review tab has a second mode, "Drift", selectable in Settings and off by default. Drift replaces the scheduled queue with a weighted-random browse over the user's own saved entries, showing each card with all its saved detail already visible and no grading. Two thumb buttons adjust how often an entry reappears, on a bounded scale that never removes anything. Drift requires no network access, adds no permissions, writes only to local extension storage, and never modifies the spaced-repetition scheduling data — switching modes is reversible and non-destructive.
 
 Quotes can be tagged. Tag chips are edited on each quote card with autocomplete, quotes can be filtered by tag, and a tag cloud allows rename and delete. Tags are stored locally and require no network access.
 
@@ -52,23 +59,30 @@ Use this flow for reviewer instructions or your own pre-submit smoke test.
 14. For a quote, confirm the active blank is hidden on the front; click
     **Reveal** to show the full quote with the answer highlighted, then choose a
     rating.
-15. Click the daily Markdown export action and confirm Chrome downloads a
+15. Open **Settings** and, under **Review mode**, select **Drift (漫读)**.
+    Return to the dashboard **Review** tab and confirm it now shows a single
+    card with everything already visible — no hidden answer, no rating buttons —
+    and a 👎 / Skip / 👍 row beneath it. Click 👍, confirm a different card
+    appears, then click **Back** and confirm the first card returns.
+16. Switch **Review mode** back to **Spaced repetition** and confirm the due
+    queue is intact and unchanged — no card was rescheduled by drifting.
+17. Click the daily Markdown export action and confirm Chrome downloads a
     `.md` file.
-16. Click the zip export action and confirm Chrome downloads a `.zip` file.
-17. Click the backup action and confirm Chrome downloads a `.json` backup file.
+18. Click the zip export action and confirm Chrome downloads a `.zip` file.
+19. Click the backup action and confirm Chrome downloads a `.json` backup file.
     The full backup also includes app settings and the AI API key for transfer
     to another device.
-18. Open Settings from the dashboard.
-19. Change the UI language between `zh-CN` and English, then return to the
+20. Open Settings from the dashboard.
+21. Change the UI language between `zh-CN` and English, then return to the
     dashboard to confirm labels update.
-20. Optional AI test: enable AI, choose a provider (DeepSeek, OpenAI,
+22. Optional AI test: enable AI, choose a provider (DeepSeek, OpenAI,
     OpenRouter, Google Gemini, Qwen, Moonshot, or Zhipu), enter a valid API
     key, and click Test Connection. Then return to a saved word and click
     **Ask AI**, and on a saved quote click **建议填空** to fetch suggested blanks.
-21. On a saved quote card, add a tag in the tag-chip editor and confirm a chip
+23. On a saved quote card, add a tag in the tag-chip editor and confirm a chip
     appears. Open the Quotes tab's **Cloud** sub-tab, confirm the tag appears
     sized by frequency, and click it to filter the **List** view.
-22. Optional folder sync test: open **Settings → Folder Sync**, click **Create
+24. Optional folder sync test: open **Settings → Folder Sync**, click **Create
     new vault**, choose an empty folder in the directory picker, and set a
     passphrase. Confirm the dashboard sync badge moves to **Synced** and that an
     encrypted file is written into the chosen folder. No network request is
@@ -110,7 +124,11 @@ manual fallback.
 - Chrome internal pages and some restricted pages cannot be scripted; use the
   popup manual fallback there.
 - Newly saved quotes are "parked" with no cloze blanks and do not appear in the
-  review queue until the user adds at least one blank (manually or via AI).
+  spaced-repetition queue until the user adds at least one blank (manually or
+  via AI). They do appear in Drift, which has no such requirement.
+- Drift weights and drift activity are per-device: they are carried in JSON
+  backups but are not synchronized by folder sync. The selected review mode is
+  likewise per-device.
 - AI providers are an enumerated allow-list (DeepSeek, OpenAI, OpenRouter,
   Google Gemini, Qwen, Moonshot, Zhipu); each host permission is optional and
   requested lazily only for the selected provider. All endpoints use HTTPS.

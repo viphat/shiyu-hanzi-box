@@ -4,10 +4,11 @@
 
 `shiyu-hanzi-box` (拾语汉字box) is a local-first Chrome MV3 extension built with
 WXT. It captures selected Chinese text as words or quotes, keeps the working
-inbox in `chrome.storage.local`, enriches and reviews it with FSRS spaced
-repetition, and exports daily Markdown notes. It also supports first-class quote
-tags, per-quote English translation, and optional encrypted provider-neutral
-folder sync between browser profiles.
+inbox in `chrome.storage.local`, enriches and reviews it, and exports daily
+Markdown notes. Review runs in one of two user-selected modes: FSRS spaced
+repetition, or Drift (漫读), a weighted-random browsing mode. It also supports
+first-class quote tags, per-quote English translation, and optional encrypted
+provider-neutral folder sync between browser profiles.
 
 Design specs and implementation plans live in `docs/superpowers/specs/` and
 `docs/superpowers/plans/`, named `YYYY-MM-DD-<topic>`. List those directories
@@ -199,6 +200,51 @@ affordance would break the invariant that no request can fire on a filled slot.
 - `entrypoints/dashboard/components/ReviewStatsTab.tsx`,
   `ReviewInsightReveal.tsx`, `ClozeEditor.tsx`.
 
+### Drift (漫读) — the second review mode
+
+`AppSettings.reviewMode` (`'srs' | 'drift'`, default `'srs'`) decides which view
+the Review tab renders. Drift is browsing, not testing: weighted-random draws
+over the whole collection with nothing hidden and no grading.
+
+**Drift must never write FSRS state.** No file under the drift path may touch
+`lib/srs.ts` scheduling, `ReviewState`, or `Cloze.review`. `DriftView` imports
+exactly one thing from `lib/srs.ts`, the pure `localDayKey` helper.
+
+- `lib/drift.ts`: pure model, no I/O. `DriftLevel` is a bounded exponent in
+  `[-2, 2]`; draw weight is `2 ** level`, so 0.25×–4×. `driftKey` is the sole key
+  producer and namespaces both kinds — `word:${normalized}` and `quote:${id}`.
+  **Keying a word by `entry.id` is a bug**: `pickWordId` in `lib/sync/project.ts`
+  picks a canonical id when replicas merge, so a word's id can change under the
+  user, orphaning its weight. `buildDriftPool` includes every non-archived word
+  and quote — parked quotes included, which `buildSrsQueue` skips.
+  `pickDriftCard` takes its RNG as a parameter so draws are testable, and never
+  returns null for a non-empty pool. `normalizeDriftStore` lives here, not in the
+  storage module, so `lib/backup.ts` can sanitize a restored blob without pulling
+  in a WXT storage item.
+- `lib/drift-storage.ts`: the `local:drift` item, with the same serialized
+  read-modify-write chain as `mutateInbox`. **Drift state lives outside the inbox
+  deliberately** — `lib/sync/coordinator.ts` does `setInbox(materialize(...))`, a
+  blind full replace, so anything hung off an entry but not projected into
+  `SyncState` is destroyed on every sync pass.
+- `entrypoints/dashboard/hooks/useDrift.ts`: reads and writes storage directly,
+  **not** through `requestSyncMutation` — drift is outside the sync domain.
+  `watchDriftStore` is the sole writer of hook state; do not re-add a local echo
+  after a write, which only races the watcher.
+- `entrypoints/dashboard/components/DriftView.tsx`: the view and its card. Each
+  history entry snapshots `previousLevel`, `dayKey`, and the pre-advance `recent`
+  window, and **Back restores those verbatim rather than inverting them** — an
+  inverse nudge corrupts a tap clamped at a bound, and `recent` is an evicting
+  sliding window that cannot be un-appended.
+- `reviewMode` writes route through `applyLocalMutation('localSettings', …)`
+  (see `applyReviewModeMutation`), never the portable `'settings'` kind, so
+  toggling a per-device setting does not bump `appSettingsUpdatedAt` and make
+  this device's `uiLocale`/`srs` win the next sync merge. CVDICT settings do the
+  same thing for the same reason.
+- Drift activity reaches the Stats tab as a plain `Record<dayKey, count>` third
+  argument to `computeReviewStats`. Streak and heatmap use the union of review
+  and drift days; `totalReviews`, `reviewedToday`, and heatmap `count` stay
+  SRS-only.
+
 ### Tags
 
 `lib/tags.ts` is the only owner of tag behavior: normalization (lowercase, trim,
@@ -268,9 +314,16 @@ provider API is ever called.
 - `lib/markdown.ts`: pure daily Markdown rendering.
 - `lib/export.ts`: daily export map and zip byte generation.
 - `lib/backup.ts`: versioned JSON backup. `BACKUP_FORMAT_VERSION` (2) is
-  inbox-only; `FULL_BACKUP_FORMAT_VERSION` (3) also carries `AppSettings` and
-  `AiSettings` including the API key. Restore validates each version and treats
-  unknown/lower versions as inbox-only. v1 backups still import (their quotes
+  inbox-only; `FULL_BACKUP_FORMAT_VERSION` (4) also carries `AppSettings`,
+  `AiSettings` including the API key, and the `DriftStore`. Full-backup
+  detection accepts **3 or 4** — a strict equality check against the current
+  constant would drop every v3 file into the inbox-only branch and silently
+  discard the user's settings and API key on restore. `drift` is optional on the
+  restore result and set only when the file actually carried one, so restoring a
+  pre-Drift backup leaves the local drift store alone instead of wiping it; the
+  same absent-vs-present rule applies to `reviewMode`. Restore validates each
+  version and treats unknown/lower versions as inbox-only. v1 backups still
+  import (their quotes
   load parked, carrying no cloze arrays); malformed cloze arrays are sanitized to
   `[]` on import and the quote is preserved. Optional fields added after v1 are
   deliberately not validated — `cloneJson` preserves them on round-trip.

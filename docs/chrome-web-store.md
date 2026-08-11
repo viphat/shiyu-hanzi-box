@@ -1,6 +1,6 @@
 # Chrome Web Store Submission Notes
 
-Last updated: 2026-06-28
+Last updated: 2026-08-11 (v0.5.0)
 
 ## Package
 
@@ -47,6 +47,10 @@ Markdown notes.
   or an installed speech engine.
 
 No declared required permission was found unused as of this audit.
+
+The v0.5.0 Drift review mode added **no permissions**. It reads the already
+saved collection, writes a small local preference record to extension storage,
+and makes no network requests of any kind.
 
 ## Folder Sync (no extra permission)
 

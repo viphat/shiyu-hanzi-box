@@ -12,7 +12,8 @@ The project is built with WXT, React, TypeScript, Tailwind CSS, Vitest, and
 
 Think of it as **Readwise for Chinese reading**: collect words and sentences as
 you read, enrich them with AI insights + an offline dictionary + pinyin, retain
-them with spaced repetition, and own the notes as plain files you control.
+them with spaced repetition (or just browse them at random when you'd rather
+not be quizzed), and own the notes as plain files you control.
 
 It is built for a specific learner and workflow rather than for everyone:
 
@@ -61,9 +62,9 @@ Implemented:
 - Lazy pinyin generation with `pinyin-pro`.
 - Daily Markdown rendering and zip export helpers.
 - Versioned JSON backup export and validated restore import. The inbox-only
-  backup is format version 2; the full backup (format version 3) also bundles
-  app settings and AI settings (including the API key) for a complete
-  device-to-device transfer.
+  backup is format version 2; the full backup (format version 4) also bundles
+  app settings, AI settings (including the API key), and Drift weights for a
+  complete device-to-device transfer. Version 3 backups still restore in full.
 - Dashboard page opened from the toolbar popup or extension action menu, with
   search, status filters, cards, edit controls, pinyin, export actions, and
   backup/restore controls.
@@ -89,9 +90,10 @@ Implemented:
   and thumbs up / down shape how often each one comes back. Drift never writes
   FSRS state; drift days keep the review streak alive without counting as
   reviews.
-- Dashboard **Stats** tab: a review streak with a one-grace-day freeze as the
-  hero, a 12-week activity heatmap, a 7-day due forecast, and lifetime total
-  reviews — all derived from existing local review history and fully localized.
+- Dashboard **Stats** tab: a streak with a one-grace-day freeze as the hero, a
+  12-week activity heatmap (drift-only days outlined rather than filled), a
+  7-day due forecast, and lifetime totals for reviews and cards drifted, kept
+  separate — all derived from existing local history and fully localized.
 - One-click Simplified to Taiwan Traditional conversion on word and quote cards,
   powered by OpenCC and cached on each entry.
 - Offline Word Insight Panel with CC-CEDICT definitions, optional locally
@@ -213,6 +215,24 @@ when you click an external link; enabling CVDICT adds a Hanzii shortcut without
 fetching Hanzii or requesting its host permission. AI requests are separate,
 opt-in, and use only the provider configured by you.
 
+## Review modes
+
+The Review tab runs in one of two modes, chosen in **Settings → Review mode**.
+The choice is per-device — a laptop and a desktop can differ — and switching is
+non-destructive in both directions.
+
+| | **Spaced repetition** (default) | **Drift (漫读)** |
+| --- | --- | --- |
+| What it shows | Only what is due | Anything you have saved |
+| The card | Prompt first, answer hidden | Everything visible at once |
+| What you do | Grade your recall | Say what you want to see more of |
+| Order | Scheduled by FSRS | Weighted random |
+| Ends when | The queue is empty | You stop |
+
+Both modes read the same collection. While you drift, the SRS queue keeps
+accruing normally, so switching back shows your real backlog — nothing is
+rescheduled or forgiven behind your back. Drift never writes FSRS state.
+
 ## Spaced repetition (Review tab)
 
 Saved words and quotes are scheduled by the FSRS algorithm (via `ts-fsrs`),
@@ -252,19 +272,55 @@ card to tomorrow without changing its memory state.
 All review data is stored locally on each entry and travels with JSON backups.
 No network access is required.
 
+## Drift (漫读)
+
+Drift is browsing, not testing. It exists because the SRS queue only ever
+surfaces what is due, and only what you have prepared for it — so most of your
+collection is invisible most of the time. Drift gives all of it a way back into
+view, and gives you something to do on a day you cannot face a queue.
+
+**The card.** One at a time, drawn at random from every non-archived word and
+quote, mixed. Nothing is hidden: a word card shows tone chips, pinyin,
+pronunciation, dictionary definitions and any AI insight you have already
+generated; a quote card shows the full sentence with **no cloze blanks**, plus
+its translation, tags, and source. There is no reveal step and no rating.
+
+Notably the pool includes **parked quotes** — the ones with no blanks. Spaced
+repetition can never show you those. Drift is the only place they come back.
+
+**The thumbs.**
+
+- 👍 **See more** — up to 4× as likely to reappear.
+- 👎 **See less** — as little as ¼ as likely.
+- **Skip** — moves on without recording an opinion.
+- **Back** — returns to the previous card and undoes the tap exactly.
+
+Each tap moves an entry one notch on a bounded scale. Nothing is ever muted or
+removed: an entry you thumb down becomes rare, never impossible, so a word that
+was too hard in March can resurface in June — and a single thumb up walks it
+straight back. The weights are per-device and are not synced, but they do travel
+in your JSON backup.
+
+**Drifting counts as showing up.** A drift day keeps your streak and heatmap
+alive, rendered outlined rather than filled so it stays distinguishable from a
+day of real recall practice. It never counts toward lifetime reviews; the Stats
+tab reports cards drifted as its own separate figure.
+
 ## Stats (Stats tab)
 
 The dashboard **Stats** tab summarizes your review history — nothing new is
 tracked; it is all derived from the review events already stored on each entry.
 
-- **Streak** — consecutive days with at least one review, shown as the hero. A
+- **Streak** — consecutive days on which you showed up, shown as the hero. A
   single missed day is forgiven (a one-day grace "freeze") so an occasional gap
-  does not reset the count.
-- **Activity heatmap** — the last 12 weeks (84 days) of review counts, zero-filled
-  and ending today.
+  does not reset the count. A day spent drifting counts as showing up.
+- **Activity heatmap** — the last 12 weeks (84 days), zero-filled and ending
+  today. Filled cells are review days; a drift-only day is outlined instead, so
+  the two never get confused.
 - **Due forecast** — how many cards come due over the next 7 days, with anything
-  overdue folded into today.
-- **Lifetime total** — the total number of reviews you have completed.
+  overdue folded into today. Unaffected by Drift.
+- **Lifetime totals** — reviews completed, and cards drifted, reported
+  separately. Drift is never folded into the review count.
 
 The Stats tab is fully localized (English / zh-CN) and requires no network access.
 
@@ -423,7 +479,8 @@ entrypoints/
     hooks/useAiInsight.ts # AI insight request + persistence hook
     hooks/useInbox.ts    # live WXT inbox storage hook
     hooks/useSettings.ts # live WXT settings storage hook
-    components/          # toolbar, word/quote cards, lists, tag chips, TagCloud, pinyin/traditional controls
+    hooks/useDrift.ts    # live WXT drift storage hook (bypasses sync)
+    components/          # toolbar, word/quote cards, lists, tag chips, TagCloud, ReviewQueue, DriftView, pinyin/traditional controls
 lib/
   ai/
     client.ts            # OpenAI-compatible fetch wrapper
@@ -433,8 +490,10 @@ lib/
     settings.ts          # local AI settings storage and presets
   capture.ts             # saveWord/saveQuote and word dedupe behavior
   cloze.ts               # cloze validation, overlap detection, markup parsing, hint types
+  drift.ts               # Drift model: bounded weights, pool, weighted picker (pure)
+  drift-storage.ts       # local:drift storage item, outside the inbox and sync
   export.ts              # export map + zip generation
-  backup.ts              # versioned inbox backup (v2) + full backup (v3) + restore validation
+  backup.ts              # versioned inbox backup (v2) + full backup (v4, accepts v3) + restore validation
   id.ts                  # dependency-free id generation
   tags.ts                # pure tag helpers (normalize, add/remove, counts, migrate)
   sync/                  # encrypted provider-neutral folder sync (CRDT)
@@ -530,8 +589,9 @@ npm run zip
 
 ## To Do
 
-No tracked pending items. Recent releases shipped capture undo with in-page save
-feedback (0.2.1) and review streak visibility via the Stats tab (0.4.0).
+No tracked pending items. The most recent release (0.5.0) added the Drift (漫读)
+review mode alongside spaced repetition, and made cloze blanks sync between
+profiles.
 
 ## Useful Notes
 
@@ -558,7 +618,9 @@ The current test suite covers:
 - daily export grouping, archived-entry skipping, and zip byte generation.
 - versioned backup JSON generation, legacy raw inbox restore, and invalid import
   rejection.
-- full backup (v3) generation and restore of app settings and AI settings.
+- full backup (v4) generation and restore of app settings, AI settings, and
+  Drift state, plus proof that a v3 backup still restores its settings and API
+  key rather than falling through to the inbox-only path.
 - AI settings presets, permission origin requests, English/Vietnamese prompt
   building, response parsing, client error handling, component rendering, and
   backup round-trip.
@@ -567,7 +629,14 @@ The current test suite covers:
 - FSRS migration, rating schedules, learning-step persistence, daily new-card
   caps, due-time wakeups, settings normalization, and one-card review UI.
 - review-stats computation (streak with grace day, 12-week heatmap, 7-day due
-  forecast, lifetime totals) and the Stats tab rendering.
+  forecast, lifetime totals) and the Stats tab rendering, including the union of
+  review and drift days for the streak and the drift-only heatmap treatment.
+- Drift weight clamping and reversibility, weighted draw proportions under a
+  seeded RNG, the no-repeat window, pool composition (archived excluded, parked
+  quotes included), serialized and failure-tolerant drift writes, exact-level
+  undo at a clamped bound, and the dashboard wiring end to end — including that
+  a thumb never writes FSRS state and that a restore neither drops nor wipes
+  drift data.
 - tag normalization, add/remove/count helpers, category-to-tags migration,
   OR-semantics tag filtering, and Tags Cloud rendering with rename/delete.
 - folder-sync deterministic merge, inbox projection, OR-Set tag merge,

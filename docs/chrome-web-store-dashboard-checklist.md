@@ -1,9 +1,9 @@
 # Chrome Web Store Dashboard Checklist
 
-Last updated: 2026-06-29
+Last updated: 2026-08-11 (v0.5.0)
 
 Use this when completing the Chrome Developer Dashboard fields after uploading
-`.output/shiyu-hanzi-box-0.2.1-chrome.zip`.
+`.output/shiyu-hanzi-box-0.5.0-chrome.zip`.
 
 ## Store Listing
 
@@ -30,6 +30,8 @@ Saved words include one-click Mandarin pronunciation through Chrome/OS Chinese t
 
 Quotes are reviewed by cloze deletion. A saved quote starts with no blanks (parked); the user marks which words become blanks, either manually by wrapping an answer in braces or with optional AI suggestions, and each blank becomes its own spaced-repetition card.
 
+Two ways to review, chosen in Settings. Spaced repetition shows only what is due and schedules it from your rating. Drift (漫读) shows your saved words and quotes one at a time in random order with everything already visible — no hidden answers, no grading — and thumbs up/down shape how often each one comes back. Drift surfaces quotes that have no blanks yet, which the scheduled queue never shows. Switching between the two is reversible and changes nothing about your scheduling.
+
 Organize quotes with tags: add tag chips with autocomplete on each quote card, filter by tag, and browse a frequency-sized tag cloud with rename and delete.
 
 AI is optional and disabled by default. If enabled, users bring their own API key and explicitly trigger it — "Ask AI" for a saved word, or "建议填空" to suggest cloze blanks for a quote. Generated word insight is stored locally so each word only needs to be generated once.
@@ -42,6 +44,7 @@ Core features:
 - View local dictionary definitions, pinyin tone chips, pronunciation, and source examples.
 - Tag quotes, filter by tag, and manage tags in a frequency-sized tag cloud.
 - Review saved words and quotes one card at a time with local spaced-repetition scheduling; quotes are reviewed by cloze deletion, with each blank scheduled as an independent card.
+- Or switch to Drift (漫读): a no-pressure browse of your whole collection in weighted random order, shaped by thumbs up/down, that never touches your scheduling.
 - Add cloze blanks to quotes manually (brace markup) or with optional AI suggestions.
 - Export daily Markdown notes, and back up/restore local data (inbox-only or full backup with settings and AI key).
 - Optionally sync between browser profiles through an encrypted, provider-neutral folder.

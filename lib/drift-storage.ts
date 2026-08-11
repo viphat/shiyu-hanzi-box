@@ -23,8 +23,16 @@ export async function mutateDriftStore(
   const run = writeChain
     .then(() => getDriftStore())
     .then((store) => normalizeDriftStore(fn(store)));
-  writeChain = run.then((next) => driftStorage.setValue(next));
-  await writeChain;
+  const write = run.then((next) => driftStorage.setValue(next));
+  // The module-level chain must never end up permanently rejected: a failure
+  // here (fn throwing, or setValue rejecting on quota/context-invalidation)
+  // would make every later `writeChain.then(() => getDriftStore())` skip
+  // straight to rejection without ever reading or mutating again. Swallowing
+  // the error only on the chained copy — never on `write` — keeps the chain
+  // healthy for subsequent callers while this caller still observes the
+  // rejection below.
+  writeChain = write.catch(() => {});
+  await write;
   return run;
 }
 

@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Drift **never** writes FSRS state. No task may touch `lib/srs.ts` scheduling, `ReviewState`, or `Cloze.review`.
-- Drift weights key on the word's `normalized` text, **never** on `WordEntry.id`, which `pickWordId` (`lib/sync/project.ts:400`) can change when two replicas merge. Both kinds are namespaced — `word:${normalized}` and `quote:${id}` — so the two key spaces cannot collide.
+- Drift weights key on the word's `normalized` text, **never** on `WordEntry.id`, which `pickWordId` in `lib/sync/project.ts` can change when two replicas merge. Both kinds are namespaced — `word:${normalized}` and `quote:${id}` — so the two key spaces cannot collide.
 - Drift state lives in the `local:drift` storage item. It is **not** added to the inbox, to `SyncState`, or to `materialize`'s `portableSettings`. The reason is `lib/sync/coordinator.ts:70`, which calls `setInbox(materialize(merged).inbox)` — a blind full replace, so any entry field not projected into `SyncState` is deleted on every sync pass. (Clozes used to be such a field; that was fixed separately in `9218ffa`..`837b831`, which does not change the rule.)
 - `AppSettings.reviewMode` defaults to `'srs'`. Existing users see no change until they opt in.
 - Drift levels are clamped to the closed range `[-2, 2]`. Nothing is ever hidden, muted, or removed from the pool.

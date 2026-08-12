@@ -691,6 +691,57 @@ describe('tts', () => {
     expect(standalone.engineNames.chrome).toBe('Eddy (Extra)');
   });
 
+  it('drops a chrome-only voice when chrome.tts cannot speak', async () => {
+    // A chrome-only candidate has no Web Speech spelling, so if chrome.tts
+    // exposes getVoices but not speak, nothing can pronounce it: the old
+    // behaviour reported the voice as available, rendered the button, and
+    // then silently did nothing on click.
+    const chromeTts = createMockChromeTts([{ lang: 'zh-CN', voiceName: 'Extension Voice' }]);
+    vi.stubGlobal('chrome', { tts: { ...chromeTts, speak: undefined } });
+    const { initTts, isChineseVoiceAvailable, listVoiceCandidates } = await importTts();
+
+    mockVoices = [];
+    initTts();
+
+    expect(listVoiceCandidates()).toEqual([]);
+    expect(isChineseVoiceAvailable()).toBe(false);
+  });
+
+  it('keeps a voice both engines share when chrome.tts cannot speak', async () => {
+    // The mirror of the case above: this voice still has a Web Speech
+    // spelling, so it stays usable and must not be filtered out with the
+    // chrome-only ones. The chrome list is still worth merging even when
+    // speak is missing — it is what supplies `remote` for the network gate.
+    const chromeTts = createMockChromeTts([
+      { lang: 'zh-CN', voiceName: 'Tingting', remote: true },
+    ]);
+    vi.stubGlobal('chrome', { tts: { ...chromeTts, speak: undefined } });
+    const { initTts, isChineseVoiceAvailable, listVoiceCandidates } = await importTts();
+
+    mockVoices = [createMockVoice('zh-CN', 'Tingting', { localService: true })];
+    initTts();
+
+    const candidates = listVoiceCandidates();
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].isRemote).toBe(true);
+    // Remote, and the gate is off by default — so nothing is selectable, but
+    // for the network reason rather than because the candidate vanished.
+    expect(isChineseVoiceAvailable()).toBe(false);
+  });
+
+  it('speaks a shared voice through Web Speech when chrome.tts cannot speak', async () => {
+    const chromeTts = createMockChromeTts([{ lang: 'zh-CN', voiceName: 'Tingting' }]);
+    vi.stubGlobal('chrome', { tts: { ...chromeTts, speak: undefined } });
+    const { getTtsState, initTts, speak } = await importTts();
+
+    mockVoices = [createMockVoice('zh-CN', 'Tingting')];
+    initTts();
+    speak('你好');
+
+    expect(speakCalls[0].voice?.name).toBe('Tingting');
+    expect(getTtsState()).toEqual({ status: 'speaking', text: '你好' });
+  });
+
   it('does not cancel mid-utterance merely because a better voice arrived', async () => {
     // Being out-ranked by a newly-arrived voice is not a reason to interrupt
     // audio already playing — only losing eligibility (voice removed, or its

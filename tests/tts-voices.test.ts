@@ -169,6 +169,21 @@ describe('selectVoice', () => {
     expect(chosen?.name).toBe('Tingting');
   });
 
+  it('ignores an explicit non-Chinese voice', () => {
+    // The picker only ever offers Chinese voices, so this cannot come from the
+    // UI — it comes from a settings object that crossed machines or was edited
+    // by hand. Speaking 这个词的发音 through an en-US voice is worse than
+    // falling back to the ranking.
+    const voices = [
+      candidate({ name: 'Samantha', lang: 'en-US', index: 0 }),
+      candidate({ name: 'Tingting', index: 1 }),
+    ];
+
+    const chosen = selectVoice(voices, { ...DEFAULT_TTS_SETTINGS, voiceName: 'Samantha' });
+
+    expect(chosen?.name).toBe('Tingting');
+  });
+
   it('falls back to the ranking when the saved voice is gone', () => {
     const voices = [candidate({ name: 'Tingting', index: 0 })];
 

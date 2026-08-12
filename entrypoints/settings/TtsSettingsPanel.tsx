@@ -222,14 +222,30 @@ export function TtsSettingsPanel({
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => speak(t(locale, 'tts.testSample'))}
-            className="inline-flex items-center gap-1 rounded-sm border border-border px-3 py-1.5 text-xs font-medium text-ink-secondary tracking-[1px] transition hover:border-border-hover hover:bg-paper-input"
-          >
-            <Volume2 className="h-3 w-3" /> {t(locale, 'tts.test')}
-            {getSelectedVoiceName() ? ` · ${getSelectedVoiceName()}` : ''}
-          </button>
+          {/*
+            Chinese voices existing is not the same as one being usable: every
+            candidate may be an Eloquence voice (listed, never auto-selected),
+            or every candidate may be remote with the gate off — in which case
+            each <option> above is disabled too, and the checkbox is the only
+            way out. Leaving the button live there gives a click that silently
+            does nothing and no hint about why.
+          */}
+          <div>
+            <button
+              type="button"
+              onClick={() => speak(t(locale, 'tts.testSample'))}
+              disabled={!effectiveVoiceName}
+              className="inline-flex items-center gap-1 rounded-sm border border-border px-3 py-1.5 text-xs font-medium text-ink-secondary tracking-[1px] transition hover:border-border-hover hover:bg-paper-input disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:bg-transparent"
+            >
+              <Volume2 className="h-3 w-3" /> {t(locale, 'tts.test')}
+              {effectiveVoiceName ? ` · ${effectiveVoiceName}` : ''}
+            </button>
+            {effectiveVoiceName ? null : (
+              <p className="mt-1 text-[10px] text-muted">
+                {t(locale, 'tts.noUsableVoice')}
+              </p>
+            )}
+          </div>
         </div>
       )}
     </section>

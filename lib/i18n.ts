@@ -125,6 +125,8 @@ export const messages = {
     'tts.badgeSystem': 'System',
     'tts.noVoices': 'No Chinese voice is installed on this system.',
     'tts.voiceMissing': 'The saved voice is unavailable; using the best available one.',
+    'tts.noUsableVoice':
+      'No voice can be used right now. Choose one above, or allow network voices.',
     'traditional.generate': 'Traditional',
     'traditional.show': 'Show Traditional',
     'traditional.hide': 'Hide Traditional',
@@ -452,6 +454,7 @@ export const messages = {
     'tts.badgeSystem': '系统',
     'tts.noVoices': '系统未安装中文语音。',
     'tts.voiceMissing': '已保存的语音不可用，正在使用最佳可用语音。',
+    'tts.noUsableVoice': '当前没有可用的语音。请在上方选择一个，或允许使用网络语音。',
     'traditional.generate': '繁體',
     'traditional.show': '显示繁體',
     'traditional.hide': '隐藏繁體',

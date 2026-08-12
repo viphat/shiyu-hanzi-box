@@ -9,7 +9,9 @@ import { DEFAULT_TTS_SETTINGS } from '../lib/tts-voices';
 import type { TtsSettings } from '../lib/types';
 
 const listVoiceCandidates = vi.fn();
-const getSelectedVoiceName = vi.fn(() => 'Tingting');
+// Annotated rather than inferred: the real getSelectedVoiceName returns null
+// when no voice resolves, and tests need to mock that case.
+const getSelectedVoiceName = vi.fn((): string | null => 'Tingting');
 
 vi.mock('../lib/tts', () => ({
   configureTts: vi.fn(),
@@ -192,6 +194,38 @@ describe('TtsSettingsPanel', () => {
 
     expect(html).toContain('No Chinese voice is installed on this system.');
     expect(html).not.toContain('Speed');
+  });
+
+  it('disables the test button and says why when no voice resolves', () => {
+    // Voices exist, so the panel is not in its empty state — but every one of
+    // them is remote and the network gate is off, which also leaves every
+    // <option> disabled. The test button would render, do nothing on click,
+    // and offer no hint about the checkbox being the way out.
+    listVoiceCandidates.mockReturnValue([
+      voice('Google 普通话', { isRemote: true }),
+    ]);
+    getSelectedVoiceName.mockReturnValue(null);
+
+    const html = renderToStaticMarkup(
+      <TtsSettingsPanel settings={DEFAULT_TTS_SETTINGS} locale="en" onSave={vi.fn()} />,
+    );
+
+    // Match the rendered attribute, not the substring: the button also
+    // carries `disabled:`-prefixed Tailwind classes in every state.
+    expect(html).toMatch(/<button[^>]*disabled=""/);
+    expect(html).toContain('No voice can be used right now');
+  });
+
+  it('keeps the test button live when a voice resolves', () => {
+    listVoiceCandidates.mockReturnValue([voice('Tingting')]);
+    getSelectedVoiceName.mockReturnValue('Tingting');
+
+    const html = renderToStaticMarkup(
+      <TtsSettingsPanel settings={DEFAULT_TTS_SETTINGS} locale="en" onSave={vi.fn()} />,
+    );
+
+    expect(html).not.toMatch(/<button[^>]*disabled=""/);
+    expect(html).not.toContain('No voice can be used right now');
   });
 
   it('warns when a saved network voice is present but gated off by allowNetworkVoices', () => {

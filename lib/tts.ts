@@ -93,6 +93,11 @@ function setState(next: TtsState): void {
  * own candidate instead. Guessing wrong here is worse than not merging: it
  * can point the picker's label at one physical voice while `chrome.tts.speak`
  * is told to speak another (see `VoiceCandidate.engineNames`).
+ *
+ * The chrome list is merged even when `chrome.tts.speak` is missing — it is
+ * what supplies `remote` for the network gate, which matters regardless of
+ * which engine ends up doing the speaking. Only *chrome-only* candidates are
+ * dropped in that case; see `canChromeSpeak` below.
  */
 function collectCandidates(): VoiceCandidate[] {
   const webByName = new Map<string, VoiceCandidate>();
@@ -102,6 +107,11 @@ function collectCandidates(): VoiceCandidate[] {
     const candidate: VoiceCandidate = {
       name: voice.name,
       lang: voice.lang,
+      // Fail CLOSED: an undefined `localService` counts as remote and is
+      // gated off. The Web Speech spec makes the field required, so a missing
+      // value is anomalous rather than routine, and treating it as local
+      // would let a network voice speak without the user's consent. Note the
+      // deliberate asymmetry with the chrome branch below.
       isRemote: !voice.localService,
       isDefault: voice.default === true,
       engines: ['web'],
@@ -116,6 +126,11 @@ function collectCandidates(): VoiceCandidate[] {
   });
 
   const chromeOnlyCandidates: VoiceCandidate[] = [];
+  // A chrome-only candidate has no Web Speech spelling, so `speakWithWebSpeech`
+  // cannot pronounce it. Without `chrome.tts.speak` nothing can, and offering
+  // it would put a voice in the picker — and a button on the dashboard — that
+  // silently does nothing when used.
+  const canChromeSpeak = typeof getChromeTts()?.speak === 'function';
 
   chromeVoices.forEach((voice, index) => {
     const name = voice.voiceName;
@@ -136,14 +151,28 @@ function collectCandidates(): VoiceCandidate[] {
     // rather than silently reassigning what chrome.tts is told to speak.
     if (target && !target.engineNames.chrome) {
       if (!target.engines.includes('chrome')) target.engines.push('chrome');
+      // OR, never AND: either engine calling the voice remote is enough to
+      // gate it. The merge is what lets a voice Web Speech reports as local
+      // still be caught by chrome's verdict on the same physical voice.
       target.isRemote = target.isRemote || voice.remote === true;
       target.engineNames.chrome = name;
       return;
     }
 
+    if (!canChromeSpeak) return;
+
     chromeOnlyCandidates.push({
       name,
       lang,
+      // Fail OPEN, unlike the web branch above: `remote` is optional on
+      // `chrome.tts.TtsVoice`, so an undefined value is routine rather than
+      // anomalous. Failing closed here would gate off genuinely local voices
+      // on any platform that omits the field, and for a chrome-only voice
+      // there is no web-side entry to fall back to — the user would be left
+      // with no pronunciation at all. The gap is bounded: a voice that is
+      // really remote and omits the field still has to be an extension's
+      // chrome-only voice to slip through, since anything both engines know
+      // about is caught by the OR-merge above.
       isRemote: voice.remote === true,
       isDefault: false,
       engines: ['chrome'],

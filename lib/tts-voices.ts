@@ -47,7 +47,7 @@ export const DEFAULT_TTS_SETTINGS: TtsSettings = {
  * in the picker — a user may deliberately want one — but are never chosen
  * automatically.
  */
-export const ELOQUENCE_VOICE_NAMES = [
+const ELOQUENCE_VOICE_NAMES = [
   'Eddy',
   'Flo',
   'Grandma',
@@ -104,7 +104,7 @@ export function voiceMergeKey(name: string, lang: string): string {
   return `${name.split(' (')[0].trim()} ${lang.toLowerCase()}`;
 }
 
-export function isChineseVoice(lang: string): boolean {
+function isChineseVoice(lang: string): boolean {
   return lang.toLowerCase().startsWith('zh');
 }
 
@@ -113,7 +113,7 @@ export function clampTtsRate(rate: number): number {
   return Math.min(MAX_TTS_RATE, Math.max(MIN_TTS_RATE, rate));
 }
 
-export function scoreVoice(candidate: VoiceCandidate): number {
+function scoreVoice(candidate: VoiceCandidate): number {
   let score = 0;
   const lower = candidate.name.toLowerCase();
   if (lower.includes('premium')) score += 40;
@@ -162,12 +162,17 @@ export function selectVoice(
   settings: TtsSettings,
 ): VoiceCandidate | null {
   if (settings.voiceName) {
-    // An explicit choice wins, including an Eloquence voice, but the network
-    // gate still applies: turning the toggle off must stop remote synthesis
-    // even if a remote voice is still saved.
+    // An explicit choice wins, including an Eloquence voice, but two filters
+    // still apply. The network gate: turning the toggle off must stop remote
+    // synthesis even if a remote voice is still saved. And the language: the
+    // picker only ever offers Chinese voices, so a non-Chinese `voiceName`
+    // reached storage some other way — a settings object synced from another
+    // machine, or edited by hand — and reading Chinese through an en-US voice
+    // is worse than falling back to the ranking.
     const chosen = candidates.find(
       (candidate) =>
         candidate.name === settings.voiceName &&
+        isChineseVoice(candidate.lang) &&
         (settings.allowNetworkVoices || !candidate.isRemote),
     );
     if (chosen) return chosen;

@@ -26,7 +26,8 @@ export function TtsSettingsPanel({
   const [draft, setDraft] = useState<TtsSettings>({ ...settings });
   // Chrome resolves its voice list asynchronously. Without this subscription
   // the picker would render once, before any voice exists, and never update.
-  const [, setTtsState] = useState<TtsState>(getTtsState);
+  // The state value itself is read below, to report a failed test playback.
+  const [ttsState, setTtsState] = useState<TtsState>(getTtsState);
 
   // The rate slider commits on release (pointerup/keyup/blur), not per drag
   // step. But unmounting mid-drag fires none of those — removing a focused
@@ -91,6 +92,11 @@ export function TtsSettingsPanel({
   const voices = listVoiceCandidates();
   const hasNetworkVoice = voices.some((voice) => voice.isRemote);
   const effectiveVoiceName = getSelectedVoiceName();
+  // Keyed to the sample text, matching SpeakButton: this page has no other
+  // speak source today, but an error left over from elsewhere should not
+  // appear to be a verdict on the test button.
+  const sampleText = t(locale, 'tts.testSample');
+  const testFailed = ttsState.status === 'error' && ttsState.text === sampleText;
   const savedVoiceNotInUse =
     draft.voiceName !== null && effectiveVoiceName !== draft.voiceName;
 
@@ -233,7 +239,7 @@ export function TtsSettingsPanel({
           <div>
             <button
               type="button"
-              onClick={() => speak(t(locale, 'tts.testSample'))}
+              onClick={() => speak(sampleText)}
               disabled={!effectiveVoiceName}
               className="inline-flex items-center gap-1 rounded-sm border border-border px-3 py-1.5 text-xs font-medium text-ink-secondary tracking-[1px] transition hover:border-border-hover hover:bg-paper-input disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:bg-transparent"
             >
@@ -245,6 +251,11 @@ export function TtsSettingsPanel({
                 {t(locale, 'tts.noUsableVoice')}
               </p>
             )}
+            {testFailed ? (
+              <p className="mt-1 text-[10px] text-accent-deep">
+                {t(locale, 'tts.speakFailed')}
+              </p>
+            ) : null}
           </div>
         </div>
       )}

@@ -691,6 +691,124 @@ describe('tts', () => {
     expect(standalone.engineNames.chrome).toBe('Eddy (Extra)');
   });
 
+  it('surfaces a Web Speech synthesis failure instead of returning to idle', async () => {
+    const { getTtsState, speak } = await initWithVoices([
+      createMockVoice('zh-CN', 'Tingting'),
+    ]);
+
+    speak('你好');
+    speakCalls[0].onerror?.({ error: 'synthesis-failed' } as SpeechSynthesisErrorEvent);
+
+    expect(getTtsState()).toEqual({ status: 'error', text: '你好' });
+  });
+
+  it('treats a cancelled Web Speech utterance as a normal stop, not a failure', async () => {
+    // Web Speech reports deliberate cancellation through onerror rather than
+    // onend — unlike chrome.tts, which gives it a distinct event type. A user
+    // pressing stop must not be shown a failure.
+    const { getTtsState, speak } = await initWithVoices([
+      createMockVoice('zh-CN', 'Tingting'),
+    ]);
+
+    speak('你好');
+    speakCalls[0].onerror?.({ error: 'canceled' } as SpeechSynthesisErrorEvent);
+
+    expect(getTtsState()).toEqual({ status: 'idle' });
+  });
+
+  it('treats an interrupted Web Speech utterance as a normal stop', async () => {
+    const { getTtsState, speak } = await initWithVoices([
+      createMockVoice('zh-CN', 'Tingting'),
+    ]);
+
+    speak('你好');
+    speakCalls[0].onerror?.({ error: 'interrupted' } as SpeechSynthesisErrorEvent);
+
+    expect(getTtsState()).toEqual({ status: 'idle' });
+  });
+
+  it('surfaces a chrome.tts synthesis failure', async () => {
+    const chromeTts = createMockChromeTts([{ lang: 'zh-CN', voiceName: 'Tingting' }]);
+    vi.stubGlobal('chrome', { tts: chromeTts });
+    const { getTtsState, initTts, speak } = await importTts();
+
+    mockVoices = [createMockVoice('zh-CN', 'Tingting')];
+    initTts();
+    speak('你好');
+    chromeSpeakOptions[0].onEvent?.({ type: 'error', errorMessage: 'engine died' });
+
+    expect(getTtsState()).toEqual({ status: 'error', text: '你好' });
+  });
+
+  it('keeps chrome.tts interruption and cancellation out of the error state', async () => {
+    const chromeTts = createMockChromeTts([{ lang: 'zh-CN', voiceName: 'Tingting' }]);
+    vi.stubGlobal('chrome', { tts: chromeTts });
+    const { getTtsState, initTts, speak } = await importTts();
+
+    mockVoices = [createMockVoice('zh-CN', 'Tingting')];
+    initTts();
+    speak('你好');
+    chromeSpeakOptions[0].onEvent?.({ type: 'interrupted' });
+
+    expect(getTtsState()).toEqual({ status: 'idle' });
+  });
+
+  it('clears the error state on the next utterance', async () => {
+    const { getTtsState, speak } = await initWithVoices([
+      createMockVoice('zh-CN', 'Tingting'),
+    ]);
+
+    speak('你好');
+    speakCalls[0].onerror?.({ error: 'synthesis-failed' } as SpeechSynthesisErrorEvent);
+    expect(getTtsState()).toEqual({ status: 'error', text: '你好' });
+
+    speak('世界');
+
+    expect(getTtsState()).toEqual({ status: 'speaking', text: '世界' });
+  });
+
+  it('clears the error state on stop', async () => {
+    const { getTtsState, speak, stop } = await initWithVoices([
+      createMockVoice('zh-CN', 'Tingting'),
+    ]);
+
+    speak('你好');
+    speakCalls[0].onerror?.({ error: 'synthesis-failed' } as SpeechSynthesisErrorEvent);
+    stop();
+
+    expect(getTtsState()).toEqual({ status: 'idle' });
+  });
+
+  it('clears the error state when the voice list changes', async () => {
+    const { getTtsState, speak } = await initWithVoices([
+      createMockVoice('zh-CN', 'Tingting'),
+    ]);
+
+    speak('你好');
+    speakCalls[0].onerror?.({ error: 'synthesis-failed' } as SpeechSynthesisErrorEvent);
+
+    mockVoices = [
+      createMockVoice('zh-CN', 'Tingting'),
+      createMockVoice('zh-CN', 'Meijia'),
+    ];
+    emitVoicesChanged();
+
+    expect(getTtsState()).toEqual({ status: 'idle' });
+  });
+
+  it('notifies subscribers when an utterance fails', async () => {
+    const { speak, subscribeTts } = await initWithVoices([
+      createMockVoice('zh-CN', 'Tingting'),
+    ]);
+    const states: unknown[] = [];
+    subscribeTts((next) => states.push(next));
+
+    speak('你好');
+    speakCalls[0].onerror?.({ error: 'synthesis-failed' } as SpeechSynthesisErrorEvent);
+
+    expect(states).toContainEqual({ status: 'error', text: '你好' });
+  });
+
   it('drops a chrome-only voice when chrome.tts cannot speak', async () => {
     // A chrome-only candidate has no Web Speech spelling, so if chrome.tts
     // exposes getVoices but not speak, nothing can pronounce it: the old

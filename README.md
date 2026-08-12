@@ -600,9 +600,9 @@ npm run zip
 
 ## To Do
 
-No tracked pending items. The most recent release (0.5.1) corrected Mandarin
-pronunciation — voices are ranked instead of taking whichever the browser listed
-first — and added Settings → Pronunciation for choosing the voice and speed.
+No tracked pending items. The most recent release (0.5.2) followed 0.5.1's
+pronunciation rework with fixes to the speed slider's save behaviour and to how
+voices are matched across the two speech engines.
 
 ## Useful Notes
 

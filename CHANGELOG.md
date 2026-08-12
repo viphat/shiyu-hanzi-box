@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-08-12
+
+### Fixed
+
+- The pronunciation speed slider wrote to storage on every step of a drag, so a
+  single adjustment fired a burst of overlapping saves and the value that landed
+  was not reliably the one you released on. It now saves once, when you let go —
+  and the change survives being interrupted by a write from another open Settings
+  page, or by closing the page mid-drag.
+- Voices offered by the two speech engines were matched by exact name, but the
+  engines spell some names differently: a voice available in more than one
+  Chinese locale is reported as `Eddy (Chinese (China mainland))` by one and as
+  plain `Eddy` by the other. The same voice could therefore appear twice in the
+  picker, and a voice one engine considered on-device while the other considered
+  it remote could slip past the network-voices setting. Voices are now paired
+  across engines only when the match is unambiguous, and a voice either engine
+  calls remote is treated as remote.
+
 ## [0.5.1] - 2026-08-11
 
 ### Fixed

@@ -600,9 +600,10 @@ npm run zip
 
 ## To Do
 
-No tracked pending items. The most recent release (0.5.2) followed 0.5.1's
-pronunciation rework with fixes to the speed slider's save behaviour and to how
-voices are matched across the two speech engines.
+No tracked pending items. The most recent release (0.5.3) closed out the review
+of the pronunciation rework: voices that cannot actually be spoken are no longer
+offered, and a synthesis failure now shows on the button instead of leaving the
+user with silence and no explanation.
 
 ## Useful Notes
 

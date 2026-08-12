@@ -479,6 +479,89 @@ describe('tts', () => {
     expect(speakCalls[0].text).toBe('世界');
   });
 
+  it('merges a voice the two engines spell differently (Web Speech language-suffixed, chrome bare) into one candidate', async () => {
+    // Web Speech disambiguates a name that exists in more than one locale by
+    // appending the language; chrome.tts reports the bare name for the same
+    // physical voice. Keying the merge on exact name (the old behaviour)
+    // would list this voice twice.
+    const chromeTts = createMockChromeTts([{ lang: 'zh-CN', voiceName: 'Eddy' }]);
+    vi.stubGlobal('chrome', { tts: chromeTts });
+    const { initTts, listVoiceCandidates } = await importTts();
+
+    mockVoices = [createMockVoice('zh-CN', 'Eddy (Chinese (China mainland))')];
+    initTts();
+
+    const candidates = listVoiceCandidates();
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].engines).toEqual(expect.arrayContaining(['web', 'chrome']));
+    // The Web Speech spelling is the display identity: it carries the
+    // language, which is genuinely more informative to the user.
+    expect(candidates[0].name).toBe('Eddy (Chinese (China mainland))');
+  });
+
+  it('speaks a merged voice by passing each engine its own spelling', async () => {
+    const chromeTts = createMockChromeTts([{ lang: 'zh-CN', voiceName: 'Eddy' }]);
+    vi.stubGlobal('chrome', { tts: chromeTts });
+    const { configureTts, initTts, speak } = await importTts();
+
+    mockVoices = [createMockVoice('zh-CN', 'Eddy (Chinese (China mainland))')];
+    initTts();
+
+    configureTts({
+      voiceName: 'Eddy (Chinese (China mainland))',
+      rate: 1,
+      allowNetworkVoices: false,
+    });
+    speak('你好');
+
+    // chrome.tts is preferred when the resolved voice supports it, and it
+    // must receive the bare chrome spelling, not the Web Speech display name.
+    expect(chromeTts.speak).toHaveBeenCalledWith(
+      '你好',
+      expect.objectContaining({ voiceName: 'Eddy' }),
+    );
+  });
+
+  it('treats a voice as remote when only chrome.tts reports it as remote, gating it off by default', async () => {
+    // The defensive OR-merge of isRemote across engines only fires once the
+    // two engines' spellings of one voice are actually recognized as the
+    // same candidate. This is the security-relevant half of the fix: a voice
+    // Web Speech calls local must not escape the network-voices gate under
+    // its web-side name while chrome.tts calls the same physical voice remote.
+    const chromeTts = createMockChromeTts([
+      { lang: 'zh-CN', voiceName: 'Eddy', remote: true },
+    ]);
+    vi.stubGlobal('chrome', { tts: chromeTts });
+    const { configureTts, initTts, isChineseVoiceAvailable, listVoiceCandidates } =
+      await importTts();
+
+    mockVoices = [
+      createMockVoice('zh-CN', 'Eddy (Chinese (China mainland))', { localService: true }),
+    ];
+    initTts();
+
+    const candidates = listVoiceCandidates();
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].isRemote).toBe(true);
+
+    // Eddy is also an Eloquence voice and thus never auto-selected on its
+    // own merits, so pin the choice explicitly to isolate the remote gate.
+    configureTts({
+      voiceName: 'Eddy (Chinese (China mainland))',
+      rate: 1,
+      allowNetworkVoices: false,
+    });
+    expect(isChineseVoiceAvailable()).toBe(false);
+
+    configureTts({
+      voiceName: 'Eddy (Chinese (China mainland))',
+      rate: 1,
+      allowNetworkVoices: true,
+    });
+    expect(isChineseVoiceAvailable()).toBe(true);
+  });
+
   it('notifies subscribers with a fresh state object when voices resolve later while idle', async () => {
     // Regression test: chrome.tts resolves voices asynchronously, often after
     // speechSynthesis has already settled the module into 'idle'. If
@@ -527,6 +610,85 @@ describe('tts', () => {
     configureTts({ voiceName: 'Google 普通话', rate: 1, allowNetworkVoices: false });
 
     expect(speechSynthesis.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps two web voices sharing a merge key but with different full names as separate candidates', async () => {
+    // "Foo (Male)" and "Foo (Female)" share a stripped-suffix merge key
+    // ("Foo zh-cn") but are genuinely distinct voices. voiceMergeKey is only
+    // ever a pairing hint, not an identity — the exact `name` must remain
+    // the identity for web voices, so both must survive.
+    const { listVoiceCandidates } = await initWithVoices([
+      createMockVoice('zh-CN', 'Foo (Male)'),
+      createMockVoice('zh-CN', 'Foo (Female)'),
+    ]);
+
+    const names = listVoiceCandidates()
+      .map((voice) => voice.name)
+      .sort();
+    expect(names).toEqual(['Foo (Female)', 'Foo (Male)']);
+  });
+
+  it('does not pair a chrome voice when its merge key is ambiguous across two web voices', async () => {
+    // The chrome voice "Foo" collapses to the same key as both "Foo (Male)"
+    // and "Foo (Female)". Since the hint cannot tell which one it physically
+    // is, it must not silently merge into either — it becomes its own
+    // candidate instead, and the two web voices must stay untouched.
+    const chromeTts = createMockChromeTts([{ lang: 'zh-CN', voiceName: 'Foo' }]);
+    vi.stubGlobal('chrome', { tts: chromeTts });
+    const { initTts, listVoiceCandidates } = await importTts();
+
+    mockVoices = [
+      createMockVoice('zh-CN', 'Foo (Male)'),
+      createMockVoice('zh-CN', 'Foo (Female)'),
+    ];
+    initTts();
+
+    const candidates = listVoiceCandidates();
+    expect(candidates).toHaveLength(3);
+
+    const male = candidates.find((c) => c.name === 'Foo (Male)')!;
+    const female = candidates.find((c) => c.name === 'Foo (Female)')!;
+    const chromeOnly = candidates.find((c) => c.name === 'Foo')!;
+
+    expect(male.engines).toEqual(['web']);
+    expect(female.engines).toEqual(['web']);
+    expect(chromeOnly).toBeDefined();
+    expect(chromeOnly.engines).toEqual(['chrome']);
+  });
+
+  it('keeps a second chrome voice standing alone rather than re-pairing it onto an already-paired candidate', async () => {
+    // Two chrome.tts voices ("Eddy" and "Eddy (Extra)") both resolve, via
+    // the stripped-suffix merge key, to the same single web candidate
+    // ("Eddy (Chinese (China mainland))"). The first pairs normally. The
+    // second must not silently overwrite the already-set chrome spelling
+    // (which would point chrome.tts.speak at the wrong physical voice) —
+    // it must become its own standalone candidate instead, and neither
+    // voice may be dropped.
+    const chromeTts = createMockChromeTts([
+      { lang: 'zh-CN', voiceName: 'Eddy' },
+      { lang: 'zh-CN', voiceName: 'Eddy (Extra)' },
+    ]);
+    vi.stubGlobal('chrome', { tts: chromeTts });
+    const { initTts, listVoiceCandidates } = await importTts();
+
+    mockVoices = [
+      createMockVoice('zh-CN', 'Eddy (Chinese (China mainland))'),
+    ];
+    initTts();
+
+    const candidates = listVoiceCandidates();
+    expect(candidates).toHaveLength(2);
+
+    const paired = candidates.find((c) => c.name === 'Eddy (Chinese (China mainland))')!;
+    const standalone = candidates.find((c) => c.name === 'Eddy (Extra)')!;
+
+    expect(paired).toBeDefined();
+    expect(paired.engines).toEqual(expect.arrayContaining(['web', 'chrome']));
+    expect(paired.engineNames.chrome).toBe('Eddy');
+
+    expect(standalone).toBeDefined();
+    expect(standalone.engines).toEqual(['chrome']);
+    expect(standalone.engineNames.chrome).toBe('Eddy (Extra)');
   });
 
   it('does not cancel mid-utterance merely because a better voice arrived', async () => {

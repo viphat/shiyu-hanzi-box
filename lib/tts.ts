@@ -4,6 +4,7 @@ import {
   DEFAULT_TTS_SETTINGS,
   listChineseVoices,
   selectVoice,
+  voiceMergeKey,
   type VoiceCandidate,
 } from './tts-voices';
 import type { TtsSettings } from './types';
@@ -76,44 +77,82 @@ function setState(next: TtsState): void {
 }
 
 /**
- * Merge both engines' voice lists by name. Neither list is a superset:
- * `speechSynthesis` reports which voice is the OS default, and `chrome.tts`
- * reports voices supplied by TTS-engine extensions along with their remoteness.
+ * Merge both engines' voice lists by physical voice. Neither list is a
+ * superset: `speechSynthesis` reports which voice is the OS default, and
+ * `chrome.tts` reports voices supplied by TTS-engine extensions along with
+ * their remoteness.
+ *
+ * Web voices are never collapsed into each other — `name` is their identity.
+ * `voiceMergeKey` only ever pairs a *chrome* voice onto a web one, and only
+ * as a hint: exact name match wins first (chrome sometimes reports the
+ * identical string), and the stripped-suffix key is consulted only when no
+ * exact match exists, and only pairs when it identifies exactly one web
+ * voice. Quality/gender variants of a voice family — `Foo (Male)` /
+ * `Foo (Female)` — collide on that stripped key despite being distinct
+ * voices, so an ambiguous key must NOT pair; the chrome voice becomes its
+ * own candidate instead. Guessing wrong here is worse than not merging: it
+ * can point the picker's label at one physical voice while `chrome.tts.speak`
+ * is told to speak another (see `VoiceCandidate.engineNames`).
  */
 function collectCandidates(): VoiceCandidate[] {
-  const byName = new Map<string, VoiceCandidate>();
+  const webByName = new Map<string, VoiceCandidate>();
+  const webByKey = new Map<string, VoiceCandidate[]>();
 
   webVoices.forEach((voice, index) => {
-    byName.set(voice.name, {
+    const candidate: VoiceCandidate = {
       name: voice.name,
       lang: voice.lang,
       isRemote: !voice.localService,
       isDefault: voice.default === true,
       engines: ['web'],
+      engineNames: { web: voice.name },
       index,
-    });
+    };
+    webByName.set(voice.name, candidate);
+    const key = voiceMergeKey(voice.name, voice.lang);
+    const bucket = webByKey.get(key);
+    if (bucket) bucket.push(candidate);
+    else webByKey.set(key, [candidate]);
   });
+
+  const chromeOnlyCandidates: VoiceCandidate[] = [];
 
   chromeVoices.forEach((voice, index) => {
     const name = voice.voiceName;
     if (!name) return;
-    const existing = byName.get(name);
-    if (existing) {
-      if (!existing.engines.includes('chrome')) existing.engines.push('chrome');
-      existing.isRemote = existing.isRemote || voice.remote === true;
+    const lang = voice.lang ?? '';
+
+    // Exact name match is definitive identity, not a hint — try it first.
+    let target = webByName.get(name);
+
+    if (!target) {
+      const bucket = webByKey.get(voiceMergeKey(name, lang));
+      // Pair on the stripped-suffix hint only when it is unambiguous.
+      if (bucket && bucket.length === 1) target = bucket[0];
+    }
+
+    // Never overwrite an already-paired web candidate's chrome spelling: a
+    // second chrome voice landing on the same target stays standalone
+    // rather than silently reassigning what chrome.tts is told to speak.
+    if (target && !target.engineNames.chrome) {
+      if (!target.engines.includes('chrome')) target.engines.push('chrome');
+      target.isRemote = target.isRemote || voice.remote === true;
+      target.engineNames.chrome = name;
       return;
     }
-    byName.set(name, {
+
+    chromeOnlyCandidates.push({
       name,
-      lang: voice.lang ?? '',
+      lang,
       isRemote: voice.remote === true,
       isDefault: false,
       engines: ['chrome'],
+      engineNames: { chrome: name },
       index: webVoices.length + index,
     });
   });
 
-  return [...byName.values()];
+  return [...webByName.values(), ...chromeOnlyCandidates];
 }
 
 function resolveSelection(): void {
@@ -310,7 +349,7 @@ function speakWithChromeTts(chromeTts: NonNullable<ChromeLike['tts']>, text: str
   try {
     chromeTts.speak(text, {
       lang,
-      voiceName: selected?.name,
+      voiceName: selected?.engineNames.chrome,
       enqueue: false,
       volume: 1,
       rate: settings.rate,
@@ -338,7 +377,7 @@ function speakWithChromeTts(chromeTts: NonNullable<ChromeLike['tts']>, text: str
 
 function speakWithWebSpeech(text: string): void {
   const synth = getSynth();
-  const voice = findWebVoice(selected?.name);
+  const voice = findWebVoice(selected?.engineNames.web);
   if (!synth || !voice || typeof SpeechSynthesisUtterance === 'undefined') {
     activeUtterance = null;
     setState({ status: 'unavailable' });

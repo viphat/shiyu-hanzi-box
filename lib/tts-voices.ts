@@ -7,7 +7,12 @@ import type { TtsSettings } from './types';
  * `chrome.tts` knows about voices supplied by TTS-engine extensions.
  */
 export type VoiceCandidate = {
-  /** Display name as the engine reports it. Also the merge key across engines. */
+  /**
+   * Display identity: what the picker shows and what `TtsSettings.voiceName`
+   * stores. The Web Speech spelling when present (its language suffix is
+   * genuinely more informative to the user), otherwise the chrome spelling.
+   * NOT necessarily what either engine accepts back — see `engineNames`.
+   */
   name: string;
   lang: string;
   /** Synthesized off-device — Web Speech `!localService`, or chrome's `remote`. */
@@ -15,6 +20,13 @@ export type VoiceCandidate = {
   /** The OS System Voice. Web Speech only; chrome-only voices are never default. */
   isDefault: boolean;
   engines: Array<'chrome' | 'web'>;
+  /**
+   * The name each engine actually accepts for this physical voice. The two
+   * engines spell the same voice differently when Web Speech disambiguates a
+   * name that exists in more than one locale by appending the language —
+   * `speak()` must pass each engine its own spelling, not the merged `name`.
+   */
+  engineNames: { web?: string; chrome?: string };
   /** Position in the source list, so equal scores break deterministically. */
   index: number;
 };
@@ -69,6 +81,27 @@ const KNOWN_GOOD_VOICE_NAMES = [
 export function isEloquenceVoice(name: string): boolean {
   const leading = name.split(' (')[0].trim();
   return ELOQUENCE_VOICE_NAMES.some((eloquence) => eloquence === leading);
+}
+
+/**
+ * A pairing HINT for matching a chrome.tts voice onto a Web Speech one — NOT
+ * an identity, and not safe to use as one. Web Speech disambiguates a name
+ * that exists in more than one locale by appending the language — `Eddy
+ * (Chinese (China mainland))` — where chrome.tts reports the bare `Eddy`.
+ * Keying on the leading token alone would collapse the zh-CN and zh-TW
+ * variants of one name into a single candidate, so the language is part of
+ * the key.
+ *
+ * This is still lossy: quality/gender variants of one voice family —
+ * `Foo (Male)` / `Foo (Female)` — strip down to the same key despite being
+ * distinct voices. Two real, distinct web voices can share a key. Callers
+ * must therefore only pair on this key when it is unambiguous (exactly one
+ * candidate has it) and must never use it to collapse two web voices into
+ * each other — `name` is the identity there. See `collectCandidates` in
+ * `lib/tts.ts` for how the ambiguous case is handled.
+ */
+export function voiceMergeKey(name: string, lang: string): string {
+  return `${name.split(' (')[0].trim()} ${lang.toLowerCase()}`;
 }
 
 export function isChineseVoice(lang: string): boolean {

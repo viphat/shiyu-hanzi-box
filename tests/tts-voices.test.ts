@@ -6,6 +6,7 @@ import {
   listChineseVoices,
   rankVoices,
   selectVoice,
+  voiceMergeKey,
   type VoiceCandidate,
 } from '../lib/tts-voices';
 
@@ -15,6 +16,7 @@ function candidate(overrides: Partial<VoiceCandidate> & { name: string }): Voice
     isRemote: false,
     isDefault: false,
     engines: ['web'],
+    engineNames: { web: overrides.name },
     index: 0,
     ...overrides,
   };
@@ -194,6 +196,30 @@ describe('listChineseVoices', () => {
       'Tingting',
       'Eddy (Chinese (China mainland))',
     ]);
+  });
+});
+
+describe('voiceMergeKey', () => {
+  it('produces the same key for the two engines\' spellings of one voice', () => {
+    const webKey = voiceMergeKey('Eddy (Chinese (China mainland))', 'zh-CN');
+    const chromeKey = voiceMergeKey('Eddy', 'zh-CN');
+
+    expect(webKey).toBe(chromeKey);
+  });
+
+  it('keeps the zh-CN and zh-TW variants of one name distinct', () => {
+    const mainland = voiceMergeKey('Eddy (Chinese (China mainland))', 'zh-CN');
+    const taiwan = voiceMergeKey('Eddy (Chinese (Taiwan))', 'zh-TW');
+
+    expect(mainland).not.toBe(taiwan);
+  });
+
+  it('agrees across engines for a single-locale voice that is not disambiguated', () => {
+    expect(voiceMergeKey('Tingting', 'zh-CN')).toBe(voiceMergeKey('Tingting', 'zh-CN'));
+  });
+
+  it('is case-insensitive on the language tag', () => {
+    expect(voiceMergeKey('Eddy', 'zh-CN')).toBe(voiceMergeKey('Eddy', 'ZH-CN'));
   });
 });
 

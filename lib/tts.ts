@@ -12,7 +12,14 @@ import type { TtsSettings } from './types';
 export type TtsState =
   | { status: 'unavailable' }
   | { status: 'idle' }
-  | { status: 'speaking'; text: string };
+  | { status: 'speaking'; text: string }
+  /**
+   * Synthesis was attempted and failed. Carries the text so the specific
+   * control that asked for it can show the failure, rather than every
+   * SpeakButton on the page reacting at once. Cleared by the next utterance,
+   * by `stop`, or by any change to the voice list — never on a timer.
+   */
+  | { status: 'error'; text: string };
 
 export type TtsListener = (state: TtsState) => void;
 
@@ -385,9 +392,17 @@ function speakWithChromeTts(chromeTts: NonNullable<ChromeLike['tts']>, text: str
       desiredEventTypes: ['start', 'end', 'error', 'interrupted', 'cancelled'],
       onEvent: (event: Browser.tts.TtsEvent) => {
         if (token !== activeSpeechToken) return;
+        // chrome.tts keeps interruption and cancellation in their own event
+        // types, so `error` here is a genuine synthesis failure — no need for
+        // the code inspection the Web Speech path below requires.
+        if (event.type === 'error') {
+          activeChromeSpeech = false;
+          speakingVoiceName = null;
+          setState({ status: 'error', text });
+          return;
+        }
         if (
           event.type === 'end' ||
-          event.type === 'error' ||
           event.type === 'interrupted' ||
           event.type === 'cancelled'
         ) {
@@ -402,6 +417,20 @@ function speakWithChromeTts(chromeTts: NonNullable<ChromeLike['tts']>, text: str
     speakingVoiceName = null;
     speakWithWebSpeech(text);
   }
+}
+
+/**
+ * Web Speech routes deliberate cancellation through `onerror` rather than
+ * `onend`: both `synth.cancel()` and an utterance preempted by a newer one
+ * arrive here. Those are normal stops and must not be reported as failures.
+ * The `activeUtterance` guard already swallows the cancels this module
+ * initiates itself — this covers the ones the browser decides on.
+ *
+ * Anything else, including an absent or unrecognized code, counts as a real
+ * failure: a diagnostic the user can see beats one that is silently correct.
+ */
+function isDeliberateStop(event: SpeechSynthesisErrorEvent | undefined): boolean {
+  return event?.error === 'canceled' || event?.error === 'interrupted';
 }
 
 function speakWithWebSpeech(text: string): void {
@@ -425,11 +454,13 @@ function speakWithWebSpeech(text: string): void {
     speakingVoiceName = null;
     setState({ status: 'idle' });
   };
-  utterance.onerror = () => {
+  utterance.onerror = (event) => {
     if (activeUtterance !== utterance) return;
     activeUtterance = null;
     speakingVoiceName = null;
-    setState({ status: 'idle' });
+    setState(
+      isDeliberateStop(event) ? { status: 'idle' } : { status: 'error', text },
+    );
   };
 
   activeUtterance = utterance;

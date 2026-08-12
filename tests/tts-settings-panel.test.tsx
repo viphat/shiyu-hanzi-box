@@ -5,19 +5,23 @@ import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TtsSettingsPanel } from '../entrypoints/settings/TtsSettingsPanel';
+import type { TtsState } from '../lib/tts';
 import { DEFAULT_TTS_SETTINGS } from '../lib/tts-voices';
 import type { TtsSettings } from '../lib/types';
 
 const listVoiceCandidates = vi.fn();
+const getTtsState = vi.fn((): TtsState => ({ status: 'idle' }));
 // Annotated rather than inferred: the real getSelectedVoiceName returns null
 // when no voice resolves, and tests need to mock that case.
 const getSelectedVoiceName = vi.fn((): string | null => 'Tingting');
 
 vi.mock('../lib/tts', () => ({
   configureTts: vi.fn(),
-  initTts: vi.fn(),
+  // The real initTts returns the resolved TtsState, and the panel seeds its
+  // state from that return value — a mock returning undefined is unfaithful.
+  initTts: () => getTtsState(),
   speak: vi.fn(),
-  getTtsState: () => ({ status: 'idle' }),
+  getTtsState: () => getTtsState(),
   subscribeTts: () => () => {},
   listVoiceCandidates: () => listVoiceCandidates(),
   getSelectedVoiceName: () => getSelectedVoiceName(),
@@ -116,6 +120,29 @@ describe('TtsSettingsPanel', () => {
   beforeEach(() => {
     listVoiceCandidates.mockReturnValue([voice('Tingting')]);
     getSelectedVoiceName.mockReturnValue('Tingting');
+    getTtsState.mockReturnValue({ status: 'idle' });
+  });
+
+  it('reports a failed test playback', () => {
+    // The Test button is where a user goes to diagnose pronunciation, so a
+    // failure there returning silently to idle is the worst place to hide it.
+    getTtsState.mockReturnValue({ status: 'error', text: '这个词的发音' });
+
+    const html = renderToStaticMarkup(
+      <TtsSettingsPanel settings={DEFAULT_TTS_SETTINGS} locale="en" onSave={vi.fn()} />,
+    );
+
+    expect(html).toContain('Pronunciation failed');
+  });
+
+  it('says nothing about failure while playback is healthy', () => {
+    getTtsState.mockReturnValue({ status: 'speaking', text: '这个词的发音' });
+
+    const html = renderToStaticMarkup(
+      <TtsSettingsPanel settings={DEFAULT_TTS_SETTINGS} locale="en" onSave={vi.fn()} />,
+    );
+
+    expect(html).not.toContain('Pronunciation failed');
   });
 
   it('renders the voice, rate, and network controls', () => {

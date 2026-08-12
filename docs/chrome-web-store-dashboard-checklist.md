@@ -26,7 +26,7 @@ Suggested detailed description:
 
 Select Chinese text on a page and save it as a word, phrase, or quote through the context menu, keyboard shortcut, or toolbar popup. The dashboard keeps your collection in local browser storage, shows offline dictionary insight from the bundled CC-CEDICT asset, and exports daily Markdown notes, zip archives, or JSON backups.
 
-Saved words include one-click Mandarin pronunciation through Chrome/OS Chinese text-to-speech voices. Pronunciation runs only when the user clicks the speaker button and requires no API key.
+Saved words include one-click Mandarin pronunciation through the Chinese text-to-speech voices your operating system already provides. Pronunciation runs only when the user clicks the speaker button and requires no API key. Settings → Pronunciation lets the user pick the voice and the playback speed; on-device voices are used by default, and network voices are off unless the user enables them.
 
 Quotes are reviewed by cloze deletion. A saved quote starts with no blanks (parked); the user marks which words become blanks, either manually by wrapping an answer in braces or with optional AI suggestions, and each blank becomes its own spaced-repetition card.
 
@@ -134,7 +134,7 @@ clipboardRead: Supports the toolbar popup "paste from clipboard and save" fallba
 ```
 
 ```text
-tts: Pronounces a saved Chinese word only after the user clicks its speaker button. Chrome selects a compatible Chinese voice from the operating system or an installed speech engine.
+tts: Pronounces a saved Chinese word only after the user clicks its speaker button. The voice comes from the operating system or an installed speech engine; the extension ranks the available Chinese voices and honours the user's own choice from Settings → Pronunciation. Only on-device voices are used unless the user opts into network voices, which are off by default.
 ```
 
 ## Optional Host Permission Justifications
@@ -187,7 +187,7 @@ Disclose these categories if the dashboard asks:
 Suggested explanation:
 
 ```text
-The extension stores selected text, notes, source metadata, review ratings and schedules, local settings, optional API keys, and generated AI insights locally in the user's browser. Spaced-repetition ratings and schedules are calculated and stored locally. AI data transfer happens only when the user enables AI and explicitly clicks an AI action: word insight sends the saved word and its dictionary context, and quote cloze suggestions send that quote's sentence text. When pronunciation is requested, the saved word is passed to Chrome's configured speech engine; some installed voices may use a remote speech resource. If the user enables optional folder sync, an encrypted replica of their data — including settings and the AI API key — is written to a folder the user selects via the File System Access API; the payload is encrypted with the user's passphrase before it leaves the extension and is not sent to any developer-owned server. The optional full JSON backup likewise includes app settings and the AI API key and is created only on an explicit backup action. The extension does not operate a developer-owned server, does not create accounts, and does not sell user data.
+The extension stores selected text, notes, source metadata, review ratings and schedules, local settings, optional API keys, and generated AI insights locally in the user's browser. Spaced-repetition ratings and schedules are calculated and stored locally. AI data transfer happens only when the user enables AI and explicitly clicks an AI action: word insight sends the saved word and its dictionary context, and quote cloze suggestions send that quote's sentence text. When pronunciation is requested, the saved word is passed to a voice the browser reports as on-device, so no pronunciation text leaves the computer; network voices, which synthesize speech remotely, are disabled by default, and only if the user enables "Allow network voices" in Settings → Pronunciation and selects one does the spoken word reach that voice's provider. If the user enables optional folder sync, an encrypted replica of their data — including settings and the AI API key — is written to a folder the user selects via the File System Access API; the payload is encrypted with the user's passphrase before it leaves the extension and is not sent to any developer-owned server. The optional full JSON backup likewise includes app settings and the AI API key and is created only on an explicit backup action. The extension does not operate a developer-owned server, does not create accounts, and does not sell user data.
 ```
 
 ## Remote Code

@@ -43,8 +43,10 @@ Markdown notes.
 - `clipboardRead`: Supports the popup "paste from clipboard and save" fallback
   when selected-text capture is unavailable.
 - `tts`: Pronounces a saved Chinese word only after the user clicks its speaker
-  button. Chrome selects a compatible Chinese voice from the operating system
-  or an installed speech engine.
+  button. The voice comes from the operating system or an installed speech
+  engine; the extension ranks the available Chinese voices and honours the
+  user's own choice from Settings → Pronunciation. Only on-device voices are
+  used unless the user opts into network voices, which are off by default.
 
 No declared required permission was found unused as of this audit.
 
@@ -101,9 +103,13 @@ Spaced-repetition scheduling does not require network access. AI provider
 transfer occurs only after the user enables AI and clicks an AI action: word
 "Ask AI" insight sends the saved word and its dictionary context, and quote
 "建议填空" cloze suggestions send that quote's sentence text. When
-pronunciation is requested, the selected saved word is passed to Chrome's
-configured speech engine; some installed voices may use a remote speech
-resource. If the user enables folder sync, an encrypted replica of their data
+pronunciation is requested, the selected saved word is passed to a voice the
+browser reports as on-device, so no pronunciation text leaves the computer. Some
+platforms additionally offer
+network voices, which synthesize speech remotely; these are disabled by default,
+and only if the user turns on "Allow network voices" in Settings → Pronunciation
+and selects one does the spoken word reach that voice's provider. If the user
+enables folder sync, an encrypted replica of their data
 (including settings and the AI API key) is written to a folder they choose; the
 data is encrypted with the user's passphrase before it leaves the extension and
 is never sent to a developer-operated server. The optional full JSON backup also

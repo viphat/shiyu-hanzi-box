@@ -72,8 +72,8 @@ files are processed locally.
 ### Pronunciation (text-to-speech)
 
 Pronunciation uses the speech voices your browser and operating system already
-provide. By default only on-device voices are used, and nothing leaves your
-computer.
+provide. By default the extension only selects voices your browser reports as
+on-device, so no pronunciation text leaves your computer.
 
 Some platforms also offer network voices, which synthesize speech on a remote
 server. These are disabled by default. If you enable **Allow network voices** in

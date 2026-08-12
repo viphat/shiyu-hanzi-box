@@ -19,7 +19,7 @@ AI is disabled by default. It powers two optional, user-triggered actions: "Ask 
 
 The bundled CC-CEDICT dictionary is packaged with the extension and used offline. The optional Kaikki workflow opens the Kaikki download page in a regular tab and processes a user-selected JSONL file locally.
 
-The tts permission supports the user-triggered speaker button on saved words. Clicking the button passes only that saved word to Chrome's configured Chinese speech engine. No audio is stored, and no developer-operated speech server is used.
+The tts permission supports the user-triggered speaker button on saved words. Clicking the button passes only that saved word to a Chinese speech voice supplied by the operating system or an installed speech engine. The extension ranks the available Chinese voices rather than taking the first one reported, and Settings → Pronunciation lets the user override that choice and set the playback speed. Only voices the browser reports as on-device are selected unless the user turns on "Allow network voices", which is off by default; with it off, no pronunciation text leaves the computer. No audio is stored, and no developer-operated speech server is used.
 
 The Review tab shows one due card at a time and schedules it locally from the user's Again, Hard, Good, or Easy rating. Word details are revealed on demand. Quotes are reviewed by cloze deletion: a newly saved quote starts "parked" with no blanks and does not enter the review queue until the user adds at least one blank. Blanks are added either manually (open "手动填空 / Mark blanks", wrap an answer span in braces, and click Apply) or via the optional "建议填空" AI suggestion. Each blank is an independent card; in review the active blank is hidden until the user clicks Reveal, which shows the full quote with the answer highlighted. When the user clicks "建议填空", the quote's sentence text is sent to the user-configured AI provider, the same opt-in path as other AI actions.
 
@@ -46,8 +46,10 @@ Use this flow for reviewer instructions or your own pre-submit smoke test.
 8. Confirm the saved word and quote appear in the dashboard.
 9. Expand the saved word. Local dictionary definitions, tone chips, source
    examples, and external dictionary links should appear without AI.
-10. Click the speaker button beside the saved word and confirm Chrome pronounces
-    it with an available Chinese voice. Click it again to stop playback.
+10. Click the speaker button beside the saved word and confirm it is pronounced
+    with an installed Chinese voice. Click it again to stop playback. The voice
+    and the playback speed can be changed in Settings → Pronunciation, which
+    also offers a Test button.
 11. On the saved quote card, add a cloze blank: open **手动填空 / Mark blanks**,
     wrap one word in braces (for example change `...刚需...` to `...{刚需}...`),
     and click **Apply / 应用**. Confirm the chosen word becomes a blank chip.
@@ -110,8 +112,12 @@ manual fallback.
 - API keys and generated AI insight are stored locally in extension storage.
 - Review ratings, schedules, and history stay in local extension storage.
 - Pronunciation runs only after a speaker-button click and stores no audio.
-- Chrome/OS or an installed speech engine provides the voice; some installed
-  voices may use a remote speech resource.
+- The operating system or an installed speech engine provides the voice. By
+  default only voices the browser reports as on-device are selected, so no
+  pronunciation text leaves the computer. Network voices, which synthesize
+  speech remotely, are off unless the user enables "Allow network voices" in
+  Settings → Pronunciation and selects one; only then is the spoken word sent to
+  that voice's provider.
 - Markdown, zip, and backup files are created only after explicit download
   actions. The full backup additionally bundles app settings and the AI API key.
 - Folder sync is off by default. When enabled it writes an encrypted replica to
@@ -132,8 +138,10 @@ manual fallback.
 - AI providers are an enumerated allow-list (DeepSeek, OpenAI, OpenRouter,
   Google Gemini, Qwen, Moonshot, Zhipu); each host permission is optional and
   requested lazily only for the selected provider. All endpoints use HTTPS.
-- The pronunciation button is hidden if Chrome exposes no compatible Chinese
-  voice.
+- The pronunciation button is hidden if no usable Chinese voice is available.
+  Novelty voices some systems ship (Apple's Eloquence set, for example) are
+  never selected automatically, so a machine offering only those counts as
+  having none.
 - Kaikki dictionary import can take time for large JSONL files and should be
   run while the Settings page remains open.
 - Folder sync requires a browser with File System Access support, is eventually

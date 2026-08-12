@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-08-12
+
+### Added
+
+- **Pronunciation failures are now visible.** When speech was attempted and the
+  engine failed, the button quietly reset as though nothing had been asked, and
+  the only symptom was silence. The button now turns into an alert icon that
+  says what happened and stays clickable to try again — such failures are
+  usually temporary, like a busy audio device. **Test** in Settings reports the
+  same way.
+
+### Fixed
+
+- A voice offered only by Chrome's speech engine could be listed and selected on
+  a page where that engine cannot actually speak. The pronounce button appeared
+  and did nothing when pressed. These voices are no longer offered.
+- Settings → Pronunciation showed a working **Test** button even when no voice
+  could be used — when every installed Chinese voice is a novelty voice, or when
+  they are all network voices and that setting is off. Pressing it did nothing.
+  It is now disabled, with a line explaining how to get to a usable voice, which
+  matters most in the network-voice case where the picker is unselectable too
+  and the checkbox is the only way forward.
+- A saved voice that is not a Chinese voice — reachable only by carrying
+  settings over from another machine, since the picker never offers one — could
+  be used to read Chinese text. The saved choice is now ignored unless it is a
+  Chinese voice.
+
 ## [0.5.2] - 2026-08-12
 
 ### Fixed
